@@ -20,14 +20,70 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from '@/components/ui/badge';
-import type { User, UserRole } from '@/lib/types'; // Assuming these types are defined
+import type { User, UserRole } from '@/lib/types'; 
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
-// Mock data - replace with actual data fetching
 const mockUsers: User[] = [
-  { id: '1', name: 'Alice Wonderland', email: 'alice@example.com', role: 'ADMIN', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { id: '2', name: 'Bob The Builder', email: 'bob@example.com', role: 'SUPERVISOR', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { id: '3', name: 'Charlie Technician', email: 'charlie@example.com', role: 'TECHNICIAN', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { id: '4', name: 'Diana Prince', email: 'diana@example.com', role: 'TECHNICIAN', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { 
+    id: 'USR001', 
+    name: 'Dr. Eleanor Vance', 
+    email: 'eleanor.vance@example.com', 
+    role: 'ADMIN', 
+    avatarUrl: 'https://placehold.co/100x100.png?text=EV',
+    assignedProjectIds: ['PJT001', 'PJT002'],
+    createdAt: new Date('2023-01-15T09:30:00Z').toISOString(), 
+    updatedAt: new Date('2023-10-20T14:00:00Z').toISOString() 
+  },
+  { 
+    id: 'USR002', 
+    name: 'Marcus Rivera', 
+    email: 'marcus.rivera@example.com', 
+    role: 'SUPERVISOR', 
+    avatarUrl: 'https://placehold.co/100x100.png?text=MR',
+    assignedProjectIds: ['PJT001', 'PJT003', 'PJT004'],
+    createdAt: new Date('2023-02-20T11:00:00Z').toISOString(), 
+    updatedAt: new Date('2023-11-01T10:15:00Z').toISOString()
+  },
+  { 
+    id: 'USR003', 
+    name: 'Aisha Khan', 
+    email: 'aisha.khan@example.com', 
+    role: 'TECHNICIAN', 
+    avatarUrl: 'https://placehold.co/100x100.png?text=AK',
+    assignedProjectIds: ['PJT002'],
+    createdAt: new Date('2023-03-10T14:45:00Z').toISOString(), 
+    updatedAt: new Date('2023-03-10T14:45:00Z').toISOString() 
+  },
+  { 
+    id: 'USR004', 
+    name: 'David Lee', 
+    email: 'david.lee@example.com', 
+    role: 'TECHNICIAN', 
+    avatarUrl: 'https://placehold.co/100x100.png?text=DL',
+    assignedProjectIds: ['PJT003'],
+    createdAt: new Date('2023-04-05T08:00:00Z').toISOString(), 
+    updatedAt: new Date('2023-09-15T16:30:00Z').toISOString() 
+  },
+  { 
+    id: 'USR005', 
+    name: 'Sofia Chen', 
+    email: 'sofia.chen@example.com', 
+    role: 'SUPERVISOR', 
+    avatarUrl: 'https://placehold.co/100x100.png?text=SC',
+    assignedProjectIds: ['PJT004', 'PJT005'],
+    createdAt: new Date('2023-05-01T10:20:00Z').toISOString(), 
+    updatedAt: new Date('2023-10-25T11:00:00Z').toISOString() 
+  },
+   { 
+    id: 'USR006', 
+    name: 'Robert Downy', 
+    email: 'robert.d@example.com', 
+    role: 'TECHNICIAN', 
+    avatarUrl: 'https://placehold.co/100x100.png?text=RD',
+    assignedProjectIds: ['PJT005'],
+    createdAt: new Date('2023-06-11T12:10:00Z').toISOString(), 
+    updatedAt: new Date('2023-06-11T12:10:00Z').toISOString() 
+  },
 ];
 
 interface UserTableProps {
@@ -43,22 +99,22 @@ const roleBadgeVariant: Record<UserRole, "default" | "secondary" | "outline" | "
 
 
 export function UserTable({ onEditUser, onDeleteUser }: UserTableProps) {
-  // In a real app, users would be fetched from an API
   const [users, setUsers] = React.useState<User[]>(mockUsers);
 
   const handleEdit = (user: User) => {
     console.log('Editing user:', user);
-    onEditUser(user);
-    // Here you would typically open a dialog pre-filled with user data
+    const userToPass = {
+      id: user.id,
+      displayName: user.name, // Map User.name to UserFormData.displayName
+      email: user.email,
+      role: user.role,
+    };
+    onEditUser(userToPass as any); // Casting as UserFormData equivalent for the dialog
   };
 
   const handleDelete = (userId: string) => {
     console.log('Deleting user ID:', userId);
     onDeleteUser(userId);
-    // Here you would typically show a confirmation dialog and then make an API call
-    // For now, just filter out from mock data for demo
-    // setUsers(prevUsers => prevUsers.filter(u => u.id !== userId)); 
-    // ^ Deleting from mock data should be handled by a toast/confirmation in a real app
   };
 
 
@@ -67,14 +123,15 @@ export function UserTable({ onEditUser, onDeleteUser }: UserTableProps) {
   }
 
   return (
-    <div className="rounded-lg border shadow-sm overflow-hidden">
+    <div className="rounded-lg border shadow-sm overflow-hidden bg-card">
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-[100px]">User ID</TableHead>
+            <TableHead className="w-[80px]">User ID</TableHead>
             <TableHead>Name</TableHead>
             <TableHead>Email</TableHead>
             <TableHead>Role</TableHead>
+            <TableHead>Projects</TableHead>
             <TableHead>Created At</TableHead>
             <TableHead className="text-right w-[100px]">Actions</TableHead>
           </TableRow>
@@ -82,11 +139,24 @@ export function UserTable({ onEditUser, onDeleteUser }: UserTableProps) {
         <TableBody>
           {users.map((user) => (
             <TableRow key={user.id}>
-              <TableCell className="font-medium">{user.id}</TableCell>
-              <TableCell>{user.name}</TableCell>
+              <TableCell className="font-medium text-xs">{user.id}</TableCell>
+              <TableCell>
+                <div className="flex items-center space-x-3">
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage src={user.avatarUrl || `https://placehold.co/40x40.png?text=${user.name[0]}`} alt={user.name} data-ai-hint="user avatar" />
+                    <AvatarFallback>{user.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
+                  </Avatar>
+                  <span>{user.name}</span>
+                </div>
+              </TableCell>
               <TableCell>{user.email}</TableCell>
               <TableCell>
                 <Badge variant={roleBadgeVariant[user.role] || 'outline'}>{user.role}</Badge>
+              </TableCell>
+              <TableCell className="text-xs">
+                {user.assignedProjectIds && user.assignedProjectIds.length > 0 
+                  ? user.assignedProjectIds.join(', ') 
+                  : 'N/A'}
               </TableCell>
               <TableCell>{new Date(user.createdAt).toLocaleDateString()}</TableCell>
               <TableCell className="text-right">
@@ -111,7 +181,7 @@ export function UserTable({ onEditUser, onDeleteUser }: UserTableProps) {
           ))}
         </TableBody>
       </Table>
-       {users.length > 5 && <TableCaption>A list of users in the system.</TableCaption>}
+       {users.length > 5 && <TableCaption>A list of {users.length} users in the system.</TableCaption>}
     </div>
   );
 }
