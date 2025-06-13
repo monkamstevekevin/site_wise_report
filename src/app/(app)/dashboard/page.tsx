@@ -14,7 +14,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import type { UserRole } from '@/lib/constants';
 import { MOCK_TECHNICIAN_EMAIL, MOCK_TECHNICIAN_REPORTS_ID } from '@/lib/constants';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'; // Added CardDescription
 import { useEffect, useState, useMemo } from 'react';
 import type { FieldReport } from '@/lib/types';
 import { mockReportsData } from '@/app/(app)/reports/page'; 
