@@ -2,6 +2,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link'; // Importer Link
 import {
   Table,
   TableBody,
@@ -12,12 +13,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Edit, Trash2, MoreVertical } from 'lucide-react';
+import { Edit, Trash2, MoreVertical, MessageSquare } from 'lucide-react'; // Importer MessageSquare
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from '@/components/ui/badge';
 import type { Project } from '@/lib/types';
@@ -84,6 +86,12 @@ export function ProjectTable({ projects, onEditProject, onDeleteProject }: Proje
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
+                    <DropdownMenuItem asChild>
+                      <Link href={`/project/${project.id}/chat`}>
+                        <MessageSquare className="mr-2 h-4 w-4" /> Ouvrir le Chat
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={() => handleEdit(project)} disabled>
                       <Edit className="mr-2 h-4 w-4" /> Edit (Soon)
                     </DropdownMenuItem>
