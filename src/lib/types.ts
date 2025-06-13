@@ -1,4 +1,6 @@
+
 import type { FieldReport as AIFieldReport } from '@/ai/flows/report-anomaly-detection';
+import type { LucideIcon } from 'lucide-react';
 
 // Re-exporting or aligning with AIFieldReport to ensure consistency
 export type FieldReport = AIFieldReport;
@@ -40,14 +42,19 @@ export interface Material {
   updatedAt: string;
 }
 
+export type NotificationType = 'new_chat_message' | 'report_update' | 'project_assignment' | 'system_update' | 'generic';
+
 export interface Notification {
   id: string;
-  userId: string;
   message: string;
-  type: 'info' | 'warning' | 'error' | 'success';
+  type: NotificationType;
   isRead: boolean;
-  link?: string;
-  createdAt: string;
+  targetId?: string; // e.g., projectId for chat, reportId for report
+  link?: string; // Optional direct link, takes precedence if both targetId and link exist
+  createdAt: string; // ISO string, for sorting and display
+  displayTime: string; // User-friendly time like "5m ago"
+  icon?: LucideIcon;
+  iconClass?: string;
 }
 
 export type SamplingMethod = 'grab' | 'composite' | 'core' | 'other';
