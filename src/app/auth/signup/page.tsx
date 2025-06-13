@@ -60,9 +60,14 @@ export default function SignupPage() {
 
   const handleGoogleSignup = async () => {
     setIsLoadingGoogle(true);
-    await signInWithGoogle();
-    // Toast and redirect are handled by AuthContext or onAuthStateChanged
-    // No need to setIsLoadingGoogle(false) here as page will redirect or authLoading will change
+    try {
+        await signInWithGoogle();
+        // Toast and redirect are handled by AuthContext or onAuthStateChanged
+    } catch (error) {
+        // Error is already handled and toasted by signInWithGoogle in AuthContext
+    } finally {
+        setIsLoadingGoogle(false);
+    }
   };
 
   const isLoading = isLoadingEmail || isLoadingGoogle || authLoading;
