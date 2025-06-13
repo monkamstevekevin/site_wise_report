@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -28,6 +29,12 @@ const FieldReportSchema = z.object({
   attachments: z.array(z.string()),
   createdAt: z.string(),
   updatedAt: z.string(),
+  photoDataUri: z
+    .string()
+    .optional()
+    .describe(
+      "Optional. A photo of the material or testing site, as a data URI. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
+    ),
 });
 
 export type FieldReport = z.infer<typeof FieldReportSchema>;
@@ -37,7 +44,7 @@ const AnomalyAssessmentSchema = z.object({
   explanation: z
     .string()
     .describe(
-      'A detailed explanation of why the report is considered anomalous, including specific data points that deviate from expected norms or validation rules.'
+      'A detailed explanation of why the report is considered anomalous, including specific data points that deviate from expected norms or validation rules. If a photo was provided, mention if it contributed to the assessment.'
     ),
 });
 
@@ -67,10 +74,15 @@ const detectReportAnomalyPrompt = ai.definePrompt({
   - Supplier: {{{supplier}}}
   - Sampling Method: {{{samplingMethod}}}
   - Notes: {{{notes}}}
+  {{#if photoDataUri}}
+  - Photo evidence provided. (You will see the image below)
+  Photo: {{media url=photoDataUri}}
+  {{/if}}
 
   Assess whether the combination of these values is plausible and consistent. Consider typical ranges for each material type and flag any significant deviations or inconsistencies.
+  If a photo was provided, consider it as part of your assessment. For example, does the photo visually align with the reported material type or conditions? Does it show any visible defects or issues not captured in the numerical data?
 
-  Output your assessment following the AnomalyAssessmentSchema. For example, if the density of a material is unusually high or low for the given material type, or if the temperature and humidity combination seems implausible, flag the report as anomalous and provide a detailed explanation.
+  Output your assessment following the AnomalyAssessmentSchema. For example, if the density of a material is unusually high or low for the given material type, or if the temperature and humidity combination seems implausible, or if the photo shows a clear discrepancy, flag the report as anomalous and provide a detailed explanation.
 
   Consider these validation rules:
   - Cement density should typically be between 1440 and 1600 kg/m³.

@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -16,7 +16,12 @@ import { detectReportAnomaly, type FieldReport, type AnomalyAssessment } from '@
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, Sparkles, AlertTriangleIcon } from 'lucide-react';
+import { Loader2, Sparkles, AlertTriangleIcon, Camera, Paperclip } from 'lucide-react';
+import Image from 'next/image';
+
+const MAX_FILE_SIZE_MB = 5;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 
 const reportFormSchema = z.object({
   projectId: z.string().min(1, 'Project ID is required'),
@@ -33,7 +38,18 @@ const reportFormSchema = z.object({
     required_error: 'Sampling method is required.',
   }),
   notes: z.string().optional(),
-  attachments: z.string().optional().describe('Comma-separated URLs for attachments'),
+  photo: z
+    .custom<FileList>()
+    .optional()
+    .refine(
+      (files) => !files || files.length === 0 || files?.[0]?.size <= MAX_FILE_SIZE_BYTES,
+      `Max image size is ${MAX_FILE_SIZE_MB}MB.`
+    )
+    .refine(
+      (files) => !files || files.length === 0 || ACCEPTED_IMAGE_TYPES.includes(files?.[0]?.type),
+      "Only .jpg, .jpeg, .png and .webp formats are supported."
+    ),
+  attachmentUrls: z.string().optional().describe('Comma-separated URLs for other attachments like documents'),
 });
 
 type ReportFormData = z.infer<typeof reportFormSchema>;
@@ -58,14 +74,40 @@ export function ReportForm() {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [anomalyResult, setAnomalyResult] = useState<AnomalyAssessment | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+
 
   const form = useForm<ReportFormData>({
     resolver: zodResolver(reportFormSchema),
     defaultValues: {
       notes: '',
-      attachments: '',
+      attachmentUrls: '',
     },
   });
+
+  const handlePhotoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      // Validate here before setting preview if needed, though Zod handles final validation
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPhotoPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setPhotoPreview(null);
+    }
+  };
+
+  const readFileAsDataURL = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = (error) => reject(error);
+      reader.readAsDataURL(file);
+    });
+  };
 
   const onSubmit = async (data: ReportFormData) => {
     if (!user) {
@@ -75,16 +117,32 @@ export function ReportForm() {
     setIsSubmitting(true);
     setAnomalyResult(null);
 
+    let photoDataUri: string | undefined = undefined;
+    if (data.photo && data.photo.length > 0) {
+      try {
+        photoDataUri = await readFileAsDataURL(data.photo[0]);
+      } catch (error) {
+        console.error("Error reading photo file:", error);
+        toast({ variant: 'destructive', title: 'Photo Error', description: 'Could not process the uploaded photo.' });
+        setIsSubmitting(false);
+        return;
+      }
+    }
+
     const fieldReportData: FieldReport = {
       ...data,
       id: crypto.randomUUID(),
       technicianId: user.uid,
       status: 'SUBMITTED',
-      attachments: data.attachments ? data.attachments.split(',').map(url => url.trim()).filter(url => url) : [],
+      attachments: data.attachmentUrls ? data.attachmentUrls.split(',').map(url => url.trim()).filter(url => url) : [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      photoDataUri: photoDataUri,
     };
-    
+    // Remove form-specific photo property before sending to AI/DB
+    delete (fieldReportData as any).photo;
+
+
     try {
       toast({ title: 'Analyzing Report...', description: 'Please wait while AI checks for anomalies.' });
       const assessment = await detectReportAnomaly(fieldReportData);
@@ -105,9 +163,10 @@ export function ReportForm() {
         });
       }
       // Here you would typically save the fieldReportData and assessment to your database
-      console.log('Field Report Data:', fieldReportData);
+      console.log('Field Report Data (to be saved):', fieldReportData);
       console.log('Anomaly Assessment:', assessment);
       // form.reset(); // Optionally reset form
+      // setPhotoPreview(null); // Reset photo preview
     } catch (error) {
       console.error('Error submitting report or detecting anomaly:', error);
       toast({
@@ -247,7 +306,7 @@ export function ReportForm() {
                 control={form.control}
                 name="samplingMethod"
                 render={({ field }) => (
-                  <FormItem className="md:col-span-2">
+                  <FormItem>
                     <FormLabel>Sampling Method</FormLabel>
                      <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
@@ -265,6 +324,45 @@ export function ReportForm() {
                   </FormItem>
                 )}
               />
+
+              <FormField
+                control={form.control}
+                name="photo"
+                render={({ field: { onChange, value, ...rest } }) => (
+                  <FormItem>
+                    <FormLabel>Upload Photo (Optional)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          onChange(e.target.files);
+                          handlePhotoChange(e);
+                        }}
+                        {...rest}
+                        ref={photoInputRef}
+                        className="pt-2"
+                      />
+                    </FormControl>
+                    <FormDescription className="flex items-center">
+                      <Camera className="mr-2 h-4 w-4" /> Max {MAX_FILE_SIZE_MB}MB. JPG, PNG, WEBP.
+                    </FormDescription>
+                    <FormMessage />
+                    {photoPreview && (
+                      <div className="mt-2">
+                        <Image src={photoPreview} alt="Photo preview" width={200} height={200} className="rounded-md object-cover max-h-48 w-auto" />
+                         <Button variant="link" size="sm" className="text-xs h-auto p-0 mt-1" onClick={() => {
+                            setPhotoPreview(null);
+                            form.setValue('photo', undefined);
+                            if(photoInputRef.current) photoInputRef.current.value = '';
+                         }}>Remove photo</Button>
+                      </div>
+                    )}
+                  </FormItem>
+                )}
+              />
+
+
               <FormField
                 control={form.control}
                 name="notes"
@@ -280,22 +378,22 @@ export function ReportForm() {
               />
               <FormField
                 control={form.control}
-                name="attachments"
+                name="attachmentUrls"
                 render={({ field }) => (
                   <FormItem className="md:col-span-2">
-                    <FormLabel>Attachments (Optional)</FormLabel>
+                    <FormLabel>Other Attachment URLs (Optional)</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., https://example.com/photo1.jpg, https://example.com/doc.pdf" {...field} />
+                      <Input placeholder="e.g., https://example.com/doc.pdf, https://example.com/drawing.png" {...field} />
                     </FormControl>
-                    <FormDescription>
-                      Comma-separated URLs for any attached files (e.g., photos, documents).
+                    <FormDescription className="flex items-center">
+                      <Paperclip className="mr-2 h-4 w-4" /> Comma-separated URLs for any attached documents, specs, etc.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
             </div>
-            
+
             <Button type="submit" className="w-full md:w-auto rounded-lg" disabled={isSubmitting}>
               {isSubmitting ? (
                 <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting & Analyzing...</>
@@ -321,3 +419,4 @@ export function ReportForm() {
     </Card>
   );
 }
+
