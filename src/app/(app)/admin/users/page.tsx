@@ -14,8 +14,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { mockProjectsData } from '@/app/(app)/admin/projects/page'; // For all projects list
-import { sendAssignmentNotification } from '@/ai/flows/assignment-notification-flow'; // New flow
+import { getProjects } from '@/services/projectService'; // Import project service
+import { sendAssignmentNotification } from '@/ai/flows/assignment-notification-flow'; 
 
 // Using a state for mockUsersData to allow updates
 const initialMockUsersData: User[] = [
@@ -45,7 +45,7 @@ const initialMockUsersData: User[] = [
     email: 'aisha.khan@example.com',
     role: 'TECHNICIAN',
     avatarUrl: 'https://placehold.co/100x100.png?text=AK',
-    assignedProjectIds: ['PJT002'],
+    assignedProjectIds: ['PJT002'], // This will be used if user.uid matches USR003 or if MOCK_TECHNICIAN_ID is USR003
     createdAt: new Date('2023-03-10T14:45:00Z').toISOString(),
     updatedAt: new Date('2023-03-10T14:45:00Z').toISOString()
   },
@@ -89,7 +89,10 @@ const userRoleFilterOptions: { value: UserRole | 'ALL'; label: string }[] = [
 ];
 
 export default function UserManagementPage() {
-  const [usersData, setUsersData] = useState<User[]>(initialMockUsersData);
+  const [usersData, setUsersData] = useState<User[]>(initialMockUsersData); // User data remains mock for now
+  const [allProjects, setAllProjects] = useState<Project[]>([]);
+  const [isLoadingProjects, setIsLoadingProjects] = useState(true);
+
   const [isUserFormOpen, setIsUserFormOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<Partial<User> & {displayName?: string} | undefined>(undefined);
   
@@ -98,10 +101,26 @@ export default function UserManagementPage() {
   const [isProcessingAssignment, setIsProcessingAssignment] = useState(false);
 
   const { toast } = useToast();
-  const { user: adminUser } = useAuth(); // Admin performing the action
+  const { user: adminAuthUser } = useAuth(); 
 
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<UserRole | 'ALL'>('ALL');
+
+  useEffect(() => {
+    const fetchAllProjects = async () => {
+      setIsLoadingProjects(true);
+      try {
+        const fetchedProjects = await getProjects();
+        setAllProjects(fetchedProjects);
+      } catch (error) {
+        console.error("Failed to fetch projects for assignment dialog:", error);
+        toast({ variant: "destructive", title: "Error", description: "Could not load projects for assignment." });
+      } finally {
+        setIsLoadingProjects(false);
+      }
+    };
+    fetchAllProjects();
+  }, [toast]);
 
   const handleAddNewUser = () => {
     setEditingUser(undefined);
@@ -109,16 +128,17 @@ export default function UserManagementPage() {
   };
 
   const handleEditUser = (user: Partial<User> & {displayName?: string}) => {
+    // User edit will be connected to Firestore later
     setEditingUser(user);
     setIsUserFormOpen(true);
   };
 
   const handleDeleteUser = (userId: string) => {
-    // Simulate deletion
+    // User delete will be connected to Firestore later
     setUsersData(prevUsers => prevUsers.filter(user => user.id !== userId));
     toast({
       title: "User Deleted (Simulated)",
-      description: `User ${userId} has been removed from the list.`,
+      description: `User ${userId} has been removed from the list. Firestore update pending.`,
       variant: "destructive"
     });
   };
@@ -131,21 +151,19 @@ export default function UserManagementPage() {
   const handleAssignProjects = async (userId: string, selectedProjectIds: string[]) => {
     setIsProcessingAssignment(true);
     const targetUser = usersData.find(u => u.id === userId);
-    if (!targetUser || !adminUser) {
+    if (!targetUser || !adminAuthUser) {
       toast({ variant: "destructive", title: "Error", description: "User or admin not found."});
       setIsProcessingAssignment(false);
       return;
     }
 
     const oldProjectIds = new Set(targetUser.assignedProjectIds || []);
-    const newProjectIds = new Set(selectedProjectIds);
-
     const newlyAssignedProjects = selectedProjectIds
       .filter(id => !oldProjectIds.has(id))
-      .map(id => mockProjectsData.find(p => p.id === id))
+      .map(id => allProjects.find(p => p.id === id)) // Use fetched allProjects
       .filter(p => p !== undefined) as Project[];
 
-    // Simulate updating user data
+    // Simulate updating user data (this will be a Firestore update later)
     setUsersData(prevUsers =>
       prevUsers.map(u =>
         u.id === userId ? { ...u, assignedProjectIds: selectedProjectIds, updatedAt: new Date().toISOString() } : u
@@ -153,8 +171,8 @@ export default function UserManagementPage() {
     );
     
     toast({
-      title: "Projects Assigned",
-      description: `${targetUser.name} has been assigned ${newlyAssignedProjects.length} new project(s).`,
+      title: "Projects Assigned (Simulated)",
+      description: `${targetUser.name} has been assigned ${newlyAssignedProjects.length} new project(s). Firestore update pending.`,
     });
 
     for (const project of newlyAssignedProjects) {
@@ -164,11 +182,11 @@ export default function UserManagementPage() {
           userEmail: targetUser.email,
           projectName: project.name,
           projectLocation: project.location,
-          assignerName: adminUser.displayName || adminUser.email || "Admin",
+          assignerName: adminAuthUser.displayName || adminAuthUser.email || "Admin",
         });
         
         toast({
-          duration: 10000, // Longer toast to read email content
+          duration: 10000, 
           title: `Simulated Email for ${project.name}`,
           description: (
             <div className="text-xs">
@@ -207,6 +225,7 @@ export default function UserManagementPage() {
             open={isUserFormOpen}
             onOpenChange={setIsUserFormOpen}
             userToEdit={editingUser}
+            // onFormSubmit will be connected to Firestore later
           >
             <Button className="rounded-lg" onClick={handleAddNewUser}>
               <UserPlus className="mr-2 h-4 w-4" /> Add New User
@@ -261,13 +280,17 @@ export default function UserManagementPage() {
         />
       </div>
 
-      <AssignProjectsDialog
-        open={isAssignProjectsDialogOpen}
-        onOpenChange={setIsAssignProjectsDialogOpen}
-        user={userToAssignProjects}
-        allProjects={mockProjectsData}
-        onAssignProjects={handleAssignProjects}
-      />
+      {isLoadingProjects ? (
+         <div className="flex items-center justify-center p-4"><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading projects for assignment...</div>
+      ) : (
+        <AssignProjectsDialog
+          open={isAssignProjectsDialogOpen}
+          onOpenChange={setIsAssignProjectsDialogOpen}
+          user={userToAssignProjects}
+          allProjects={allProjects} // Use fetched projects
+          onAssignProjects={handleAssignProjects}
+        />
+      )}
     </>
   );
 }

@@ -18,8 +18,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Loader2, Sparkles, AlertTriangleIcon, Camera, Paperclip, Save, Send } from 'lucide-react';
 import Image from 'next/image';
-import { mockProjectsData } from '@/app/(app)/admin/projects/page'; // Import all projects
+import { getProjects } from '@/services/projectService'; // Import project service
 import type { Project } from '@/lib/types';
+import { Skeleton } from '@/components/ui/skeleton';
+import { MOCK_TECHNICIAN_REPORTS_ID } from '@/lib/constants'; // Assuming technician ID is used for assigned projects logic
 
 const MAX_FILE_SIZE_MB = 5;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
@@ -52,7 +54,6 @@ const reportFormSchema = z.object({
       "Only .jpg, .jpeg, .png and .webp formats are supported."
     ),
   attachmentUrls: z.string().optional().describe('Comma-separated URLs for other attachments like documents'),
-  // status is not part of the form, it's set by button click
 });
 
 type ReportFormData = z.infer<typeof reportFormSchema>;
@@ -72,6 +73,10 @@ const samplingMethodOptions: { value: ReportFormData['samplingMethod']; label: s
   { value: 'other', label: 'Other Method' },
 ];
 
+// Mock user data to simulate assigned projects for the current user.
+// In a real app, this would come from the user's profile in Firestore.
+const MOCK_USER_ASSIGNED_PROJECT_IDS_TEMP = ['PJT001', 'PJT003', MOCK_TECHNICIAN_REPORTS_ID]; // Example
+
 export function ReportForm() {
   const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
@@ -80,35 +85,67 @@ export function ReportForm() {
   const [anomalyResult, setAnomalyResult] = useState<AnomalyAssessment | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
+  
+  const [allProjects, setAllProjects] = useState<Project[]>([]);
   const [assignedProjects, setAssignedProjects] = useState<Project[]>([]);
+  const [isLoadingProjects, setIsLoadingProjects] = useState(true);
 
   const form = useForm<ReportFormData>({
     resolver: zodResolver(reportFormSchema),
     defaultValues: {
       notes: '',
       attachmentUrls: '',
-      projectId: '', // Ensure projectId is initialized
+      projectId: '', 
     },
   });
 
   useEffect(() => {
-    if (user && !authLoading) {
-      // Simulate fetching user's assigned projects from mock data
-      // In a real app, user object from useAuth might contain assignedProjectIds or you'd fetch them.
-      // For now, let's assume the user object in AuthContext has an `assignedProjectIds` array.
-      // This is a mock implementation detail.
-      const currentUserAssignedIds = mockUsersData.find(u => u.id === user.uid)?.assignedProjectIds || [];
-      const userProjects = mockProjectsData.filter(p => currentUserAssignedIds.includes(p.id));
-      setAssignedProjects(userProjects);
-      if (userProjects.length > 0 && !form.getValues('projectId')) {
-        form.setValue('projectId', userProjects[0].id); // Set default project if available
+    const fetchAllProjects = async () => {
+      if (authLoading) return; // Wait for auth to be ready
+      setIsLoadingProjects(true);
+      try {
+        const fetchedProjects = await getProjects();
+        setAllProjects(fetchedProjects);
+
+        if (user) {
+          // Simulate getting assigned project IDs for the current user.
+          // This part will be replaced by actual data fetching from user profile in Firestore later.
+          const userProfile = initialMockUsersData.find(u => u.id === user.uid || u.id === MOCK_TECHNICIAN_REPORTS_ID); // Use mock tech ID for demo
+          const currentUserAssignedIds = userProfile?.assignedProjectIds || MOCK_USER_ASSIGNED_PROJECT_IDS_TEMP;
+          
+          const userProjects = fetchedProjects.filter(p => currentUserAssignedIds.includes(p.id));
+          setAssignedProjects(userProjects);
+          
+          if (userProjects.length > 0 && !form.getValues('projectId')) {
+            form.setValue('projectId', userProjects[0].id); 
+          }
+        } else {
+          setAssignedProjects([]); // No user, no assigned projects
+        }
+
+      } catch (error) {
+        console.error("Failed to fetch projects for report form:", error);
+        toast({ variant: "destructive", title: "Error", description: "Could not load projects." });
+        setAssignedProjects([]); // Set to empty on error
+      } finally {
+        setIsLoadingProjects(false);
       }
-    }
-  }, [user, authLoading, form]);
+    };
+    fetchAllProjects();
+  }, [user, authLoading, form, toast]);
   
-  // Mock user data, in real app this comes from a proper source like context or API
-  const mockUsersData = [ 
-    { id: user?.uid || 'USR_TEMP', name: 'Current User', assignedProjectIds: ['PJT001', 'PJT003'] } 
+  // Keep a simplified mock for initial user data if needed before actual user service
+   const initialMockUsersData: User[] = [
+    {
+      id: MOCK_TECHNICIAN_REPORTS_ID, // This ID should match the mock technician for whom reports data exists
+      name: 'Test Technician',
+      email: 'tech@example.com',
+      role: 'TECHNICIAN',
+      assignedProjectIds: ['PJT001', 'PJT002', 'PJT003', 'PJT005'], // Sample assigned projects
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    },
+    // Add other mock users if necessary for testing different scenarios
   ];
 
 
@@ -158,15 +195,18 @@ export function ReportForm() {
 
     const fieldReportData: FieldReport = {
       ...data,
-      id: crypto.randomUUID(),
+      id: crypto.randomUUID(), // This will be generated by Firestore on add
       technicianId: user.uid,
       status: status,
       attachments: data.attachmentUrls ? data.attachmentUrls.split(',').map(url => url.trim()).filter(url => url) : [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(), // Firestore will use serverTimestamp
+      updatedAt: new Date().toISOString(), // Firestore will use serverTimestamp
       photoDataUri: photoDataUri,
     };
-    delete (fieldReportData as any).photo;
+    delete (fieldReportData as any).photo; // Remove FileList object
+
+    // Firestore add logic will be here in a future step
+    console.log(`Field Report to be ${status} (Firestore):`, fieldReportData);
 
     try {
       toast({ title: 'Analyzing Report...', description: 'AI checking for anomalies...' });
@@ -178,27 +218,27 @@ export function ReportForm() {
           toast({
             variant: 'destructive',
             title: 'Anomaly Detected!',
-            description: 'Review details. Report submitted but flagged.',
+            description: 'Review details. Report "submitted" (simulated) but flagged.',
             duration: 10000,
           });
         } else {
           toast({
-            title: 'Report Submitted & Analyzed',
-            description: 'No anomalies. Submitted for validation.',
+            title: 'Report "Submitted" & Analyzed (Simulated)',
+            description: 'No anomalies. "Submitted" for validation.',
             duration: 7000,
           });
         }
-      } else { // DRAFT
+      } else { 
          toast({
-            title: 'Report Saved as Draft',
-            description: assessment.isAnomalous ? 'Anomaly detected in draft.' : 'Draft saved. No anomalies detected by AI.',
+            title: 'Report "Saved as Draft" (Simulated)',
+            description: assessment.isAnomalous ? 'Anomaly detected in draft.' : 'Draft "saved". No anomalies detected by AI.',
             duration: 7000,
           });
       }
-      console.log(`Field Report ${status}:`, fieldReportData);
-      console.log('Anomaly Assessment:', assessment);
-      // form.reset(); // Optionally reset form
+      // Optionally reset form, depending on UX preference
+      // form.reset(); 
       // setPhotoPreview(null);
+      // if(photoInputRef.current) photoInputRef.current.value = '';
     } catch (error) {
       console.error('Error processing report:', error);
       toast({ variant: 'destructive', title: 'Error', description: 'Could not process report.' });
@@ -208,9 +248,30 @@ export function ReportForm() {
     }
   };
 
-  if (authLoading) {
-      return <Card className="shadow-xl"><CardContent><Skeleton className="h-64 w-full" /></CardContent></Card>
+  if (authLoading || isLoadingProjects) {
+      return (
+        <Card className="shadow-xl">
+          <CardHeader>
+            <CardTitle>Submit Field Report</CardTitle>
+            <CardDescription>Enter the details for the material test report.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+             <Skeleton className="h-20 w-full" />
+             <div className="flex gap-3">
+                <Skeleton className="h-10 w-32" />
+                <Skeleton className="h-10 w-32" />
+             </div>
+          </CardContent>
+        </Card>
+      );
   }
+  
 
   return (
     <Card className="shadow-xl">
@@ -228,14 +289,14 @@ export function ReportForm() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Project (Assigned to you)</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value || ""} defaultValue={field.value || ""}>
                       <FormControl>
-                        <SelectTrigger disabled={assignedProjects.length === 0}>
-                          <SelectValue placeholder={assignedProjects.length === 0 ? "No projects assigned" : "Select an assigned project"} />
+                        <SelectTrigger disabled={assignedProjects.length === 0 && !user}>
+                          <SelectValue placeholder={assignedProjects.length === 0 ? "No projects assigned or loadable" : "Select an assigned project"} />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {assignedProjects.length === 0 && <SelectItem value="-" disabled>No projects assigned to you</SelectItem>}
+                        {assignedProjects.length === 0 && <SelectItem value="-" disabled>{user ? "No projects assigned to you" : "Login to see projects"}</SelectItem>}
                         {assignedProjects.map(project => (
                           <SelectItem key={project.id} value={project.id}>{project.name} ({project.id})</SelectItem>
                         ))}
@@ -479,4 +540,16 @@ export function ReportForm() {
       </CardContent>
     </Card>
   );
+}
+// Added User type definition locally for mock user data until a global user service is in place.
+// This is a temporary measure.
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: 'ADMIN' | 'SUPERVISOR' | 'TECHNICIAN';
+  avatarUrl?: string;
+  assignedProjectIds: string[];
+  createdAt: string;
+  updatedAt: string;
 }
