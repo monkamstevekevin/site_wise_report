@@ -3,12 +3,13 @@
 
 import { db } from '@/lib/firebase';
 import type { Project } from '@/lib/types';
-import { collection, getDocs, doc, Timestamp, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, Timestamp, query, orderBy } from 'firebase/firestore';
 
 /**
  * @fileOverview Project service for interacting with Firestore.
  *
  * - getProjects - Fetches all projects from Firestore.
+ * - getProjectById - Fetches a single project by its ID from Firestore.
  */
 
 /**
@@ -31,8 +32,6 @@ export async function getProjects(): Promise<Project[]> {
         location: data.location,
         description: data.description || '',
         status: data.status,
-        // Assuming createdAt and updatedAt are stored as ISO strings or Firestore Timestamps
-        // If Timestamps, convert: data.createdAt.toDate().toISOString()
         createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
         updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
       } as Project;
@@ -44,7 +43,6 @@ export async function getProjects(): Promise<Project[]> {
   }
 }
 
-// Placeholder for getProjectById - will be implemented later
 /**
  * Fetches a single project by its ID from Firestore.
  * @param {string} projectId The ID of the project to fetch.
@@ -67,14 +65,13 @@ export async function getProjectById(projectId: string): Promise<Project | null>
         updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
       } as Project;
     } else {
-      console.log("No such project document!");
+      console.log("No such project document with ID:", projectId);
       return null;
     }
   } catch (error) {
     console.error("Error fetching project by ID: ", error);
-    // It's often better to throw an error or return a specific error state
-    // rather than null if the operation itself failed, distinct from "not found".
-    // For now, returning null for simplicity for "not found" or error.
     return null;
   }
 }
+
+// Future functions for add, update, delete projects will go here.
