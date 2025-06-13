@@ -66,9 +66,11 @@ export function Header() {
                 <p className="text-xs text-muted-foreground">{user.email}</p>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem disabled> {/* Replace with actual link or functionality */}
-                <UserCircle className="mr-2 h-4 w-4" />
-                <span>Profile</span>
+              <DropdownMenuItem asChild>
+                <Link href="/profile">
+                  <UserCircle className="mr-2 h-4 w-4" />
+                  <span>Profile</span>
+                </Link>
               </DropdownMenuItem>
               <DropdownMenuItem disabled> {/* Replace with actual link or functionality */}
                 <Settings className="mr-2 h-4 w-4" />
@@ -93,3 +95,4 @@ export function Header() {
     </header>
   );
 }
+
