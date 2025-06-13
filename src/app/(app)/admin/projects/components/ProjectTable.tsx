@@ -22,80 +22,30 @@ import {
 import { Badge } from '@/components/ui/badge';
 import type { Project } from '@/lib/types';
 
-const mockProjects: Project[] = [
-  {
-    id: 'PJT001',
-    name: 'Downtown Tower Renovation',
-    location: 'Springfield, IL',
-    description: 'Complete overhaul of the 20-story Downtown Tower, including facade and internal systems.',
-    status: 'ACTIVE',
-    createdAt: new Date('2023-03-15T09:00:00Z').toISOString(),
-    updatedAt: new Date('2024-05-20T14:30:00Z').toISOString(),
-  },
-  {
-    id: 'PJT002',
-    name: 'Greenfield Highway Expansion',
-    location: 'Route 66, AZ',
-    description: 'Adding two new lanes to a 50-mile stretch of the historic Route 66.',
-    status: 'ACTIVE',
-    createdAt: new Date('2022-08-01T11:30:00Z').toISOString(),
-    updatedAt: new Date('2024-06-01T10:00:00Z').toISOString(),
-  },
-  {
-    id: 'PJT003',
-    name: 'Coastal Bridge Repair',
-    location: 'Port City, CA',
-    description: 'Structural repairs and seismic retrofitting for the main coastal access bridge.',
-    status: 'INACTIVE',
-    createdAt: new Date('2024-01-10T16:00:00Z').toISOString(),
-    updatedAt: new Date('2024-04-05T09:20:00Z').toISOString(),
-  },
-  {
-    id: 'PJT004',
-    name: 'Suburban Water Treatment Plant',
-    location: 'Rivertown, TX',
-    description: 'Construction of a new water treatment facility to serve a growing suburban area.',
-    status: 'COMPLETED',
-    createdAt: new Date('2021-05-20T08:45:00Z').toISOString(),
-    updatedAt: new Date('2023-11-10T17:00:00Z').toISOString(),
-  },
-  {
-    id: 'PJT005',
-    name: 'High-Speed Rail Corridor - Section A',
-    location: 'Central Valley, CA',
-    description: 'Initial earthworks and track laying for Section A of the new high-speed rail line.',
-    status: 'ACTIVE',
-    createdAt: new Date('2023-09-01T13:15:00Z').toISOString(),
-    updatedAt: new Date('2024-06-10T11:00:00Z').toISOString(),
-  },
-];
-
 interface ProjectTableProps {
+  projects: Project[]; // Accept projects as a prop
   onEditProject?: (project: Project) => void;
   onDeleteProject?: (projectId: string) => void;
 }
 
 const projectStatusBadgeVariant: Record<Project['status'], "default" | "secondary" | "outline" | "destructive"> = {
-  ACTIVE: "default", // Will use primary color
+  ACTIVE: "default",
   COMPLETED: "secondary",
   INACTIVE: "outline",
 };
 
-export function ProjectTable({ onEditProject, onDeleteProject }: ProjectTableProps) {
-  const [projects, setProjects] = React.useState<Project[]>(mockProjects);
+export function ProjectTable({ projects, onEditProject, onDeleteProject }: ProjectTableProps) {
 
   const handleEdit = (project: Project) => {
-    console.log('Editing project:', project);
     onEditProject?.(project);
   };
 
   const handleDelete = (projectId: string) => {
-    console.log('Deleting project ID:', projectId);
     onDeleteProject?.(projectId);
   };
 
   if (projects.length === 0) {
-    return <p className="text-muted-foreground text-center py-8">No projects found.</p>;
+    return <p className="text-muted-foreground text-center py-8">No projects match the current filters.</p>;
   }
 
   return (
