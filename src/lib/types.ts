@@ -13,7 +13,7 @@ export interface User {
   email: string;
   role: UserRole;
   avatarUrl?: string;
-  assignedProjectIds?: string[];
+  assignedProjectIds: string[]; // Ensure this is not optional for easier handling
   createdAt: string;
   updatedAt: string;
 }
@@ -42,14 +42,14 @@ export interface Material {
   updatedAt: string;
 }
 
-export type NotificationType = 'new_chat_message' | 'report_update' | 'project_assignment' | 'system_update' | 'generic';
+export type NotificationType = 'new_chat_message' | 'report_update' | 'project_assignment' | 'system_update' | 'generic' | 'project_assigned_admin_confirm';
 
 export interface Notification {
   id: string;
   message: string;
   type: NotificationType;
   isRead: boolean;
-  targetId?: string; // e.g., projectId for chat, reportId for report
+  targetId?: string; // e.g., projectId for chat, reportId for report, userId for assignment confirmation
   link?: string; // Optional direct link, takes precedence if both targetId and link exist
   createdAt: string; // ISO string, for sorting and display
   displayTime: string; // User-friendly time like "5m ago"

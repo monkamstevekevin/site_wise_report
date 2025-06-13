@@ -1,20 +1,24 @@
 
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { PageTitle } from '@/components/common/PageTitle';
-import { Users, UserPlus, Filter } from 'lucide-react';
+import { Users, UserPlus, Filter, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UserFormDialog } from './components/UserFormDialog';
 import { UserTable } from './components/UserTable';
-import type { User, UserRole } from '@/lib/types';
+import { AssignProjectsDialog } from './components/AssignProjectsDialog'; // New Dialog
+import type { User, UserRole, Project } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { mockProjectsData } from '@/app/(app)/admin/projects/page'; // For all projects list
+import { sendAssignmentNotification } from '@/ai/flows/assignment-notification-flow'; // New flow
 
-// Moved mockUsers here
-const mockUsersData: User[] = [
+// Using a state for mockUsersData to allow updates
+const initialMockUsersData: User[] = [
   {
     id: 'USR001',
     name: 'Dr. Eleanor Vance',
@@ -85,9 +89,16 @@ const userRoleFilterOptions: { value: UserRole | 'ALL'; label: string }[] = [
 ];
 
 export default function UserManagementPage() {
+  const [usersData, setUsersData] = useState<User[]>(initialMockUsersData);
   const [isUserFormOpen, setIsUserFormOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<Partial<User> & {displayName?: string} | undefined>(undefined);
+  
+  const [isAssignProjectsDialogOpen, setIsAssignProjectsDialogOpen] = useState(false);
+  const [userToAssignProjects, setUserToAssignProjects] = useState<User | null>(null);
+  const [isProcessingAssignment, setIsProcessingAssignment] = useState(false);
+
   const { toast } = useToast();
+  const { user: adminUser } = useAuth(); // Admin performing the action
 
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<UserRole | 'ALL'>('ALL');
@@ -103,31 +114,94 @@ export default function UserManagementPage() {
   };
 
   const handleDeleteUser = (userId: string) => {
-    console.log("Attempting to delete user ID:", userId);
+    // Simulate deletion
+    setUsersData(prevUsers => prevUsers.filter(user => user.id !== userId));
     toast({
-      title: "Delete Action (Simulated)",
-      description: `If implemented, user ${userId} would be deleted.`,
+      title: "User Deleted (Simulated)",
+      description: `User ${userId} has been removed from the list.`,
       variant: "destructive"
     });
-    // Implement actual deletion and re-fetch/update `mockUsersData` if it were state
+  };
+
+  const handleOpenAssignProjectsDialog = (user: User) => {
+    setUserToAssignProjects(user);
+    setIsAssignProjectsDialogOpen(true);
+  };
+
+  const handleAssignProjects = async (userId: string, selectedProjectIds: string[]) => {
+    setIsProcessingAssignment(true);
+    const targetUser = usersData.find(u => u.id === userId);
+    if (!targetUser || !adminUser) {
+      toast({ variant: "destructive", title: "Error", description: "User or admin not found."});
+      setIsProcessingAssignment(false);
+      return;
+    }
+
+    const oldProjectIds = new Set(targetUser.assignedProjectIds || []);
+    const newProjectIds = new Set(selectedProjectIds);
+
+    const newlyAssignedProjects = selectedProjectIds
+      .filter(id => !oldProjectIds.has(id))
+      .map(id => mockProjectsData.find(p => p.id === id))
+      .filter(p => p !== undefined) as Project[];
+
+    // Simulate updating user data
+    setUsersData(prevUsers =>
+      prevUsers.map(u =>
+        u.id === userId ? { ...u, assignedProjectIds: selectedProjectIds, updatedAt: new Date().toISOString() } : u
+      )
+    );
+    
+    toast({
+      title: "Projects Assigned",
+      description: `${targetUser.name} has been assigned ${newlyAssignedProjects.length} new project(s).`,
+    });
+
+    for (const project of newlyAssignedProjects) {
+      try {
+        const notificationContent = await sendAssignmentNotification({
+          userName: targetUser.name,
+          userEmail: targetUser.email,
+          projectName: project.name,
+          projectLocation: project.location,
+          assignerName: adminUser.displayName || adminUser.email || "Admin",
+        });
+        
+        toast({
+          duration: 10000, // Longer toast to read email content
+          title: `Simulated Email for ${project.name}`,
+          description: (
+            <div className="text-xs">
+              <p className="font-semibold">To: {targetUser.email}</p>
+              <p className="font-semibold">Subject: {notificationContent.emailSubject}</p>
+              <p className="mt-2 whitespace-pre-wrap">{notificationContent.emailBody}</p>
+            </div>
+          ),
+        });
+      } catch (error) {
+        console.error("Error generating assignment email:", error);
+        toast({ variant: "destructive", title: `Email Gen Error for ${project.name}`, description: "Could not simulate email notification."});
+      }
+    }
+    setIsProcessingAssignment(false);
   };
 
   const filteredUsers = useMemo(() => {
-    return mockUsersData.filter(user => {
+    return usersData.filter(user => {
       const matchesSearchTerm = searchTerm === '' ||
         user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         user.email.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesRole = roleFilter === 'ALL' || user.role === roleFilter;
       return matchesSearchTerm && matchesRole;
     });
-  }, [searchTerm, roleFilter]);
+  }, [usersData, searchTerm, roleFilter]);
 
   return (
     <>
       <PageTitle
         title="User Management"
         icon={Users}
-        subtitle="Administer user accounts, roles, and permissions."
+        subtitle="Administer user accounts, roles, and project assignments."
         actions={
           <UserFormDialog
             open={isUserFormOpen}
@@ -174,8 +248,26 @@ export default function UserManagementPage() {
       </div>
 
       <div className="bg-card p-0 md:p-6 rounded-lg shadow-md">
-        <UserTable users={filteredUsers} onEditUser={handleEditUser} onDeleteUser={handleDeleteUser} />
+        {isProcessingAssignment && 
+          <div className="flex items-center justify-center p-4 text-sm text-muted-foreground">
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing assignments...
+          </div>
+        }
+        <UserTable 
+          users={filteredUsers} 
+          onEditUser={handleEditUser} 
+          onDeleteUser={handleDeleteUser}
+          onAssignProjects={handleOpenAssignProjectsDialog}
+        />
       </div>
+
+      <AssignProjectsDialog
+        open={isAssignProjectsDialogOpen}
+        onOpenChange={setIsAssignProjectsDialogOpen}
+        user={userToAssignProjects}
+        allProjects={mockProjectsData}
+        onAssignProjects={handleAssignProjects}
+      />
     </>
   );
 }
