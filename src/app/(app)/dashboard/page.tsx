@@ -3,7 +3,7 @@
 
 import { PageTitle } from '@/components/common/PageTitle';
 import { KpiCard } from './components/KpiCard';
-import { FileText, CheckCircle, AlertTriangle, BarChart3, LayoutDashboard, ListChecks, UserCheck, ClockHistory } from 'lucide-react';
+import { FileText, CheckCircle, AlertTriangle, BarChart3, LayoutDashboard, ListChecks, UserCheck, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { MaterialReportsChart } from './components/MaterialReportsChart';
@@ -74,7 +74,7 @@ export default function DashboardPage() {
     { title: "My Submitted Reports", value: technicianReports.length, icon: FileText, description: "Total reports you've created." },
     { title: "Pending My Review", value: technicianReports.filter(r => r.status === 'SUBMITTED' || r.status === 'REJECTED').length, icon: ListChecks, description: "Reports needing action or submitted." },
     { title: "My Validated Reports", value: technicianReports.filter(r => r.status === 'VALIDATED').length, icon: UserCheck, description: "Reports approved." },
-    { title: "Reports in Draft", value: technicianReports.filter(r => r.status === 'DRAFT').length, icon: ClockHistory, description: "Reports saved as draft." },
+    { title: "Reports in Draft", value: technicianReports.filter(r => r.status === 'DRAFT').length, icon: Clock, description: "Reports saved as draft." },
   ], [technicianReports]);
 
   const technicianMaterialUsage = useMemo(() => {
