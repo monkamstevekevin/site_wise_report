@@ -14,7 +14,7 @@ export interface NavItem {
 export const ALL_NAV_ITEMS: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['ADMIN', 'SUPERVISOR', 'TECHNICIAN'] },
   { href: '/reports', label: 'Field Reports', icon: FileText, roles: ['ADMIN', 'SUPERVISOR', 'TECHNICIAN'] },
-  { href: '/reports/create', label: 'Create Report', icon: FileText, roles: ['ADMIN', 'SUPERVISOR', 'TECHNICIAN'] }, // Added for direct access if desired
+  { href: '/reports/create', label: 'Create Report', icon: FileText, roles: ['ADMIN', 'SUPERVISOR', 'TECHNICIAN'] },
   {
     href: '/admin',
     label: 'Admin Panel',
@@ -26,8 +26,6 @@ export const ALL_NAV_ITEMS: NavItem[] = [
       { href: '/admin/materials', label: 'Material Management', icon: TestTube2, roles: ['ADMIN'] },
     ]
   },
-  // Profile link is typically handled by the Header, but can be listed if needed for other navs
-  // { href: '/profile', label: 'My Profile', icon: UserCircle, roles: ['ADMIN', 'SUPERVISOR', 'TECHNICIAN'], isProfileLink: true },
 ];
 
 export const APP_NAME = "SiteWise Reports";
@@ -55,9 +53,9 @@ export const getNavItemsForRole = (role: UserRole): NavItem[] => {
   return filterItems(ALL_NAV_ITEMS);
 };
 
-// Example usage for current user role (replace with actual role from auth context)
 export type UserRole = 'ADMIN' | 'SUPERVISOR' | 'TECHNICIAN';
-// const currentUserRole: UserRole = 'TECHNICIAN'; // This will be dynamic in the Sidebar
-// export const NAV_ITEMS = getNavItemsForRole(currentUserRole);
-// The NAV_ITEMS export is removed; Sidebar will call getNavItemsForRole directly.
+
+// Mock technician identity for data population
+export const MOCK_TECHNICIAN_EMAIL = 'tech@example.com';
+export const MOCK_TECHNICIAN_REPORTS_ID = 'tech001';
 

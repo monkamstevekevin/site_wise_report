@@ -12,15 +12,16 @@ import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { useAuth } from '@/contexts/AuthContext'; // For filtering by technician
+import { useAuth } from '@/contexts/AuthContext';
 import { Skeleton } from '@/components/ui/skeleton';
+import type { UserRole } from '@/lib/constants';
+import { MOCK_TECHNICIAN_EMAIL, MOCK_TECHNICIAN_REPORTS_ID } from '@/lib/constants';
 
-// Moved mockReports here - make it exportable if needed elsewhere, but for now it's local
 export const mockReportsData: FieldReport[] = [
   {
     id: 'RPT001',
     projectId: 'PJT001',
-    technicianId: 'USR003', // Aisha Khan
+    technicianId: MOCK_TECHNICIAN_REPORTS_ID, // Aisha Khan -> Now our mock tech
     materialType: 'cement',
     temperature: 22.5,
     volume: 15.0,
@@ -38,7 +39,7 @@ export const mockReportsData: FieldReport[] = [
   {
     id: 'RPT002',
     projectId: 'PJT002',
-    technicianId: 'USR004', // David Lee
+    technicianId: 'USR004', // David Lee - Stays as another tech
     materialType: 'asphalt',
     temperature: 150.2,
     volume: 50.0,
@@ -57,7 +58,7 @@ export const mockReportsData: FieldReport[] = [
   {
     id: 'RPT003',
     projectId: 'PJT001',
-    technicianId: 'USR003', // Aisha Khan
+    technicianId: MOCK_TECHNICIAN_REPORTS_ID, // Aisha Khan -> Now our mock tech
     materialType: 'gravel',
     temperature: 18.0,
     volume: 100.0,
@@ -75,7 +76,7 @@ export const mockReportsData: FieldReport[] = [
   {
     id: 'RPT004',
     projectId: 'PJT003',
-    technicianId: 'USR006', // Robert Downy
+    technicianId: MOCK_TECHNICIAN_REPORTS_ID, // Robert Downy -> Now our mock tech
     materialType: 'sand',
     temperature: 25.0,
     volume: 30.0,
@@ -93,7 +94,7 @@ export const mockReportsData: FieldReport[] = [
   {
     id: 'RPT005',
     projectId: 'PJT004',
-    technicianId: 'USR003', // Aisha Khan
+    technicianId: MOCK_TECHNICIAN_REPORTS_ID, // Aisha Khan -> Now our mock tech
     materialType: 'other',
     temperature: 20,
     volume: 5,
@@ -108,16 +109,53 @@ export const mockReportsData: FieldReport[] = [
     createdAt: new Date('2024-05-11T15:00:00Z').toISOString(),
     updatedAt: new Date('2024-05-11T15:00:00Z').toISOString(),
   },
-  { // Add a DRAFT report for the currently logged-in user if they are a technician
+  { 
     id: 'RPT006',
     projectId: 'PJT001',
-    // This technicianId will be dynamically checked against the logged-in user
-    technicianId: 'UNIQUE_TECHNICIAN_ID_PLACEHOLDER', // Replace with actual ID for testing
+    technicianId: MOCK_TECHNICIAN_REPORTS_ID, 
     materialType: 'cement',
     temperature: 20, volume: 10, density: 1450, humidity: 70,
     batchNumber: 'DRAFT-001', supplier: 'Test Supplier', samplingMethod: 'grab',
     status: 'DRAFT', attachments: [],
-    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    notes: "This is a draft report for testing.",
+    createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), // 2 days ago
+    updatedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+   {
+    id: 'RPT007',
+    projectId: 'PJT005',
+    technicianId: MOCK_TECHNICIAN_REPORTS_ID,
+    materialType: 'asphalt',
+    temperature: 145.5,
+    volume: 22.0,
+    density: 2350,
+    humidity: 35,
+    batchNumber: 'ASP-TECH-007',
+    supplier: 'BuildIt Co.',
+    samplingMethod: 'core',
+    notes: 'Core sample from new highway section. Looks good.',
+    status: 'VALIDATED',
+    attachments: [],
+    createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days ago
+    updatedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 'RPT008',
+    projectId: 'PJT002',
+    technicianId: MOCK_TECHNICIAN_REPORTS_ID,
+    materialType: 'sand',
+    temperature: 28,
+    volume: 12.0,
+    density: 1680,
+    humidity: 42,
+    batchNumber: 'SAND-TECH-008',
+    supplier: 'Quality Aggregates',
+    samplingMethod: 'grab',
+    notes: 'Sand sample for concrete mix. Submitted for review.',
+    status: 'SUBMITTED',
+    attachments: [],
+    createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(), // 1 day ago
+    updatedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
   }
 ];
 
@@ -138,46 +176,55 @@ const materialTypeFilterOptions: { value: FieldReport['materialType'] | 'ALL'; l
   { value: 'other', label: 'Other' },
 ];
 
-// Mock mapping for user role (replace with actual role from useAuth if available and more structured)
-const mapFirebaseUserToAppRole = (firebaseUser: any): UserRole => {
-  if (!firebaseUser) return 'TECHNICIAN';
-  if (firebaseUser.email?.includes('admin@example.com')) return 'ADMIN';
-  if (firebaseUser.email?.includes('supervisor@example.com')) return 'SUPERVISOR';
-  return 'TECHNICIAN';
+interface MappedUserRole {
+  role: UserRole;
+  effectiveTechnicianId: string | null;
+}
+
+const mapFirebaseUserToAppRoleAndId = (firebaseUser: any): MappedUserRole => {
+  if (!firebaseUser) return { role: 'TECHNICIAN', effectiveTechnicianId: null };
+  
+  if (firebaseUser.email === MOCK_TECHNICIAN_EMAIL) {
+    return { role: 'TECHNICIAN', effectiveTechnicianId: MOCK_TECHNICIAN_REPORTS_ID };
+  }
+  if (firebaseUser.email?.includes('admin@example.com')) return { role: 'ADMIN', effectiveTechnicianId: null };
+  if (firebaseUser.email?.includes('supervisor@example.com')) return { role: 'SUPERVISOR', effectiveTechnicianId: null };
+  
+  // Default for other authenticated users, could be their firebaseUser.uid if we adapt mock data further
+  return { role: 'TECHNICIAN', effectiveTechnicianId: firebaseUser.uid }; 
 };
-type UserRole = 'ADMIN' | 'SUPERVISOR' | 'TECHNICIAN';
 
 
 export default function ReportsPage() {
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
   const [currentUserRole, setCurrentUserRole] = useState<UserRole | null>(null);
+  const [effectiveTechnicianId, setEffectiveTechnicianId] = useState<string | null>(null);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<FieldReport['status'] | 'ALL'>('ALL');
   const [materialFilter, setMaterialFilter] = useState<FieldReport['materialType'] | 'ALL'>('ALL');
 
-  // Adjust mock data for the current technician for testing 'edit draft'
-  const [reportsToDisplay, setReportsToDisplay] = useState<FieldReport[]>(mockReportsData);
+  const [reportsToDisplay, setReportsToDisplay] = useState<FieldReport[]>([]);
 
   useEffect(() => {
     if (!authLoading && user) {
-      const role = mapFirebaseUserToAppRole(user);
+      const { role, effectiveTechnicianId: mappedTechId } = mapFirebaseUserToAppRoleAndId(user);
       setCurrentUserRole(role);
+      setEffectiveTechnicianId(mappedTechId);
 
-      const updatedMockData = mockReportsData.map(report =>
-        report.id === 'RPT006' ? { ...report, technicianId: user.uid } : report
-      );
-
-      if (role === 'TECHNICIAN') {
-        setReportsToDisplay(updatedMockData.filter(report => report.technicianId === user.uid));
+      if (role === 'TECHNICIAN' && mappedTechId) {
+        setReportsToDisplay(mockReportsData.filter(report => report.technicianId === mappedTechId));
+      } else if (role === 'ADMIN' || role === 'SUPERVISOR') {
+        setReportsToDisplay(mockReportsData); 
       } else {
-        setReportsToDisplay(updatedMockData); // Admins/Supervisors see all
+         setReportsToDisplay([]); // Default to empty if no specific role or ID match
       }
+
     } else if (!authLoading && !user){
-      // Non-logged in users see nothing or a login prompt (handled by layout)
       setReportsToDisplay([]);
-      setCurrentUserRole('TECHNICIAN'); // Default to avoid null issues if needed by UI before redirect
+      setCurrentUserRole(null); 
+      setEffectiveTechnicianId(null);
     }
   }, [user, authLoading]);
 
@@ -189,14 +236,18 @@ export default function ReportsPage() {
 
   const handleEditReport = (report: FieldReport) => {
     console.log("Edit report:", report.id);
-    // This would typically navigate to /reports/edit/[reportId] or open a dialog
     toast({ title: "Edit Report", description: `Form to edit report ${report.id} would open.` });
   };
 
   const handleDeleteReport = (reportId: string) => {
     console.log("Delete report:", reportId);
+    // Simulate deletion from the currently displayed list
+    setReportsToDisplay(prevReports => prevReports.filter(r => r.id !== reportId));
+    // Also update mockReportsData if you want deletion to persist across navigations (for mock purposes)
+    // const indexInMock = mockReportsData.findIndex(r => r.id === reportId);
+    // if (indexInMock > -1) mockReportsData.splice(indexInMock, 1);
+
     toast({ variant: "destructive", title: "Delete Report (Simulated)", description: `Report ${reportId} would be deleted.`});
-     // Implement actual deletion and re-fetch/update `reportsToDisplay`
   };
 
   const filteredReports = useMemo(() => {
@@ -204,17 +255,16 @@ export default function ReportsPage() {
       const matchesSearchTerm = searchTerm === '' ||
         report.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
         report.projectId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        report.supplier.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (report.supplier && report.supplier.toLowerCase().includes(searchTerm.toLowerCase())) ||
         report.batchNumber.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesStatus = statusFilter === 'ALL' || report.status === statusFilter;
       const matchesMaterial = materialFilter === 'ALL' || report.materialType === materialFilter;
       
-      // Technician specific filtering is already done in useEffect updating `reportsToDisplay`
       return matchesSearchTerm && matchesStatus && matchesMaterial;
     });
   }, [reportsToDisplay, searchTerm, statusFilter, materialFilter]);
 
-  if (authLoading || currentUserRole === null) {
+  if (authLoading || currentUserRole === null && user) { // Show loading if auth is loading OR if user exists but role not yet determined
     return (
       <>
         <PageTitle title="Field Reports" icon={FileText} subtitle="Loading reports..." />
@@ -223,6 +273,21 @@ export default function ReportsPage() {
       </>
     );
   }
+  
+  if (!user && !authLoading) {
+     return (
+      <>
+        <PageTitle title="Field Reports" icon={FileText} subtitle="Please log in to view reports." />
+         <div className="text-center py-10">
+            <p className="text-muted-foreground">You need to be logged in to access this page.</p>
+            <Button asChild className="mt-4">
+              <Link href="/auth/login">Login</Link>
+            </Button>
+          </div>
+      </>
+    );
+  }
+
 
   return (
     <>
@@ -288,13 +353,12 @@ export default function ReportsPage() {
         <ReportTable
           reports={filteredReports}
           onViewReport={handleViewReport}
-          onEditReport={handleEditReport} // Make sure this is passed
+          onEditReport={handleEditReport}
           onDeleteReport={handleDeleteReport}
-          currentUserId={user?.uid} // Pass current user ID
+          currentUserId={user?.uid} 
           currentUserRole={currentUserRole}
         />
       </div>
     </>
   );
 }
-
