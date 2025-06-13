@@ -74,6 +74,7 @@ export function MaterialTable({ materials, onEditMaterial, onDeleteMaterial }: M
   return (
     <div className="rounded-lg border shadow-sm overflow-hidden bg-card">
       <Table>
+        {materials.length > 5 && <TableCaption>A list of {materials.length} materials in the system.</TableCaption>}
         <TableHeader>
           <TableRow>
             <TableHead className="w-[100px]">Material ID</TableHead>
@@ -116,7 +117,6 @@ export function MaterialTable({ materials, onEditMaterial, onDeleteMaterial }: M
           ))}
         </TableBody>
       </Table>
-      {materials.length > 5 && <TableCaption>A list of {materials.length} materials in the system.</TableCaption>}
     </div>
   );
 }

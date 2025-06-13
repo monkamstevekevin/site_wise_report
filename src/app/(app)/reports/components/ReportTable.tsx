@@ -84,6 +84,7 @@ export function ReportTable({ reports, onViewReport, onEditReport, onDeleteRepor
   return (
     <div className="rounded-lg border shadow-sm overflow-hidden bg-card">
       <Table>
+        {reports.length > 10 && <TableCaption>A list of {reports.length} field reports.</TableCaption>}
         <TableHeader>
           <TableRow>
             <TableHead className="w-[120px]">Report ID</TableHead>
@@ -139,7 +140,6 @@ export function ReportTable({ reports, onViewReport, onEditReport, onDeleteRepor
           ))}
         </TableBody>
       </Table>
-      {reports.length > 10 && <TableCaption>A list of {reports.length} field reports.</TableCaption>}
     </div>
   );
 }

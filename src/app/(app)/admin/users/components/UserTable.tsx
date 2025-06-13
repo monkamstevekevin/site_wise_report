@@ -60,6 +60,7 @@ export function UserTable({ users, onEditUser, onDeleteUser }: UserTableProps) {
   return (
     <div className="rounded-lg border shadow-sm overflow-hidden bg-card">
       <Table>
+        {users.length > 5 && <TableCaption>A list of {users.length} users in the system.</TableCaption>}
         <TableHeader>
           <TableRow>
             <TableHead className="w-[80px]">User ID</TableHead>
@@ -116,7 +117,6 @@ export function UserTable({ users, onEditUser, onDeleteUser }: UserTableProps) {
           ))}
         </TableBody>
       </Table>
-       {users.length > 5 && <TableCaption>A list of {users.length} users in the system.</TableCaption>}
     </div>
   );
 }

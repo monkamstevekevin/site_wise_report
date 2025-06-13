@@ -51,6 +51,7 @@ export function ProjectTable({ projects, onEditProject, onDeleteProject }: Proje
   return (
     <div className="rounded-lg border shadow-sm overflow-hidden bg-card">
       <Table>
+        {projects.length > 5 && <TableCaption>A list of {projects.length} projects in the system.</TableCaption>}
         <TableHeader>
           <TableRow>
             <TableHead className="w-[100px]">Project ID</TableHead>
@@ -96,7 +97,6 @@ export function ProjectTable({ projects, onEditProject, onDeleteProject }: Proje
           ))}
         </TableBody>
       </Table>
-      {projects.length > 5 && <TableCaption>A list of {projects.length} projects in the system.</TableCaption>}
     </div>
   );
 }
