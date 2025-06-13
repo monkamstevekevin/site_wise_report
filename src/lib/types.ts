@@ -51,3 +51,15 @@ export interface Notification {
 }
 
 export type SamplingMethod = 'grab' | 'composite' | 'core' | 'other';
+
+export interface ChatMessage {
+  id: string;
+  projectId: string;
+  senderId: string;
+  senderName: string;
+  senderAvatar?: string;
+  text?: string;
+  imageUrl?: string;
+  timestamp: string; // ISO string
+  isOwnMessage?: boolean; // Helper for UI, set client-side
+}
