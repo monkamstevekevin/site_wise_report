@@ -3,15 +3,16 @@ import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
 import { getAuth, type Auth } from 'firebase/auth';
 // import { getFirestore, type Firestore } from 'firebase/firestore'; // Example for Firestore
 
-// TODO: Replace with your actual Firebase configuration from your Firebase project settings
-// These should ideally be stored in environment variables for security.
+// Configuration updated with provided project details.
+// IMPORTANT: Please verify your `appId` from your Firebase project settings
+// (Project settings -> General -> Your apps -> Web app config).
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "YOUR_API_KEY",
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "YOUR_AUTH_DOMAIN",
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "YOUR_PROJECT_ID",
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "YOUR_STORAGE_BUCKET",
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "YOUR_MESSAGING_SENDER_ID",
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "YOUR_APP_ID",
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyCYLK-Ytm5GVCzYGSA3K9oTbr39A5mf8QE",
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "sitewise-reports.firebaseapp.com",
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "sitewise-reports",
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "sitewise-reports.appspot.com",
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "792660061825",
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "YOUR_APP_ID_FROM_FIREBASE_CONSOLE", // <-- IMPORTANT: Replace this!
 };
 
 let app: FirebaseApp;
@@ -28,3 +29,4 @@ auth = getAuth(app);
 // db = getFirestore(app); // Example for Firestore
 
 export { app, auth /*, db */ };
+
