@@ -24,12 +24,15 @@ import {
 import { Badge } from '@/components/ui/badge';
 import type { FieldReport } from '@/lib/types';
 import { format } from 'date-fns';
+import type { UserRole } from '@/lib/constants';
 
 // Mock user data to map technicianId to name - in a real app, this would come from a data store or context
 const mockTechnicians: Record<string, string> = {
   'USR003': 'Aisha Khan',
   'USR004': 'David Lee',
   'USR006': 'Robert Downy',
+  // Add more mappings if new technician IDs are used in mockReportsData
+  // For dynamic user IDs from Firebase Auth, this map would need to be populated from your user data source
 };
 
 const reportStatusBadgeVariant: Record<FieldReport['status'], "default" | "secondary" | "outline" | "destructive"> = {
@@ -39,7 +42,7 @@ const reportStatusBadgeVariant: Record<FieldReport['status'], "default" | "secon
   REJECTED: "destructive",
 };
 
-const materialTypeDisplay: Record<FieldReport['materialType'], string> = {
+const materialTypeDisplay: Record<string, string> = { // Allow any string for materialType
   cement: "Cement",
   asphalt: "Asphalt",
   gravel: "Gravel",
@@ -48,26 +51,25 @@ const materialTypeDisplay: Record<FieldReport['materialType'], string> = {
 };
 
 interface ReportTableProps {
-  reports: FieldReport[]; // Accept reports as a prop
+  reports: FieldReport[];
   onViewReport?: (report: FieldReport) => void;
   onEditReport?: (report: FieldReport) => void;
   onDeleteReport?: (reportId: string) => void;
+  currentUserId?: string; // For technician-specific actions
+  currentUserRole?: UserRole | null;
 }
 
-export function ReportTable({ reports, onViewReport, onEditReport, onDeleteReport }: ReportTableProps) {
+export function ReportTable({ reports, onViewReport, onEditReport, onDeleteReport, currentUserId, currentUserRole }: ReportTableProps) {
 
   const handleView = (report: FieldReport) => {
-    alert(`Viewing Report ID: ${report.id}\nStatus: ${report.status}\n(Details view not yet implemented)`);
     onViewReport?.(report);
   };
 
   const handleEdit = (report: FieldReport) => {
-    alert(`Editing Report ID: ${report.id}\n(Edit form not yet implemented)`);
     onEditReport?.(report);
   };
 
   const handleDelete = (reportId: string) => {
-    alert(`Deleting Report ID: ${reportId}\n(Deletion not yet implemented)`);
     onDeleteReport?.(reportId);
   };
 
@@ -76,7 +78,9 @@ export function ReportTable({ reports, onViewReport, onEditReport, onDeleteRepor
       <div className="flex flex-col items-center justify-center py-12 text-center bg-card rounded-lg shadow-md">
         <FileText className="w-16 h-16 mb-4 text-muted-foreground" />
         <h3 className="text-xl font-semibold mb-2 text-foreground">No Reports Found</h3>
-        <p className="text-muted-foreground">No reports match the current filters. Try adjusting your search.</p>
+        <p className="text-muted-foreground">
+          {currentUserRole === 'TECHNICIAN' ? "You haven't created any reports yet, or none match the current filters." : "No reports match the current filters. Try adjusting your search."}
+        </p>
       </div>
     );
   }
@@ -84,7 +88,9 @@ export function ReportTable({ reports, onViewReport, onEditReport, onDeleteRepor
   return (
     <div className="rounded-lg border shadow-sm overflow-hidden bg-card">
       <Table>
-        {reports.length > 10 && <TableCaption>A list of {reports.length} field reports.</TableCaption>}
+        <TableCaption>
+          { currentUserRole === 'TECHNICIAN' ? `A list of your ${reports.length} field report(s).` : `A list of ${reports.length} field reports.`}
+        </TableCaption>
         <TableHeader>
           <TableRow>
             <TableHead className="w-[120px]">Report ID</TableHead>
@@ -97,47 +103,53 @@ export function ReportTable({ reports, onViewReport, onEditReport, onDeleteRepor
           </TableRow>
         </TableHeader>
         <TableBody>
-          {reports.map((report) => (
-            <TableRow key={report.id}>
-              <TableCell className="font-medium text-xs">{report.id}</TableCell>
-              <TableCell className="text-xs">{report.projectId}</TableCell>
-              <TableCell>{mockTechnicians[report.technicianId] || report.technicianId}</TableCell>
-              <TableCell>{materialTypeDisplay[report.materialType]}</TableCell>
-              <TableCell>
-                <Badge variant={reportStatusBadgeVariant[report.status] || 'outline'}>
-                  {report.status}
-                </Badge>
-              </TableCell>
-              <TableCell>{format(new Date(report.createdAt), 'PP')}</TableCell>
-              <TableCell className="text-right">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="h-8 w-8 p-0">
-                      <span className="sr-only">Open menu</span>
-                      <MoreVertical className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                    <DropdownMenuItem onClick={() => handleView(report)}>
-                      <Eye className="mr-2 h-4 w-4" /> View Details
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleEdit(report)} disabled>
-                       <Edit className="mr-2 h-4 w-4" /> Edit (Soon)
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onClick={() => handleDelete(report.id)}
-                      className="text-destructive focus:text-destructive focus:bg-destructive/10"
-                      disabled
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" /> Delete (Soon)
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </TableCell>
-            </TableRow>
-          ))}
+          {reports.map((report) => {
+            const isOwner = report.technicianId === currentUserId;
+            const canEdit = currentUserRole === 'TECHNICIAN' && isOwner && report.status === 'DRAFT';
+            const canDelete = (currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') || (isOwner && report.status === 'DRAFT');
+
+            return (
+              <TableRow key={report.id}>
+                <TableCell className="font-medium text-xs">{report.id}</TableCell>
+                <TableCell className="text-xs">{report.projectId}</TableCell>
+                <TableCell>{mockTechnicians[report.technicianId] || report.technicianId.substring(0,10)+'...'}</TableCell>
+                <TableCell>{materialTypeDisplay[report.materialType] || report.materialType}</TableCell>
+                <TableCell>
+                  <Badge variant={reportStatusBadgeVariant[report.status] || 'outline'}>
+                    {report.status}
+                  </Badge>
+                </TableCell>
+                <TableCell>{format(new Date(report.createdAt), 'PP')}</TableCell>
+                <TableCell className="text-right">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" className="h-8 w-8 p-0">
+                        <span className="sr-only">Open menu</span>
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                      <DropdownMenuItem onClick={() => handleView(report)}>
+                        <Eye className="mr-2 h-4 w-4" /> View Details
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleEdit(report)} disabled={!canEdit}>
+                         <Edit className="mr-2 h-4 w-4" /> {canEdit ? "Edit Draft" : "Edit (Locked)"}
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => handleDelete(report.id)}
+                        className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                        disabled={!canDelete}
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" /> {canDelete ? "Delete" : "Delete (Locked)"}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </TableCell>
+              </TableRow>
+            );
+          })}
         </TableBody>
       </Table>
     </div>

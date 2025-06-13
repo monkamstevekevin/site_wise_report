@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -16,8 +16,10 @@ import { detectReportAnomaly, type FieldReport, type AnomalyAssessment } from '@
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, Sparkles, AlertTriangleIcon, Camera, Paperclip } from 'lucide-react';
+import { Loader2, Sparkles, AlertTriangleIcon, Camera, Paperclip, Save, Send } from 'lucide-react';
 import Image from 'next/image';
+import { mockProjectsData } from '@/app/(app)/admin/projects/page'; // Import all projects
+import type { Project } from '@/lib/types';
 
 const MAX_FILE_SIZE_MB = 5;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
@@ -50,6 +52,7 @@ const reportFormSchema = z.object({
       "Only .jpg, .jpeg, .png and .webp formats are supported."
     ),
   attachmentUrls: z.string().optional().describe('Comma-separated URLs for other attachments like documents'),
+  // status is not part of the form, it's set by button click
 });
 
 type ReportFormData = z.infer<typeof reportFormSchema>;
@@ -70,26 +73,48 @@ const samplingMethodOptions: { value: ReportFormData['samplingMethod']; label: s
 ];
 
 export function ReportForm() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitAction, setSubmitAction] = useState<'DRAFT' | 'SUBMITTED' | null>(null);
   const [anomalyResult, setAnomalyResult] = useState<AnomalyAssessment | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
-
+  const [assignedProjects, setAssignedProjects] = useState<Project[]>([]);
 
   const form = useForm<ReportFormData>({
     resolver: zodResolver(reportFormSchema),
     defaultValues: {
       notes: '',
       attachmentUrls: '',
+      projectId: '', // Ensure projectId is initialized
     },
   });
+
+  useEffect(() => {
+    if (user && !authLoading) {
+      // Simulate fetching user's assigned projects from mock data
+      // In a real app, user object from useAuth might contain assignedProjectIds or you'd fetch them.
+      // For now, let's assume the user object in AuthContext has an `assignedProjectIds` array.
+      // This is a mock implementation detail.
+      const currentUserAssignedIds = mockUsersData.find(u => u.id === user.uid)?.assignedProjectIds || [];
+      const userProjects = mockProjectsData.filter(p => currentUserAssignedIds.includes(p.id));
+      setAssignedProjects(userProjects);
+      if (userProjects.length > 0 && !form.getValues('projectId')) {
+        form.setValue('projectId', userProjects[0].id); // Set default project if available
+      }
+    }
+  }, [user, authLoading, form]);
+  
+  // Mock user data, in real app this comes from a proper source like context or API
+  const mockUsersData = [ 
+    { id: user?.uid || 'USR_TEMP', name: 'Current User', assignedProjectIds: ['PJT001', 'PJT003'] } 
+  ];
+
 
   const handlePhotoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      // Validate here before setting preview if needed, though Zod handles final validation
       const reader = new FileReader();
       reader.onloadend = () => {
         setPhotoPreview(reader.result as string);
@@ -109,12 +134,13 @@ export function ReportForm() {
     });
   };
 
-  const onSubmit = async (data: ReportFormData) => {
+  const processSubmit = async (data: ReportFormData, status: 'DRAFT' | 'SUBMITTED') => {
     if (!user) {
-      toast({ variant: 'destructive', title: 'Authentication Error', description: 'You must be logged in to submit a report.' });
+      toast({ variant: 'destructive', title: 'Authentication Error', description: 'You must be logged in.' });
       return;
     }
     setIsSubmitting(true);
+    setSubmitAction(status);
     setAnomalyResult(null);
 
     let photoDataUri: string | undefined = undefined;
@@ -123,8 +149,9 @@ export function ReportForm() {
         photoDataUri = await readFileAsDataURL(data.photo[0]);
       } catch (error) {
         console.error("Error reading photo file:", error);
-        toast({ variant: 'destructive', title: 'Photo Error', description: 'Could not process the uploaded photo.' });
+        toast({ variant: 'destructive', title: 'Photo Error', description: 'Could not process the photo.' });
         setIsSubmitting(false);
+        setSubmitAction(null);
         return;
       }
     }
@@ -133,51 +160,57 @@ export function ReportForm() {
       ...data,
       id: crypto.randomUUID(),
       technicianId: user.uid,
-      status: 'SUBMITTED',
+      status: status,
       attachments: data.attachmentUrls ? data.attachmentUrls.split(',').map(url => url.trim()).filter(url => url) : [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       photoDataUri: photoDataUri,
     };
-    // Remove form-specific photo property before sending to AI/DB
     delete (fieldReportData as any).photo;
 
-
     try {
-      toast({ title: 'Analyzing Report...', description: 'Please wait while AI checks for anomalies.' });
+      toast({ title: 'Analyzing Report...', description: 'AI checking for anomalies...' });
       const assessment = await detectReportAnomaly(fieldReportData);
       setAnomalyResult(assessment);
 
-      if (assessment.isAnomalous) {
-        toast({
-          variant: 'destructive',
-          title: 'Anomaly Detected!',
-          description: 'Review the details below and consider revising the report.',
-          duration: 10000,
-        });
-      } else {
-        toast({
-          title: 'Report Submitted & Analyzed',
-          description: 'No anomalies detected by AI. Report submitted successfully.',
-          duration: 7000,
-        });
+      if (status === 'SUBMITTED') {
+        if (assessment.isAnomalous) {
+          toast({
+            variant: 'destructive',
+            title: 'Anomaly Detected!',
+            description: 'Review details. Report submitted but flagged.',
+            duration: 10000,
+          });
+        } else {
+          toast({
+            title: 'Report Submitted & Analyzed',
+            description: 'No anomalies. Submitted for validation.',
+            duration: 7000,
+          });
+        }
+      } else { // DRAFT
+         toast({
+            title: 'Report Saved as Draft',
+            description: assessment.isAnomalous ? 'Anomaly detected in draft.' : 'Draft saved. No anomalies detected by AI.',
+            duration: 7000,
+          });
       }
-      // Here you would typically save the fieldReportData and assessment to your database
-      console.log('Field Report Data (to be saved):', fieldReportData);
+      console.log(`Field Report ${status}:`, fieldReportData);
       console.log('Anomaly Assessment:', assessment);
       // form.reset(); // Optionally reset form
-      // setPhotoPreview(null); // Reset photo preview
+      // setPhotoPreview(null);
     } catch (error) {
-      console.error('Error submitting report or detecting anomaly:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Submission Error',
-        description: 'Could not submit report or run anomaly detection.',
-      });
+      console.error('Error processing report:', error);
+      toast({ variant: 'destructive', title: 'Error', description: 'Could not process report.' });
     } finally {
       setIsSubmitting(false);
+      setSubmitAction(null);
     }
   };
+
+  if (authLoading) {
+      return <Card className="shadow-xl"><CardContent><Skeleton className="h-64 w-full" /></CardContent></Card>
+  }
 
   return (
     <Card className="shadow-xl">
@@ -187,17 +220,27 @@ export function ReportForm() {
       </CardHeader>
       <CardContent>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField
                 control={form.control}
                 name="projectId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Project ID</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g., PJT-001" {...field} />
-                    </FormControl>
+                    <FormLabel>Project (Assigned to you)</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger disabled={assignedProjects.length === 0}>
+                          <SelectValue placeholder={assignedProjects.length === 0 ? "No projects assigned" : "Select an assigned project"} />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {assignedProjects.length === 0 && <SelectItem value="-" disabled>No projects assigned to you</SelectItem>}
+                        {assignedProjects.map(project => (
+                          <SelectItem key={project.id} value={project.id}>{project.name} ({project.id})</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -350,7 +393,7 @@ export function ReportForm() {
                     <FormMessage />
                     {photoPreview && (
                       <div className="mt-2">
-                        <Image src={photoPreview} alt="Photo preview" width={200} height={200} className="rounded-md object-cover max-h-48 w-auto" />
+                        <Image src={photoPreview} alt="Photo preview" width={200} height={200} className="rounded-md object-cover max-h-48 w-auto" data-ai-hint="material sample" />
                          <Button variant="link" size="sm" className="text-xs h-auto p-0 mt-1" onClick={() => {
                             setPhotoPreview(null);
                             form.setValue('photo', undefined);
@@ -361,8 +404,6 @@ export function ReportForm() {
                   </FormItem>
                 )}
               />
-
-
               <FormField
                 control={form.control}
                 name="notes"
@@ -381,9 +422,9 @@ export function ReportForm() {
                 name="attachmentUrls"
                 render={({ field }) => (
                   <FormItem className="md:col-span-2">
-                    <FormLabel>Other Attachment URLs (Optional)</FormLabel>
+                    <FormLabel>Other Attachment URLs (Optional, e.g., PDFs)</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., https://example.com/doc.pdf, https://example.com/drawing.png" {...field} />
+                      <Input placeholder="e.g., https://example.com/doc.pdf" {...field} />
                     </FormControl>
                     <FormDescription className="flex items-center">
                       <Paperclip className="mr-2 h-4 w-4" /> Comma-separated URLs for any attached documents, specs, etc.
@@ -394,13 +435,33 @@ export function ReportForm() {
               />
             </div>
 
-            <Button type="submit" className="w-full md:w-auto rounded-lg" disabled={isSubmitting}>
-              {isSubmitting ? (
-                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting & Analyzing...</>
-              ) : (
-                <><Sparkles className="mr-2 h-4 w-4" /> Submit & Check Anomaly</>
-              )}
-            </Button>
+            <div className="flex flex-col sm:flex-row gap-3 pt-4">
+                <Button 
+                    type="button" 
+                    onClick={form.handleSubmit(data => processSubmit(data, 'DRAFT'))} 
+                    variant="outline" 
+                    className="w-full sm:w-auto rounded-lg" 
+                    disabled={isSubmitting}
+                >
+                {isSubmitting && submitAction === 'DRAFT' ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</>
+                ) : (
+                    <><Save className="mr-2 h-4 w-4" /> Save as Draft</>
+                )}
+                </Button>
+                <Button 
+                    type="button" 
+                    onClick={form.handleSubmit(data => processSubmit(data, 'SUBMITTED'))} 
+                    className="w-full sm:w-auto rounded-lg" 
+                    disabled={isSubmitting}
+                >
+                {isSubmitting && submitAction === 'SUBMITTED' ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting...</>
+                ) : (
+                    <><Send className="mr-2 h-4 w-4" /> Submit for Validation</>
+                )}
+                </Button>
+            </div>
           </form>
         </Form>
 
@@ -419,4 +480,3 @@ export function ReportForm() {
     </Card>
   );
 }
-

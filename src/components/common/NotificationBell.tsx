@@ -1,7 +1,7 @@
 
 'use client';
 
-import { Bell, MessageSquare, FileText, Briefcase, Settings } from 'lucide-react';
+import { Bell, MessageSquare, FileText, Briefcase, Settings, UserCheck, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -18,63 +18,88 @@ import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
-// Mock notifications
-const initialNotifications: Notification[] = [
+// Mock notifications - tailored for a technician
+const technicianNotifications: Notification[] = [
   {
-    id: 'notif1',
-    type: 'new_chat_message',
-    message: 'Nouveau message de Marcus dans "Highway 7 Expansion"',
-    targetId: 'PJT002', // Example Project ID
-    isRead: false,
-    displayTime: '5m ago',
-    createdAt: new Date(Date.now() - 5 * 60000).toISOString(),
-    icon: MessageSquare,
-    iconClass: 'text-blue-500',
-  },
-  {
-    id: 'notif2',
+    id: 'notif_tech_1',
     type: 'report_update',
-    message: 'Rapport #RPT001 validé par le superviseur.',
-    targetId: 'RPT001',
+    message: 'Your report #RPT001 for PJT001 has been VALIDATED.',
+    targetId: 'RPT001', // Report ID
     isRead: false,
-    displayTime: '1h ago',
-    createdAt: new Date(Date.now() - 60 * 60000).toISOString(),
-    icon: FileText,
+    displayTime: '15m ago',
+    createdAt: new Date(Date.now() - 15 * 60000).toISOString(),
+    icon: UserCheck,
     iconClass: 'text-green-500',
   },
   {
-    id: 'notif3',
+    id: 'notif_tech_2',
+    type: 'report_update',
+    message: 'Report #RPT003 for PJT001 was REJECTED. Reason: Incomplete data.',
+    targetId: 'RPT003', // Report ID
+    isRead: false,
+    displayTime: '1h ago',
+    createdAt: new Date(Date.now() - 60 * 60000).toISOString(),
+    icon: AlertCircle,
+    iconClass: 'text-red-500',
+  },
+  {
+    id: 'notif_tech_3',
     type: 'project_assignment',
-    message: 'Vous avez été assigné au projet "Coastal Bridge Repair".',
-    targetId: 'PJT003',
+    message: 'You have been assigned to a new project: "Greenfield Highway Expansion" (PJT002).',
+    targetId: 'PJT002', // Project ID
     isRead: true,
-    displayTime: '3h ago',
-    createdAt: new Date(Date.now() - 3 * 60 * 60000).toISOString(),
+    displayTime: '4h ago',
+    createdAt: new Date(Date.now() - 4 * 60 * 60000).toISOString(),
     icon: Briefcase,
     iconClass: 'text-purple-500',
   },
   {
-    id: 'notif4',
-    type: 'system_update',
-    message: 'Maintenance du système prévue ce soir à 23h00.',
-    isRead: true,
-    displayTime: '1d ago',
-    createdAt: new Date(Date.now() - 24 * 60 * 60000).toISOString(),
-    icon: Settings,
-    iconClass: 'text-gray-500',
-  },
-   {
-    id: 'notif5',
+    id: 'notif_tech_4',
     type: 'new_chat_message',
-    message: 'Aisha a répondu dans "Downtown Tower Renovation"',
-    targetId: 'PJT001',
+    message: 'Supervisor message in "Downtown Tower Renovation" (PJT001)',
+    targetId: 'PJT001', // Project ID for chat
     isRead: false,
-    displayTime: '10m ago',
-    createdAt: new Date(Date.now() - 10 * 60000).toISOString(),
+    displayTime: 'Yesterday',
+    createdAt: new Date(Date.now() - 24 * 60 * 60000).toISOString(),
     icon: MessageSquare,
     iconClass: 'text-blue-500',
   },
 ];
+
+// Admin/Supervisor notifications (can be expanded)
+const adminSupervisorNotifications: Notification[] = [
+    {
+    id: 'notif_admin_1',
+    type: 'report_update', // or a new type like 'report_submitted_for_validation'
+    message: 'Report #RPT002 (Technician: David L.) submitted for validation.',
+    targetId: 'RPT002',
+    isRead: false,
+    displayTime: '30m ago',
+    createdAt: new Date(Date.now() - 30 * 60000).toISOString(),
+    icon: FileText,
+    iconClass: 'text-orange-500',
+  },
+   {
+    id: 'notif_admin_2',
+    type: 'system_update',
+    message: 'User Aisha K. updated their profile.',
+    targetId: 'USR003', // User ID
+    isRead: true,
+    displayTime: '2h ago',
+    createdAt: new Date(Date.now() - 2 * 60 * 60000).toISOString(),
+    icon: Settings,
+    iconClass: 'text-gray-500',
+  }
+];
+
+// Combine notifications based on a mock role for now
+// In a real app, this would be based on the logged-in user's role from AuthContext
+const MOCK_CURRENT_USER_ROLE = 'TECHNICIAN'; // Change to 'ADMIN' or 'SUPERVISOR' to test
+
+const initialNotifications = MOCK_CURRENT_USER_ROLE === 'TECHNICIAN'
+  ? technicianNotifications
+  : [...adminSupervisorNotifications, ...technicianNotifications.slice(0,2)]; // Admin sees some tech notifs too
+
 
 export function NotificationBell() {
   const [notifications, setNotifications] = useState(initialNotifications);
@@ -84,45 +109,40 @@ export function NotificationBell() {
   const { toast } = useToast();
 
   useEffect(() => {
-    setMounted(true); // Ensure client-side rendering for dropdown
-    setUnreadCount(notifications.filter(n => !n.read).length);
+    setMounted(true);
+    setUnreadCount(notifications.filter(n => !n.isRead).length);
   }, [notifications]);
 
   const handleNotificationClick = (notification: Notification) => {
-    // Mark as read
     setNotifications(prev =>
       prev.map(n => (n.id === notification.id ? { ...n, isRead: true } : n))
     );
 
-    // Navigate or perform action
     if (notification.link) {
       router.push(notification.link);
     } else if (notification.type === 'new_chat_message' && notification.targetId) {
       router.push(`/project/${notification.targetId}/chat`);
     } else if (notification.type === 'report_update' && notification.targetId) {
-      // In a real app, navigate to the report details page
-      // router.push(`/reports/${notification.targetId}`);
+      // For a technician, this could link to their /reports page, filtered or scrolled to that report.
+      // For an admin/supervisor, this could link to a specific report view page.
+      router.push(`/reports?highlight=${notification.targetId}`); // Simple nav for now
       toast({
-        title: 'Notification: Rapport',
-        description: `Action pour le rapport ${notification.targetId}. (Navigation à implémenter)`,
+        title: 'Report Notification',
+        description: `Navigating to details for report ${notification.targetId}. (Full navigation to specific report TBD)`,
       });
     } else if (notification.type === 'project_assignment' && notification.targetId) {
-      // In a real app, navigate to the project details page
-      // router.push(`/admin/projects/${notification.targetId}/details`); // Or similar
-      router.push(`/admin/projects`); // Go to projects list for now
+      router.push(`/admin/projects`); // Or a specific project page if one exists: /projects/[id]
        toast({
-        title: 'Notification: Projet',
-        description: `Action pour le projet ${notification.targetId}. (Navigation à implémenter)`,
+        title: 'Project Assignment',
+        description: `You were assigned to project ${notification.targetId}. View project details. (Full navigation TBD)`,
       });
     } else {
-      // Generic notification, maybe show a toast or nothing
       toast({ title: 'Notification', description: notification.message });
     }
-     // DropdownMenu typically closes on item click, if not, manage state to close it
   };
 
   const handleMarkAllAsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
   };
 
   if (!mounted) {
@@ -166,7 +186,6 @@ export function NotificationBell() {
                 !notification.isRead && "bg-accent/50 hover:bg-accent/60"
               )}
               onClick={() => handleNotificationClick(notification)}
-              // Prevent dropdown from closing if an interactive element inside is clicked (not needed here as item is the trigger)
             >
               {notification.icon && (
                 <div className={cn("mt-0.5", notification.iconClass || 'text-muted-foreground')}>
@@ -195,3 +214,4 @@ export function NotificationBell() {
     </DropdownMenu>
   );
 }
+
