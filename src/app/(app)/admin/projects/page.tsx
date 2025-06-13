@@ -13,8 +13,8 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 
-// Moved mockProjects here
-const mockProjectsData: Project[] = [
+// Moved mockProjects here and exported it
+export const mockProjectsData: Project[] = [
   {
     id: 'PJT001',
     name: 'Downtown Tower Renovation',
