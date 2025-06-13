@@ -156,7 +156,44 @@ export const mockReportsData: FieldReport[] = [
     attachments: [],
     createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(), // 1 day ago
     updatedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-  }
+  },
+  {
+    id: 'RPT009',
+    projectId: 'PJT001',
+    technicianId: MOCK_TECHNICIAN_REPORTS_ID,
+    materialType: 'cement',
+    temperature: 19.5,
+    volume: 8.0,
+    density: 1470,
+    humidity: 60,
+    batchNumber: 'CMT-TECH-009',
+    supplier: 'Acme Materials',
+    samplingMethod: 'grab',
+    notes: 'Small patch work, concrete looks fine. Submitted.',
+    status: 'SUBMITTED',
+    attachments: [],
+    createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(), // 5 hours ago
+    updatedAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 'RPT010',
+    projectId: 'PJT003',
+    technicianId: MOCK_TECHNICIAN_REPORTS_ID,
+    materialType: 'gravel',
+    temperature: 15.0,
+    volume: 25.0,
+    density: 1750,
+    humidity: 50,
+    batchNumber: 'GRV-TECH-010',
+    supplier: 'RockSolid Inc.',
+    samplingMethod: 'composite',
+    notes: 'Gravel for pathway, seems okay. Saved as draft for now.',
+    status: 'DRAFT',
+    attachments: [],
+    photoDataUri: 'https://placehold.co/600x400.png',
+    createdAt: new Date(Date.now() - 10 * 60 * 60 * 1000).toISOString(), // 10 hours ago
+    updatedAt: new Date(Date.now() - 10 * 60 * 60 * 1000).toISOString(),
+  },
 ];
 
 const reportStatusFilterOptions: { value: FieldReport['status'] | 'ALL'; label: string }[] = [
@@ -362,3 +399,5 @@ export default function ReportsPage() {
     </>
   );
 }
+
+    

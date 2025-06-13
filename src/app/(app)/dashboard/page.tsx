@@ -14,7 +14,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import type { UserRole } from '@/lib/constants';
 import { MOCK_TECHNICIAN_EMAIL, MOCK_TECHNICIAN_REPORTS_ID } from '@/lib/constants';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'; // Added CardDescription
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useEffect, useState, useMemo } from 'react';
 import type { FieldReport } from '@/lib/types';
 import { mockReportsData } from '@/app/(app)/reports/page'; 
@@ -89,6 +89,10 @@ export default function DashboardPage() {
     { title: "My Validated Reports", value: technicianReports.filter(r => r.status === 'VALIDATED').length, icon: UserCheck, description: "Reports approved." },
     { title: "Reports in Draft", value: technicianReports.filter(r => r.status === 'DRAFT').length, icon: Clock, description: "Reports saved as draft." },
   ], [technicianReports]);
+  
+  const sortedTechnicianReportsForDisplay = useMemo(() => {
+    return [...technicianReports].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [technicianReports]);
 
   const technicianMaterialUsage = useMemo(() => {
     const counts: { [key: string]: number } = {};
@@ -195,7 +199,7 @@ export default function DashboardPage() {
                  <CardDescription>Quick overview of your latest activity.</CardDescription>
               </CardHeader>
               <CardContent>
-                {technicianReports.length > 0 ? technicianReports.slice(0, 5).map(report => (
+                {sortedTechnicianReportsForDisplay.length > 0 ? sortedTechnicianReportsForDisplay.slice(0, 5).map(report => (
                   <div key={report.id} className="mb-3 pb-3 border-b last:border-b-0 last:pb-0 last:mb-0">
                     <div className="flex justify-between items-center">
                       <span className="text-sm font-medium text-foreground truncate max-w-[150px] sm:max-w-xs" title={`Report ${report.id} for ${report.projectId}`}>Report {report.id.substring(0,6)}... ({report.projectId})</span>
@@ -239,7 +243,7 @@ export default function DashboardPage() {
                 <CardDescription>Important action items or system notices.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    {technicianReports.some(r => r.status === 'REJECTED') && (
+                    {technicianReports.filter(r => r.status === 'REJECTED').length > 0 && (
                         <div className="mb-3 p-2 bg-destructive/10 border border-destructive/30 rounded-md">
                             <p className="text-sm text-destructive font-medium">You have {technicianReports.filter(r => r.status === 'REJECTED').length} rejected report(s) needing attention.</p>
                         </div>
@@ -261,3 +265,5 @@ export default function DashboardPage() {
     </>
   );
 }
+
+    
