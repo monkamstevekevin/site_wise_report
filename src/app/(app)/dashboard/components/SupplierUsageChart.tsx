@@ -6,36 +6,43 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from '@/components/ui/chart';
 import { Users2 } from 'lucide-react';
 
-const chartData = [
-  { name: 'Acme Materials', reports: 275, fill: 'var(--color-acme)' },
-  { name: 'BuildIt Co.', reports: 180, fill: 'var(--color-buildit)' },
-  { name: 'RockSolid Inc.', reports: 150, fill: 'var(--color-rocksolid)' },
-  { name: 'Quality Aggregates', reports: 90, fill: 'var(--color-quality)' },
-];
+interface SupplierData {
+  name: string;
+  reports: number;
+  fill: string;
+}
 
+interface SupplierUsageChartProps {
+  data: SupplierData[];
+}
+
+// This chartConfig remains as a general setup or fallback,
+// actual colors and labels are driven by the dynamic data.
 const chartConfig = {
   reports: {
     label: 'Reports',
   },
-  acme: {
-    label: 'Acme Materials',
-    color: 'hsl(var(--chart-1))',
-  },
-  buildit: {
-    label: 'BuildIt Co.',
-    color: 'hsl(var(--chart-2))',
-  },
-  rocksolid: {
-    label: 'RockSolid Inc.',
-    color: 'hsl(var(--chart-3))',
-  },
-  quality: {
-    label: 'Quality Aggregates',
-    color: 'hsl(var(--chart-4))',
-  },
+  // Dynamic keys for suppliers will be handled by the data itself
 } satisfies ChartConfig;
 
-export function SupplierUsageChart() {
+export function SupplierUsageChart({ data }: SupplierUsageChartProps) {
+  if (!data || data.length === 0) {
+    return (
+      <Card className="shadow-lg rounded-lg">
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <Users2 className="mr-2 h-5 w-5 text-primary" />
+            Supplier Usage
+          </CardTitle>
+          <CardDescription>Distribution of reports based on material suppliers.</CardDescription>
+        </CardHeader>
+        <CardContent className="h-80 flex items-center justify-center">
+          <p className="text-muted-foreground">No supplier usage data available.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+  
   return (
     <Card className="shadow-lg rounded-lg">
       <CardHeader>
@@ -51,10 +58,13 @@ export function SupplierUsageChart() {
             <PieChart>
               <Tooltip
                 cursor={false}
-                content={<ChartTooltipContent hideLabel />}
+                content={<ChartTooltipContent 
+                            formatter={(value, name, props) => [`${value} reports`, props.payload.name]}
+                            hideLabel 
+                        />}
               />
               <Pie
-                data={chartData}
+                data={data}
                 dataKey="reports"
                 nameKey="name"
                 cx="50%"
@@ -62,10 +72,10 @@ export function SupplierUsageChart() {
                 outerRadius={100}
                 innerRadius={60}
                 labelLine={false}
-                // label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                // label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} // Optional: enable for direct labels
               >
-                {chartData.map((entry) => (
-                  <Cell key={`cell-${entry.name}`} fill={entry.fill} />
+                {data.map((entry, index) => (
+                  <Cell key={`cell-${index}-${entry.name}`} fill={entry.fill} />
                 ))}
               </Pie>
               <ChartLegend
@@ -82,3 +92,5 @@ export function SupplierUsageChart() {
     </Card>
   );
 }
+
+    

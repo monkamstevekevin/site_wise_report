@@ -16,7 +16,7 @@ import { MOCK_TECHNICIAN_EMAIL, MOCK_TECHNICIAN_REPORTS_ID } from '@/lib/constan
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useEffect, useState, useMemo } from 'react';
-import type { FieldReport } from '@/lib/types';
+import type { FieldReport, MaterialType } from '@/lib/types';
 import { getReportsByTechnicianId, getReports as getAllReports } from '@/services/reportService'; 
 import { Badge } from '@/components/ui/badge';
 import { formatDistanceToNow } from 'date-fns';
@@ -59,6 +59,14 @@ const materialColors: { [key: string]: string } = {
   other: 'hsl(var(--chart-5))',
 };
 
+const supplierChartColors: string[] = [
+  'hsl(var(--chart-1))',
+  'hsl(var(--chart-2))',
+  'hsl(var(--chart-3))',
+  'hsl(var(--chart-4))',
+  'hsl(var(--chart-5))', // Color for "Other"
+];
+
 
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
@@ -72,45 +80,44 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const loadDashboardData = async () => {
-      if (authLoading) { // Only wait for authLoading, not !user initially
-        setIsLoadingDashboardData(true); // Ensure loading state is true while auth is resolving
+      if (authLoading) { 
+        setIsLoadingDashboardData(true); 
         return;
       }
       
-      if (!user) { // If auth is done and there's no user
+      if (!user) { 
         setIsLoadingDashboardData(false);
         setAllReportsData([]);
         setTechnicianReports([]);
-        setCurrentUserRole(null); // Clear role
-        setDashboardError(null); // Clear any previous errors
+        setCurrentUserRole(null); 
+        setDashboardError(null); 
         return;
       }
       
       setIsLoadingDashboardData(true);
-      setDashboardError(null); // Reset error at the start of a new fetch attempt
+      setDashboardError(null); 
       const { role, effectiveTechnicianId: mappedTechId } = mapFirebaseUserToAppRoleAndId(user);
       setCurrentUserRole(role);
       setEffectiveTechnicianId(mappedTechId);
 
       try {
-        let reports: FieldReport[] = [];
+        let reportsToSetForDashboard: FieldReport[] = [];
         if (role === 'ADMIN' || role === 'SUPERVISOR') {
-          reports = await getAllReports();
-          setAllReportsData(reports);
+          reportsToSetForDashboard = await getAllReports();
+          setAllReportsData(reportsToSetForDashboard);
         } else if (role === 'TECHNICIAN' && mappedTechId) {
-          reports = await getReportsByTechnicianId(mappedTechId);
-          setTechnicianReports(reports);
-          setAllReportsData(reports); 
+          reportsToSetForDashboard = await getReportsByTechnicianId(mappedTechId);
+          setTechnicianReports(reportsToSetForDashboard);
+          // For technician view, allReportsData might be a subset or same as technicianReports
+          // Depending on if they should see global charts or just their own.
+          // For now, let's assume global charts use 'allReportsData' which for a tech could be their own.
+          setAllReportsData(reportsToSetForDashboard); 
         } else if (role === 'TECHNICIAN' && !mappedTechId) {
-          // Technician role but no specific ID to fetch for (e.g. new user not yet in a custom system)
            setTechnicianReports([]);
            setAllReportsData([]);
         }
-        // Note: reportService now returns [] for missing indexes, so no error will be thrown for that.
-        // dashboardError will only be set if reportService throws a *different* type of error.
       } catch (err) {
         console.error("Error loading dashboard data:", err);
-        // This error will only be set for actual service failures, not missing indexes.
         setDashboardError((err as Error).message || "Failed to load report data for dashboard.");
       } finally {
         setIsLoadingDashboardData(false);
@@ -118,14 +125,17 @@ export default function DashboardPage() {
     };
 
     loadDashboardData();
-  }, [user, authLoading]); // Dependencies
+  }, [user, authLoading]); 
   
-  const adminKpiData = useMemo(() => [
-    { title: "Total Reports", value: allReportsData.length, icon: FileText, trend: "+X% from last month" , trendDirection: "up" as const }, 
-    { title: "Pending Validation", value: allReportsData.filter(r => r.status === 'SUBMITTED').length, icon: AlertTriangle, trend: "-Y since yesterday", trendDirection: "down" as const },
-    { title: "Validated Reports", value: allReportsData.filter(r => r.status === 'VALIDATED').length, icon: CheckCircle, trend: "+Z this week", trendDirection: "up" as const },
-    { title: "Avg. Compliance", value: "XX%", icon: BarChart3, trend: "Maintained", trendDirection: "neutral" as const }, // Needs actual calculation
-  ], [allReportsData]);
+  const adminKpiData = useMemo(() => {
+    const reportsForKpi = allReportsData; // Admin/Supervisor see all reports
+    return [
+        { title: "Total Reports", value: reportsForKpi.length, icon: FileText, trend: "", trendDirection: "neutral" as const }, 
+        { title: "Pending Validation", value: reportsForKpi.filter(r => r.status === 'SUBMITTED').length, icon: AlertTriangle, trend: "", trendDirection: "neutral" as const },
+        { title: "Validated Reports", value: reportsForKpi.filter(r => r.status === 'VALIDATED').length, icon: CheckCircle, trend: "", trendDirection: "neutral" as const },
+        { title: "Avg. Compliance", value: "XX%", icon: BarChart3, trend: "Maintained", trendDirection: "neutral" as const }, 
+    ];
+  }, [allReportsData]);
 
 
   const technicianKpiData = useMemo(() => [
@@ -139,17 +149,52 @@ export default function DashboardPage() {
     return [...technicianReports].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [technicianReports]);
 
-  const technicianMaterialUsage = useMemo(() => {
-    const counts: { [key: string]: number } = {};
-    technicianReports.forEach(report => {
-      counts[report.materialType] = (counts[report.materialType] || 0) + 1;
+  const materialUsageData = useMemo(() => {
+    const reportsSource = (currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') ? allReportsData : technicianReports;
+    const counts: { [key in MaterialType]: number } = { cement: 0, asphalt: 0, gravel: 0, sand: 0, other: 0 };
+    reportsSource.forEach(report => {
+      if (counts[report.materialType] !== undefined) {
+        counts[report.materialType]++;
+      } else {
+        counts.other++; // Default to 'other' if materialType is somehow unknown
+      }
     });
-    return Object.entries(counts).map(([name, value]) => ({
-      name: name.charAt(0).toUpperCase() + name.slice(1), 
-      value,
-      fill: materialColors[name.toLowerCase()] || 'hsl(var(--muted))',
+    return Object.entries(counts).map(([material, reportCount]) => ({
+      material: material.charAt(0).toUpperCase() + material.slice(1), 
+      reports: reportCount,
+      fill: materialColors[material as MaterialType] || materialColors.other,
     }));
-  }, [technicianReports]);
+  }, [allReportsData, technicianReports, currentUserRole]);
+
+  const supplierUsageData = useMemo(() => {
+    const reportsSource = (currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') ? allReportsData : technicianReports;
+    const supplierCounts: { [key: string]: number } = {};
+    reportsSource.forEach(report => {
+      const supplier = report.supplier || "Unknown Supplier";
+      supplierCounts[supplier] = (supplierCounts[supplier] || 0) + 1;
+    });
+
+    const sortedSuppliers = Object.entries(supplierCounts)
+      .sort(([, a], [, b]) => b - a);
+
+    const topSuppliers = sortedSuppliers.slice(0, 4);
+    const otherCount = sortedSuppliers.slice(4).reduce((sum, [, count]) => sum + count, 0);
+
+    const chartData = topSuppliers.map(([name, reports], index) => ({
+      name,
+      reports,
+      fill: supplierChartColors[index],
+    }));
+
+    if (otherCount > 0) {
+      chartData.push({
+        name: 'Other Suppliers',
+        reports: otherCount,
+        fill: supplierChartColors[4], // Last color in palette for 'Other'
+      });
+    }
+    return chartData;
+  }, [allReportsData, technicianReports, currentUserRole]);
 
 
   if (authLoading || isLoadingDashboardData) { 
@@ -167,7 +212,7 @@ export default function DashboardPage() {
     );
   }
   
-  if (!user && !authLoading) { // Explicitly check for no user after auth is done loading
+  if (!user && !authLoading) { 
      return (
       <>
         <PageTitle title="Dashboard" icon={LayoutDashboard} subtitle="Please log in to view your dashboard." />
@@ -181,7 +226,6 @@ export default function DashboardPage() {
     );
   }
   
-  // This block will now only show for actual fetch errors, not missing indexes.
   if (dashboardError) {
     return (
       <>
@@ -197,9 +241,8 @@ export default function DashboardPage() {
     )
   }
 
-  // If no error, and loading is false, but user is present and role might still be resolving briefly
   if (user && currentUserRole === null && !isLoadingDashboardData) {
-     return ( // Simplified loading state if role isn't set yet but data fetch might be "done" (e.g. empty)
+     return ( 
       <>
         <PageTitle title="Dashboard Overview" icon={LayoutDashboard} subtitle="Finalizing dashboard..." />
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
@@ -208,6 +251,9 @@ export default function DashboardPage() {
       </>
     );
   }
+
+  const noReportsExistForUser = (currentUserRole === 'TECHNICIAN' && technicianReports.length === 0) ||
+                               ((currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') && allReportsData.length === 0);
 
   return (
     <>
@@ -226,7 +272,7 @@ export default function DashboardPage() {
 
       { (currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') && (
         <>
-          {allReportsData.length === 0 && !isLoadingDashboardData && !dashboardError && (
+          {noReportsExistForUser && !isLoadingDashboardData && !dashboardError && (
             <Card className="mb-8">
               <CardHeader>
                 <CardTitle>No Reports Found</CardTitle>
@@ -237,7 +283,7 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
           )}
-          {allReportsData.length > 0 && (
+          {!noReportsExistForUser && (
             <>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
                 {adminKpiData.map((kpi) => (
@@ -253,10 +299,10 @@ export default function DashboardPage() {
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2">
-                <MaterialReportsChart />
+                <MaterialReportsChart data={materialUsageData} />
                 </div>
                 <div>
-                <SupplierUsageChart />
+                <SupplierUsageChart data={supplierUsageData} />
                 </div>
                 <ComplianceTrendChart />
                 <ActivityLog />
@@ -268,7 +314,7 @@ export default function DashboardPage() {
 
       { currentUserRole === 'TECHNICIAN' && (
         <>
-         {technicianReports.length === 0 && !isLoadingDashboardData && !dashboardError && (
+         {noReportsExistForUser && !isLoadingDashboardData && !dashboardError && (
             <Card className="mb-8">
               <CardHeader>
                 <CardTitle>No Reports Found</CardTitle>
@@ -279,7 +325,7 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
           )}
-          {technicianReports.length > 0 && (
+          {!noReportsExistForUser && (
             <>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
                 {technicianKpiData.map((kpi) => (
@@ -306,7 +352,7 @@ export default function DashboardPage() {
                         <Badge variant={reportStatusBadgeVariant[report.status]}>{report.status}</Badge>
                         </div>
                         <p className="text-xs text-muted-foreground">
-                        {report.materialType.charAt(0).toUpperCase() + report.materialType.slice(1)} - {formatDistanceToNow(new Date(report.createdAt), { addSuffix: true })}
+                        {(materialTypeDisplay[report.materialType] || report.materialType)} - {formatDistanceToNow(new Date(report.createdAt), { addSuffix: true })}
                         </p>
                     </div>
                     )) : <p className="text-sm text-muted-foreground">No reports submitted yet.</p>}
@@ -318,13 +364,13 @@ export default function DashboardPage() {
                     <CardDescription>Breakdown of materials in your reports.</CardDescription>
                 </CardHeader>
                 <CardContent className="h-72 flex items-center justify-center">
-                    {technicianMaterialUsage.length > 0 ? (
+                    {materialUsageData.filter(m => m.reports > 0).length > 0 ? (
                     <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
-                        <Pie data={technicianMaterialUsage} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} labelLine={false} 
+                        <Pie data={materialUsageData.filter(m => m.reports > 0)} dataKey="reports" nameKey="material" cx="50%" cy="50%" outerRadius={80} labelLine={false} 
                         label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                         >
-                            {technicianMaterialUsage.map((entry, index) => (
+                            {materialUsageData.filter(m => m.reports > 0).map((entry, index) => (
                             <Cell key={`cell-${index}`} fill={entry.fill} />
                             ))}
                         </Pie>
@@ -367,3 +413,5 @@ export default function DashboardPage() {
     </>
   );
 }
+
+    

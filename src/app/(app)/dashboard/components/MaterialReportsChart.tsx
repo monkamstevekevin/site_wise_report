@@ -6,41 +6,50 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from '@/components/ui/chart';
 import { GanttChartSquare } from 'lucide-react';
 
-const chartData = [
-  { material: 'Cement', reports: 186, fill: 'var(--color-cement)' },
-  { material: 'Asphalt', reports: 120, fill: 'var(--color-asphalt)' },
-  { material: 'Gravel', reports: 95, fill: 'var(--color-gravel)' },
-  { material: 'Sand', reports: 73, fill: 'var(--color-sand)' },
-  { material: 'Other', reports: 45, fill: 'var(--color-other)' },
-];
+interface MaterialReportData {
+  material: string;
+  reports: number;
+  fill: string;
+}
 
+interface MaterialReportsChartProps {
+  data: MaterialReportData[];
+}
+
+// This chartConfig is now mainly for Legend labels and general setup,
+// as colors are driven by the 'fill' property in the incoming data.
 const chartConfig = {
   reports: {
     label: 'Reports',
   },
-  cement: {
-    label: 'Cement',
-    color: 'hsl(var(--chart-1))',
-  },
-  asphalt: {
-    label: 'Asphalt',
-    color: 'hsl(var(--chart-2))',
-  },
-  gravel: {
-    label: 'Gravel',
-    color: 'hsl(var(--chart-3))',
-  },
-  sand: {
-    label: 'Sand',
-    color: 'hsl(var(--chart-4))',
-  },
-  other: {
-    label: 'Other',
-    color: 'hsl(var(--chart-5))',
-  },
+  // The keys here (cement, asphalt, etc.) should match the 'material' names
+  // from the data if we want the legend to pick them up automatically.
+  // However, the legend can also be built dynamically or use nameKey from data.
+  Cement: { label: 'Cement', color: 'hsl(var(--chart-1))' },
+  Asphalt: { label: 'Asphalt', color: 'hsl(var(--chart-2))' },
+  Gravel: { label: 'Gravel', color: 'hsl(var(--chart-3))' },
+  Sand: { label: 'Sand', color: 'hsl(var(--chart-4))' },
+  Other: { label: 'Other', color: 'hsl(var(--chart-5))' },
 } satisfies ChartConfig;
 
-export function MaterialReportsChart() {
+export function MaterialReportsChart({ data }: MaterialReportsChartProps) {
+  if (!data || data.length === 0) {
+    return (
+      <Card className="shadow-lg rounded-lg">
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <GanttChartSquare className="mr-2 h-5 w-5 text-primary" />
+            Reports by Material Type
+          </CardTitle>
+          <CardDescription>Breakdown of submitted reports by material category.</CardDescription>
+        </CardHeader>
+        <CardContent className="h-80 flex items-center justify-center">
+          <p className="text-muted-foreground">No material report data available.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card className="shadow-lg rounded-lg">
       <CardHeader>
@@ -53,16 +62,19 @@ export function MaterialReportsChart() {
       <CardContent>
         <ChartContainer config={chartConfig} className="h-80 w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 5, right: 20, left: -20, bottom: 5 }}>
+            <BarChart data={data} margin={{ top: 5, right: 20, left: -20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="material" tickLine={false} axisLine={false} tickMargin={8} />
-              <YAxis tickLine={false} axisLine={false} tickMargin={8} />
+              <YAxis tickLine={false} axisLine={false} tickMargin={8} allowDecimals={false} />
               <Tooltip
                 cursor={false}
-                content={<ChartTooltipContent hideLabel />}
+                content={<ChartTooltipContent 
+                            formatter={(value, name, props) => [`${value} reports`, props.payload.material]} 
+                            hideLabel
+                        />}
               />
               <Bar dataKey="reports" radius={5} />
-               <ChartLegend content={<ChartLegendContent />} />
+               <ChartLegend content={<ChartLegendContent nameKey="material"/>} />
             </BarChart>
           </ResponsiveContainer>
         </ChartContainer>
@@ -70,3 +82,5 @@ export function MaterialReportsChart() {
     </Card>
   );
 }
+
+    
