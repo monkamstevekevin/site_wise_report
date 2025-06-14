@@ -1,12 +1,23 @@
 
 'use client';
 
+import React, { useState } from 'react';
 import Link from 'next/link';
 import type { Project } from '@/lib/types';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { MessageSquare, MapPin, FileText } from 'lucide-react';
+import { MessageSquare, MapPin, FileText, AlertTriangle } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface MyProjectCardProps {
   project: Project;
@@ -19,38 +30,75 @@ const projectStatusBadgeVariant: Record<Project['status'], "default" | "secondar
 };
 
 export function MyProjectCard({ project }: MyProjectCardProps) {
+  const [isNavigateDialogOpen, setIsNavigateDialogOpen] = useState(false);
+  const [navigationTarget, setNavigationTarget] = useState<string | null>(null);
+
+  const handleOpenNavigateDialog = (location: string) => {
+    setNavigationTarget(location);
+    setIsNavigateDialogOpen(true);
+  };
+
+  const handleConfirmNavigation = () => {
+    if (navigationTarget) {
+      const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(navigationTarget)}`;
+      window.open(mapsUrl, '_blank');
+    }
+    setIsNavigateDialogOpen(false);
+    setNavigationTarget(null);
+  };
+
   return (
-    <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 rounded-lg">
-      <CardHeader>
-        <div className="flex justify-between items-start">
-            <div>
-                <CardTitle className="text-xl font-headline">{project.name}</CardTitle>
-                <CardDescription className="flex items-center text-sm mt-1">
-                    <MapPin className="mr-1.5 h-4 w-4 text-muted-foreground" /> {project.location}
-                </CardDescription>
-            </div>
-            <Badge variant={projectStatusBadgeVariant[project.status] || 'outline'} className="ml-2 whitespace-nowrap">
-                {project.status}
-            </Badge>
-        </div>
-        {project.description && <p className="text-sm text-muted-foreground pt-2">{project.description}</p>}
-      </CardHeader>
-      <CardContent>
-        <p className="text-xs text-muted-foreground">Project ID: {project.id}</p>
-        <p className="text-xs text-muted-foreground">Created: {new Date(project.createdAt).toLocaleDateString()}</p>
-      </CardContent>
-      <CardFooter className="flex flex-col sm:flex-row justify-end gap-2">
-        <Button variant="outline" asChild className="w-full sm:w-auto rounded-lg">
-          <Link href={`/reports?projectId=${project.id}`}>
-            <FileText className="mr-2 h-4 w-4" /> View Reports
-          </Link>
-        </Button>
-        <Button asChild className="w-full sm:w-auto rounded-lg">
-          <Link href={`/project/${project.id}/chat`}>
-            <MessageSquare className="mr-2 h-4 w-4" /> Open Chat
-          </Link>
-        </Button>
-      </CardFooter>
-    </Card>
+    <>
+      <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 rounded-lg flex flex-col">
+        <CardHeader>
+          <div className="flex justify-between items-start">
+              <div>
+                  <CardTitle className="text-xl font-headline">{project.name}</CardTitle>
+                  <CardDescription className="flex items-center text-sm mt-1">
+                      <MapPin className="mr-1.5 h-4 w-4 text-muted-foreground" /> {project.location}
+                  </CardDescription>
+              </div>
+              <Badge variant={projectStatusBadgeVariant[project.status] || 'outline'} className="ml-2 whitespace-nowrap">
+                  {project.status}
+              </Badge>
+          </div>
+          {project.description && <p className="text-sm text-muted-foreground pt-2">{project.description}</p>}
+        </CardHeader>
+        <CardContent className="flex-grow">
+          <p className="text-xs text-muted-foreground">Project ID: {project.id}</p>
+          <p className="text-xs text-muted-foreground">Created: {new Date(project.createdAt).toLocaleDateString()}</p>
+        </CardContent>
+        <CardFooter className="flex flex-col sm:flex-row justify-end gap-2 pt-4">
+          <Button variant="outline" size="sm" asChild className="w-full sm:w-auto rounded-lg">
+            <Link href={`/reports?projectId=${project.id}`}>
+              <FileText className="mr-2 h-4 w-4" /> View Reports
+            </Link>
+          </Button>
+          <Button variant="outline" size="sm" className="w-full sm:w-auto rounded-lg" onClick={() => handleOpenNavigateDialog(project.location)}>
+            <MapPin className="mr-2 h-4 w-4" /> Navigate to Site
+          </Button>
+          <Button size="sm" asChild className="w-full sm:w-auto rounded-lg">
+            <Link href={`/project/${project.id}/chat`}>
+              <MessageSquare className="mr-2 h-4 w-4" /> Open Chat
+            </Link>
+          </Button>
+        </CardFooter>
+      </Card>
+
+      <AlertDialog open={isNavigateDialogOpen} onOpenChange={setIsNavigateDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Navigation</AlertDialogTitle>
+            <AlertDialogDescription>
+              You are about to open the location "{navigationTarget}" in your map application. Do you want to continue?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setIsNavigateDialogOpen(false)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmNavigation}>Navigate</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
