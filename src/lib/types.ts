@@ -68,13 +68,24 @@ export interface Notification {
 export type SamplingMethod = 'grab' | 'composite' | 'core' | 'other';
 
 export interface ChatMessage {
-  id: string;
+  id: string; // Firestore document ID
   projectId: string;
   senderId: string;
   senderName: string;
   senderAvatar?: string;
   text?: string;
-  imageUrl?: string;
-  timestamp: string; // ISO string
-  isOwnMessage?: boolean; // Helper for UI, set client-side
+  imageUrl?: string; // For now, this will remain client-side or null in Firestore
+  timestamp: string; // ISO string (converted from Firestore Timestamp)
+  isOwnMessage?: boolean; // Helper for UI, set client-side based on senderId
 }
+
+// Data sent to Firestore when adding a new message
+export type NewChatMessagePayload = {
+  projectId: string;
+  senderId: string;
+  senderName: string;
+  senderAvatar?: string;
+  text?: string;
+  imageUrl?: string | null; // Explicitly allow null for Firestore
+  // timestamp is serverTimestamp()
+};
