@@ -61,13 +61,18 @@ const mapFirebaseUserToAppRoleAndId = (firebaseUser: any): MappedUserRoleAndId =
   if (firebaseUser.email === 'janesteve237@gmail.com') {
     return { role: 'ADMIN', effectiveTechnicianId: null }; // Admins see all reports or based on other logic
   }
-  if (firebaseUser.email === MOCK_TECHNICIAN_EMAIL) { // tech@example.com
-    return { role: 'TECHNICIAN', effectiveTechnicianId: MOCK_TECHNICIAN_REPORTS_ID }; // tech001
-  }
+  
   // For roles like SUPERVISOR, they might see all reports or reports for their team.
   // For this example, we'll assume SUPERVISOR also sees all reports like ADMIN.
   if (firebaseUser.email?.includes('admin@example.com')) return { role: 'ADMIN', effectiveTechnicianId: null };
   if (firebaseUser.email?.includes('supervisor@example.com')) return { role: 'SUPERVISOR', effectiveTechnicianId: null };
+
+  // MOCK_TECHNICIAN_EMAIL must be checked AFTER admin/supervisor to avoid mock admin being treated as mock tech.
+  // However, if MOCK_TECHNICIAN_EMAIL IS an admin/supervisor email, this order won't matter as it'd be caught above.
+  // Best practice: ensure MOCK_TECHNICIAN_EMAIL is unique and not an admin/supervisor email.
+  if (firebaseUser.email === MOCK_TECHNICIAN_EMAIL) { // tech@example.com
+    return { role: 'TECHNICIAN', effectiveTechnicianId: MOCK_TECHNICIAN_REPORTS_ID }; // tech001
+  }
 
   // Default: "Normal" technician users. Their reports are identified by their Firebase UID.
   return { role: 'TECHNICIAN', effectiveTechnicianId: firebaseUser.uid };
@@ -112,11 +117,16 @@ export default function ReportsPage() {
     try {
       let fetchedReports: FieldReport[] = [];
       if (role === 'TECHNICIAN' && mappedTechId) {
+        console.log(`[ReportsPage] Querying for technician ID: ${mappedTechId}`);
         fetchedReports = await getReportsByTechnicianId(mappedTechId);
-        console.log(`[ReportsPage] Fetched ${fetchedReports.length} reports for technician ${mappedTechId}`, fetchedReports);
+        console.log(`[ReportsPage] Fetched ${fetchedReports.length} reports for technician ${mappedTechId}. Reports:`, fetchedReports.map(r => ({id: r.id, projectId: r.projectId, materialType: r.materialType, status: r.status, techIdOnReport: r.technicianId }) ));
       } else if (role === 'ADMIN' || role === 'SUPERVISOR') {
+        console.log(`[ReportsPage] Querying for all reports (role: ${role})`);
         fetchedReports = await getReports();
-         console.log(`[ReportsPage] Fetched ${fetchedReports.length} reports for admin/supervisor`, fetchedReports);
+         console.log(`[ReportsPage] Fetched ${fetchedReports.length} reports for admin/supervisor. Reports:`, fetchedReports.map(r => ({id: r.id, projectId: r.projectId, materialType: r.materialType, status: r.status, techIdOnReport: r.technicianId })));
+      } else {
+        console.log(`[ReportsPage] No specific query path for role: ${role} and mappedTechId: ${mappedTechId}. Setting reports to empty.`);
+        fetchedReports = [];
       }
       setAllFetchedReports(fetchedReports);
     } catch (err) {
