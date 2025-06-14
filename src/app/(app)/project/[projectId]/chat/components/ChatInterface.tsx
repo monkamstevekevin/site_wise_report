@@ -12,7 +12,8 @@ import { cn } from '@/lib/utils';
 import Image from 'next/image';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card } from '@/components/ui/card';
-import { addChatMessage, getChatMessagesSubscription } from '@/services/chatService';
+import { addChatMessage } from '@/services/chatService'; // For Server Action
+import { getChatMessagesSubscription } from '@/lib/chatClientService'; // For client-side subscription
 import { useToast } from '@/hooks/use-toast';
 
 
