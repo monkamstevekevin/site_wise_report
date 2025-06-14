@@ -2,9 +2,11 @@
 'use server';
 
 import { auth, db } from '@/lib/firebase';
-import type { User, UserRole } from '@/lib/types';
+import type { User, UserRole, Project } from '@/lib/types'; // Added Project type
 import { collection, getDocs, doc, getDoc, Timestamp, query, setDoc, serverTimestamp, updateDoc, deleteDoc } from 'firebase/firestore';
 import { createUserWithEmailAndPassword, updateProfile as updateAuthProfile } from 'firebase/auth';
+import { addNotification } from './notificationService'; // Added import
+import { getProjectById } from './projectService'; // Added import
 
 /**
  * @fileOverview User service for interacting with Firestore 'users' collection and Firebase Auth.
@@ -13,7 +15,7 @@ import { createUserWithEmailAndPassword, updateProfile as updateAuthProfile } fr
  * - getUserById - Fetches a single user by their ID from Firestore.
  * - addUser - Creates a new user in Firebase Auth and Firestore.
  * - updateUser - Updates a user's information (name, role) in Firestore.
- * - updateUserAssignedProjects - Updates the assigned projects for a user in Firestore.
+ * - updateUserAssignedProjects - Updates the assigned projects for a user in Firestore and sends notifications.
  * - deleteUserFirestoreRecord - Deletes a user's document from Firestore.
  */
 
@@ -181,19 +183,50 @@ export async function updateUser(userId: string, data: { displayName?: string; r
 
 
 /**
- * Updates the assigned projects for a user in Firestore.
+ * Updates the assigned projects for a user in Firestore and sends notifications for new assignments.
  * @param {string} userId The ID of the user to update.
- * @param {string[]} projectIds An array of project IDs to assign to the user.
+ * @param {string[]} newProjectIds An array of project IDs to assign to the user.
  * @returns {Promise<void>} A promise that resolves when the user's projects are successfully updated.
- * @throws Will throw an error if updating the user's projects fails.
+ * @throws Will throw an error if updating the user's projects fails or if project details cannot be fetched for notifications.
  */
-export async function updateUserAssignedProjects(userId: string, projectIds: string[]): Promise<void> {
+export async function updateUserAssignedProjects(userId: string, newProjectIds: string[]): Promise<void> {
+  const userDocRef = doc(db, 'users', userId);
   try {
-    const userDocRef = doc(db, 'users', userId);
+    const userDocSnap = await getDoc(userDocRef);
+    if (!userDocSnap.exists()) {
+      throw new Error(`User with ID ${userId} not found.`);
+    }
+    const currentUserData = userDocSnap.data() as User;
+    const oldProjectIds = new Set(currentUserData.assignedProjectIds || []);
+
     await updateDoc(userDocRef, {
-      assignedProjectIds: projectIds,
+      assignedProjectIds: newProjectIds,
       updatedAt: serverTimestamp(),
     });
+
+    // Determine newly assigned projects and send notifications
+    const newlyAssignedProjectIds = newProjectIds.filter(id => !oldProjectIds.has(id));
+
+    for (const projectId of newlyAssignedProjectIds) {
+      try {
+        const project = await getProjectById(projectId); // Fetch project details
+        if (project) {
+          await addNotification(userId, {
+            type: 'project_assignment',
+            message: `You have been assigned to a new project: ${project.name} (Location: ${project.location}).`,
+            targetId: projectId,
+            link: `/my-projects`, // Or `/project/${projectId}/chat`
+          });
+          // The Genkit email simulation is handled in the page component for now
+        } else {
+          console.warn(`Project details for ID ${projectId} not found. Skipping notification for this assignment.`);
+        }
+      } catch (projectError) {
+        console.error(`Error fetching project ${projectId} or sending notification for user ${userId}:`, projectError);
+        // Continue assigning other projects even if one notification fails
+      }
+    }
+
   } catch (error) {
     console.error(`Error updating assigned projects for user ${userId}: `, error);
     throw new Error(`Failed to update assigned projects for user ${userId} in database.`);

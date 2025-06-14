@@ -4,6 +4,7 @@
 import { db } from '@/lib/firebase';
 import type { FieldReport } from '@/lib/types';
 import { collection, getDocs, Timestamp, query, where, orderBy, addDoc, serverTimestamp, doc, getDoc, updateDoc, deleteDoc, type FirestoreError } from 'firebase/firestore';
+import { addNotification } from './notificationService'; // Added import
 
 /**
  * @fileOverview Report service for interacting with Firestore.
@@ -200,6 +201,15 @@ export async function updateReport(
   try {
     const reportDocRef = doc(db, 'reports', reportId);
     
+    // Fetch the current report data to get technicianId and projectId for notifications
+    const currentReportSnap = await getDoc(reportDocRef);
+    if (!currentReportSnap.exists()) {
+      throw new Error(`Report with ID ${reportId} not found.`);
+    }
+    const currentReportData = currentReportSnap.data() as FieldReport;
+    const technicianId = currentReportData.technicianId;
+    const projectId = currentReportData.projectId;
+
     const updatePayload: any = { ...reportData };
 
     if (reportData.photoDataUri === undefined && Object.prototype.hasOwnProperty.call(reportData, 'photoDataUri')) {
@@ -212,7 +222,6 @@ export async function updateReport(
       updatePayload.rejectionReason = reportData.rejectionReason || null;
     }
     
-    // Ensure AI fields are explicitly set to null if they are being cleared
     if (Object.prototype.hasOwnProperty.call(reportData, 'aiIsAnomalous') && reportData.aiIsAnomalous === undefined) {
       updatePayload.aiIsAnomalous = null;
     }
@@ -220,11 +229,31 @@ export async function updateReport(
       updatePayload.aiAnomalyExplanation = null;
     }
 
-
     await updateDoc(reportDocRef, {
       ...updatePayload,
       updatedAt: serverTimestamp(),
     });
+
+    // Send notifications after successful update
+    if (technicianId && reportData.status) {
+      if (reportData.status === 'VALIDATED') {
+        await addNotification(technicianId, {
+          type: 'report_update',
+          message: `Your report #${reportId.substring(0,6)}... for project PJT-${projectId.substring(0,4)}... has been VALIDATED.`,
+          targetId: reportId,
+          link: `/reports/view/${reportId}`,
+        });
+      } else if (reportData.status === 'REJECTED') {
+        const reason = reportData.rejectionReason || "No specific reason provided.";
+        await addNotification(technicianId, {
+          type: 'report_update',
+          message: `Your report #${reportId.substring(0,6)}... for project PJT-${projectId.substring(0,4)}... has been REJECTED. Reason: ${reason}`,
+          targetId: reportId,
+          link: `/reports/edit/${reportId}`, // Link to edit page for rejected reports
+        });
+      }
+    }
+
   } catch (error) {
     const firestoreError = error as FirestoreError;
     console.error(`[Service/updateReport] Error updating report ${reportId}: `, firestoreError.code, firestoreError.message, firestoreError);
@@ -248,3 +277,4 @@ export async function deleteReport(reportId: string): Promise<void> {
     throw new Error(`Failed to delete report ${reportId} from database. Firebase Error: ${firestoreError.code} - ${firestoreError.message}.`);
   }
 }
+
