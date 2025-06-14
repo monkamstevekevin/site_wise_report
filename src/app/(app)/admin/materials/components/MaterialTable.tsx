@@ -23,7 +23,7 @@ import { Badge } from '@/components/ui/badge';
 import type { Material } from '@/lib/types';
 
 interface MaterialTableProps {
-  materials: Material[]; // Accept materials as a prop
+  materials: Material[]; 
   onEditMaterial?: (material: Material) => void;
   onDeleteMaterial?: (materialId: string) => void;
 }
@@ -37,7 +37,7 @@ const materialTypeBadgeVariant: Record<Material['type'], "default" | "secondary"
 };
 
 const formatValidationRules = (rules?: Material['validationRules']): string => {
-  if (!rules) return 'N/A';
+  if (!rules || Object.keys(rules).length === 0) return 'N/A';
   const parts: string[] = [];
   if (rules.minDensity !== undefined && rules.maxDensity !== undefined) {
     parts.push(`Density: ${rules.minDensity}-${rules.maxDensity} kg/m³`);
@@ -104,8 +104,8 @@ export function MaterialTable({ materials, onEditMaterial, onDeleteMaterial }: M
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => handleEdit(material)} disabled>
-                       <Edit className="mr-2 h-4 w-4" /> Edit (Soon)
+                    <DropdownMenuItem onClick={() => handleEdit(material)}>
+                       <Edit className="mr-2 h-4 w-4" /> Edit
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleDelete(material.id)} className="text-destructive focus:text-destructive focus:bg-destructive/10" disabled>
                       <Trash2 className="mr-2 h-4 w-4" /> Delete (Soon)

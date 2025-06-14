@@ -12,7 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { getMaterials, addMaterial } from '@/services/materialService';
+import { getMaterials, addMaterial, updateMaterial } from '@/services/materialService';
 
 const materialTypeFilterOptions: { value: MaterialType | 'ALL'; label: string }[] = [
   { value: 'ALL', label: 'All Types' },
@@ -60,9 +60,7 @@ export default function MaterialManagementPage() {
 
   const handleEditMaterial = (material: Material) => {
     setEditingMaterial(material);
-    // setIsMaterialFormOpen(true); // Enable this when edit is implemented
-    console.log("Edit material (simulated):", material.id);
-    toast({ title: "Edit Material (Simulated)", description: `Form for material ${material.id} would open.`});
+    setIsMaterialFormOpen(true);
   };
 
   const handleDeleteMaterial = (materialId: string) => {
@@ -79,11 +77,10 @@ export default function MaterialManagementPage() {
     setIsMaterialFormOpen(false);
 
     if (id) {
-      // Update logic will go here
       try {
-        // await updateMaterial(id, data); // Example call
+        await updateMaterial(id, data);
         toast({
-          title: "Material Updated Successfully (Simulated)",
+          title: "Material Updated Successfully",
           description: `Material "${data.name}" has been updated.`,
         });
       } catch (err) {
@@ -92,9 +89,9 @@ export default function MaterialManagementPage() {
           title: "Failed to Update Material",
           description: (err as Error).message || "An unexpected error occurred.",
         });
+        setIsMaterialFormOpen(true); // Re-open dialog on error if needed
       }
     } else {
-      // Add logic
       try {
         const newMaterialId = await addMaterial(data);
         toast({
@@ -107,6 +104,7 @@ export default function MaterialManagementPage() {
           title: "Failed to Add Material",
           description: (err as Error).message || "An unexpected error occurred.",
         });
+         setIsMaterialFormOpen(true); // Re-open dialog on error if needed
       }
     }
     await fetchMaterials();

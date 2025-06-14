@@ -3,7 +3,9 @@
 
 import { db } from '@/lib/firebase';
 import type { Material, MaterialType, MaterialValidationRules } from '@/lib/types';
-import { collection, getDocs, doc, getDoc, Timestamp, query, orderBy, addDoc, serverTimestamp, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, Timestamp, query, orderBy, addDoc, serverTimestamp, updateDoc, deleteDoc, setDoc } from 'firebase/firestore';
+import type { MaterialSubmitData } from '@/app/(app)/admin/materials/components/MaterialFormDialog';
+
 
 /**
  * @fileOverview Material service for interacting with Firestore.
@@ -11,7 +13,8 @@ import { collection, getDocs, doc, getDoc, Timestamp, query, orderBy, addDoc, se
  * - getMaterials - Fetches all materials from Firestore.
  * - getMaterialById - Fetches a single material by its ID from Firestore.
  * - addMaterial - Adds a new material to Firestore.
- * - (Future: updateMaterial, deleteMaterial)
+ * - updateMaterial - Updates an existing material in Firestore.
+ * - (Future: deleteMaterial)
  */
 
 const formatTimestamp = (timestampField: any): string => {
@@ -106,7 +109,7 @@ export async function getMaterialById(materialId: string): Promise<Material | nu
  * @throws Will throw an error if adding the material fails.
  */
 export async function addMaterial(
-  materialData: { name: string; type: MaterialType; validationRules?: MaterialValidationRules }
+  materialData: MaterialSubmitData
 ): Promise<string> {
   try {
     const materialsCollectionRef = collection(db, 'materials');
@@ -123,6 +126,26 @@ export async function addMaterial(
   }
 }
 
+/**
+ * Updates an existing material in Firestore.
+ * @param {string} materialId The ID of the material to update.
+ * @param {MaterialSubmitData} materialData The data to update.
+ * @returns {Promise<void>} A promise that resolves when the material is successfully updated.
+ * @throws Will throw an error if updating the material fails.
+ */
+export async function updateMaterial(materialId: string, materialData: MaterialSubmitData): Promise<void> {
+  try {
+    const materialDocRef = doc(db, 'materials', materialId);
+    await updateDoc(materialDocRef, {
+      ...materialData,
+      validationRules: materialData.validationRules || {},
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error(`Error updating material ${materialId}: `, error);
+    throw new Error(`Failed to update material ${materialId} in database.`);
+  }
+}
 
-// export async function updateMaterial(materialId: string, materialData: Partial<Omit<Material, 'id' | 'createdAt' | 'updatedAt'>>): Promise<void> { ... }
+
 // export async function deleteMaterial(materialId: string): Promise<void> { ... }
