@@ -92,7 +92,7 @@ export function UserTable({ users, onEditUser, onDeleteUser, onAssignProjects }:
               <TableCell>
                 <Badge variant={roleBadgeVariant[user.role] || 'outline'}>{user.role}</Badge>
               </TableCell>
-              <TableCell className="text-xs">
+              <TableCell className="text-center">
                 {/* Ensure assignedProjectIds is treated as potentially undefined and default to 0 */}
                 {user.assignedProjectIds ? user.assignedProjectIds.length : 0}
               </TableCell>

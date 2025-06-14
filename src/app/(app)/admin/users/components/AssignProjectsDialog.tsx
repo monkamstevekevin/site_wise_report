@@ -39,7 +39,7 @@ export function AssignProjectsDialog({
   useEffect(() => {
     if (user && open) {
       setSelectedProjectIds(user.assignedProjectIds || []);
-    } else {
+    } else if (!open) { // Reset when dialog is closed externally
       setSelectedProjectIds([]);
     }
   }, [user, open]);
@@ -55,9 +55,17 @@ export function AssignProjectsDialog({
   const handleSubmit = async () => {
     if (!user) return;
     setIsSubmitting(true);
-    await onAssignProjects(user.id, selectedProjectIds);
-    setIsSubmitting(false);
-    onOpenChange(false);
+    try {
+      await onAssignProjects(user.id, selectedProjectIds);
+      // Parent component will handle closing the dialog via onOpenChange
+      // after successful submission or error handling.
+    } catch (error) {
+      // Error is typically handled by parent's onAssignProjects toast
+      console.error("AssignProjectsDialog submission error:", error);
+    } finally {
+      setIsSubmitting(false);
+      // Don't call onOpenChange(false) here; parent controls this.
+    }
   };
 
   if (!user) return null;

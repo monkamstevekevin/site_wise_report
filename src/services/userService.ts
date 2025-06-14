@@ -171,4 +171,3 @@ export async function updateUserAssignedProjects(userId: string, projectIds: str
 // TODO: Implement updateUser (for role, name, etc.) and deleteUser functions
 // updateUser would update both Auth (if needed, e.g. email) and Firestore
 // deleteUser would delete from Auth and Firestore (requires careful implementation, possibly a Firebase Function for atomicity)
-
