@@ -51,6 +51,14 @@ const reportStatusBadgeVariant: Record<FieldReport['status'], "default" | "secon
   REJECTED: "destructive",
 };
 
+const materialTypeDisplay: Record<string, string> = { // Allow any string for materialType
+  cement: "Cement",
+  asphalt: "Asphalt",
+  gravel: "Gravel",
+  sand: "Sand",
+  other: "Other",
+};
+
 const materialColors: { [key: string]: string } = {
   cement: 'hsl(var(--chart-1))',
   asphalt: 'hsl(var(--chart-2))',
