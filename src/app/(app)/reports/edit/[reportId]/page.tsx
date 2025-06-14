@@ -62,18 +62,16 @@ export default function EditReportPage() {
             const isOwner = data.technicianId === effectiveTechnicianId;
 
             let canAccessEditPage = false;
-            if (currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') {
-              if (data.status === 'DRAFT' || data.status === 'SUBMITTED') {
-                canAccessEditPage = true;
-              }
-            } else if (currentUserRole === 'TECHNICIAN' && isOwner && data.status === 'DRAFT') {
+            if (currentUserRole === 'TECHNICIAN' && isOwner && (data.status === 'DRAFT' || data.status === 'REJECTED')) {
+              canAccessEditPage = true;
+            } else if ((currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') && (data.status === 'DRAFT' || data.status === 'SUBMITTED')) {
               canAccessEditPage = true;
             }
 
             if (canAccessEditPage) {
                  setReportToEdit(data);
             } else {
-                setErrorLoadingReport("Vous n'avez pas la permission de modifier ce rapport ou il n'est pas dans un état modifiable.");
+                setErrorLoadingReport("Vous n'avez pas la permission de modifier ce rapport ou il n'est pas dans un état modifiable (Technicien: Brouillon/Rejeté uniquement; Admin/Sup: Brouillon/Soumis uniquement).");
                 toast({variant: "destructive", title: "Permission Refusée", description: "Impossible de modifier ce rapport."});
             }
           } else {
@@ -129,9 +127,12 @@ export default function EditReportPage() {
       return { success: false, anomalyAssessment: assessment };
     }
 
+    // For rejected reports being resubmitted, their status becomes 'SUBMITTED'
+    const finalStatus = reportToEdit.status === 'REJECTED' && status === 'SUBMITTED' ? 'SUBMITTED' : status;
+
     const reportDataToUpdate: Partial<Omit<FieldReport, 'id' | 'createdAt' | 'updatedAt' | 'technicianId' | 'projectId'>> = {
       ...data,
-      status: status, 
+      status: finalStatus, 
       photoDataUri: finalPhotoDataUri,
     };
 
@@ -188,7 +189,7 @@ export default function EditReportPage() {
       <PageTitle 
         title="Modifier Rapport de Terrain" 
         icon={FileText}
-        subtitle={`Modification du rapport ID: ${reportToEdit.id}`}
+        subtitle={`Modification du rapport ID: ${reportToEdit.id}. Statut actuel: ${reportToEdit.status}`}
         actions={
           <Button variant="outline" asChild className="rounded-lg">
             <Link href="/reports">
@@ -205,3 +206,4 @@ export default function EditReportPage() {
     </>
   );
 }
+

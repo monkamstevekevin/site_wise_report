@@ -55,8 +55,8 @@ interface ReportTableProps {
   onViewReport?: (report: FieldReport) => void;
   onEditReport?: (report: FieldReport) => void;
   onDeleteReport?: (report: FieldReport) => void;
-  onValidateReport?: (report: FieldReport) => void; // New prop
-  onRejectReport?: (report: FieldReport) => void;   // New prop
+  onValidateReport?: (report: FieldReport) => void; 
+  onRejectReport?: (report: FieldReport) => void;   
   currentUserId?: string;
   currentUserRole?: UserRole | null;
 }
@@ -126,11 +126,9 @@ export function ReportTable({
             const isOwner = report.technicianId === currentUserId;
             
             let canEdit = false;
-            if (currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') {
-              if (report.status === 'DRAFT' || report.status === 'SUBMITTED') {
-                canEdit = true;
-              }
-            } else if (currentUserRole === 'TECHNICIAN' && isOwner && report.status === 'DRAFT') {
+            if (currentUserRole === 'TECHNICIAN' && isOwner && (report.status === 'DRAFT' || report.status === 'REJECTED')) {
+              canEdit = true;
+            } else if ((currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') && (report.status === 'DRAFT' || report.status === 'SUBMITTED')) {
               canEdit = true;
             }
 
@@ -171,7 +169,7 @@ export function ReportTable({
                         <Eye className="mr-2 h-4 w-4" /> Voir Détails
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => handleEdit(report)} disabled={!canEdit}>
-                         <Edit className="mr-2 h-4 w-4" /> {canEdit ? "Modifier Rapport" : "Modifier (Verrouillé)"}
+                         <Edit className="mr-2 h-4 w-4" /> {canEdit ? (report.status === 'REJECTED' ? "Corriger et Resoumettre" : "Modifier Rapport") : "Modifier (Verrouillé)"}
                       </DropdownMenuItem>
                       
                       {canValidateOrReject && (
@@ -205,3 +203,4 @@ export function ReportTable({
     </div>
   );
 }
+
