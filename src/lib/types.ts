@@ -63,6 +63,7 @@ export interface Notification {
   displayTime: string; // User-friendly time like "5m ago"
   icon?: LucideIcon;
   iconClass?: string;
+  roles?: UserRole[]; // Added to specify which roles should see this mock notification
 }
 
 export type SamplingMethod = 'grab' | 'composite' | 'core' | 'other';
