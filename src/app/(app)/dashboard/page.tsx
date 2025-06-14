@@ -3,7 +3,7 @@
 
 import { PageTitle } from '@/components/common/PageTitle';
 import { KpiCard } from './components/KpiCard';
-import { FileText, CheckCircle, AlertTriangle, BarChart3, LayoutDashboard, ListChecks, UserCheck, Clock } from 'lucide-react';
+import { FileText, CheckCircle, AlertTriangle, BarChart3, LayoutDashboard, ListChecks, UserCheck, Clock, AlertTriangleIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { MaterialReportsChart } from './components/MaterialReportsChart';
@@ -17,12 +17,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useEffect, useState, useMemo } from 'react';
 import type { FieldReport } from '@/lib/types';
-import { mockReportsData } from '@/app/(app)/reports/page'; 
+// import { mockReportsData } from '@/app/(app)/reports/page'; // Removed as we will fetch reports
+import { getReportsByTechnicianId, getReports as getAllReports } from '@/services/reportService'; // Import report service
 import { Badge } from '@/components/ui/badge';
 import { formatDistanceToNow } from 'date-fns';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend } from 'recharts';
 
-interface MappedUserRoleAndId { // Renamed from MappedUserRole to avoid conflict with UserRole type
+interface MappedUserRoleAndId { 
   role: UserRole;
   effectiveTechnicianId: string | null;
 }
@@ -30,7 +31,6 @@ interface MappedUserRoleAndId { // Renamed from MappedUserRole to avoid conflict
 const mapFirebaseUserToAppRoleAndId = (firebaseUser: any): MappedUserRoleAndId => {
   if (!firebaseUser) return { role: 'TECHNICIAN', effectiveTechnicianId: null };
   
-  // TEMPORARY: Assign ADMIN role to janesteve237@gmail.com for testing
   if (firebaseUser.email === 'janesteve237@gmail.com') {
     return { role: 'ADMIN', effectiveTechnicianId: null }; 
   }
@@ -58,34 +58,61 @@ const materialColors: { [key: string]: string } = {
   other: 'hsl(var(--chart-5))',
 };
 
-const adminKpiData = [
-  { title: "Total Reports", value: mockReportsData.length, icon: FileText, trend: "+20.1% from last month" , trendDirection: "up" as const },
-  { title: "Pending Validation", value: mockReportsData.filter(r => r.status === 'SUBMITTED').length, icon: AlertTriangle, trend: "-5 since yesterday", trendDirection: "down" as const },
-  { title: "Validated Reports", value: mockReportsData.filter(r => r.status === 'VALIDATED').length, icon: CheckCircle, trend: "+15 this week", trendDirection: "up" as const },
-  { title: "Avg. Compliance", value: "92%", icon: BarChart3, trend: "Maintained", trendDirection: "neutral" as const },
-];
-
 
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
   const [currentUserRole, setCurrentUserRole] = useState<UserRole | null>(null);
   const [effectiveTechnicianId, setEffectiveTechnicianId] = useState<string | null>(null);
+  
+  const [allReportsData, setAllReportsData] = useState<FieldReport[]>([]);
   const [technicianReports, setTechnicianReports] = useState<FieldReport[]>([]);
+  const [isLoadingDashboardData, setIsLoadingDashboardData] = useState(true);
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!authLoading && user) {
+    const loadDashboardData = async () => {
+      if (authLoading || !user) {
+        setIsLoadingDashboardData(false);
+        if (!authLoading && !user) {
+           setAllReportsData([]);
+           setTechnicianReports([]);
+        }
+        return;
+      }
+      
+      setIsLoadingDashboardData(true);
+      setDashboardError(null);
       const { role, effectiveTechnicianId: mappedTechId } = mapFirebaseUserToAppRoleAndId(user);
       setCurrentUserRole(role);
       setEffectiveTechnicianId(mappedTechId);
-      if (role === 'TECHNICIAN' && mappedTechId) {
-        setTechnicianReports(mockReportsData.filter(report => report.technicianId === mappedTechId));
+
+      try {
+        if (role === 'ADMIN' || role === 'SUPERVISOR') {
+          const reports = await getAllReports();
+          setAllReportsData(reports);
+        } else if (role === 'TECHNICIAN' && mappedTechId) {
+          const reports = await getReportsByTechnicianId(mappedTechId);
+          setTechnicianReports(reports);
+          setAllReportsData(reports); // For KPIs that might use all reports data for a technician view too.
+        }
+      } catch (err) {
+        console.error("Error loading dashboard data:", err);
+        setDashboardError("Failed to load report data for dashboard.");
+      } finally {
+        setIsLoadingDashboardData(false);
       }
-    } else if (!authLoading && !user) {
-      setCurrentUserRole(null); 
-      setEffectiveTechnicianId(null);
-      setTechnicianReports([]);
-    }
+    };
+
+    loadDashboardData();
   }, [user, authLoading]);
+  
+  const adminKpiData = useMemo(() => [
+    { title: "Total Reports", value: allReportsData.length, icon: FileText, trend: "+X% from last month" , trendDirection: "up" as const }, // Trend data needs to be dynamic
+    { title: "Pending Validation", value: allReportsData.filter(r => r.status === 'SUBMITTED').length, icon: AlertTriangle, trend: "-Y since yesterday", trendDirection: "down" as const },
+    { title: "Validated Reports", value: allReportsData.filter(r => r.status === 'VALIDATED').length, icon: CheckCircle, trend: "+Z this week", trendDirection: "up" as const },
+    { title: "Avg. Compliance", value: "XX%", icon: BarChart3, trend: "Maintained", trendDirection: "neutral" as const }, // Needs actual calculation
+  ], [allReportsData]);
+
 
   const technicianKpiData = useMemo(() => [
     { title: "My Submitted Reports", value: technicianReports.filter(r => r.status !== 'DRAFT').length, icon: FileText, description: "Total reports you've submitted." },
@@ -111,7 +138,7 @@ export default function DashboardPage() {
   }, [technicianReports]);
 
 
-  if (authLoading || (user && currentUserRole === null) ) { 
+  if (authLoading || isLoadingDashboardData || (user && currentUserRole === null) ) { 
     return (
       <>
         <PageTitle title="Dashboard Overview" icon={LayoutDashboard} subtitle="Loading your personalized insights..." />
@@ -132,12 +159,27 @@ export default function DashboardPage() {
         <PageTitle title="Dashboard" icon={LayoutDashboard} subtitle="Please log in to view your dashboard." />
          <div className="text-center py-10">
             <p className="text-muted-foreground">You need to be logged in to access this page.</p>
-            <Button asChild className="mt-4">
+            <Button asChild className="mt-4 rounded-lg">
               <Link href="/auth/login">Login</Link>
             </Button>
           </div>
       </>
     );
+  }
+  
+  if (dashboardError) {
+    return (
+      <>
+        <PageTitle title="Dashboard Error" icon={AlertTriangleIcon} subtitle="Could not load dashboard data." />
+        <Card>
+            <CardHeader><CardTitle>Error Details</CardTitle></CardHeader>
+            <CardContent>
+                <p className="text-destructive">{dashboardError}</p>
+                <Button onClick={() => window.location.reload()} className="mt-4 rounded-lg">Try Reloading</Button>
+            </CardContent>
+        </Card>
+      </>
+    )
   }
 
 
