@@ -1,9 +1,9 @@
 
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { PageTitle } from '@/components/common/PageTitle';
-import { TestTube2, PlusCircle, Filter } from 'lucide-react';
+import { TestTube2, PlusCircle, Filter, Loader2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { MaterialTable } from './components/MaterialTable';
 import type { Material } from '@/lib/types';
@@ -11,48 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-
-// Moved mockMaterials here
-const mockMaterialsData: Material[] = [
-  {
-    id: 'MAT001',
-    name: 'High-Strength Concrete Mix C40',
-    type: 'cement',
-    validationRules: { minDensity: 2300, maxDensity: 2500, minTemperature: 5, maxTemperature: 30 },
-    createdAt: new Date('2023-01-20T10:00:00Z').toISOString(),
-    updatedAt: new Date('2023-01-20T10:00:00Z').toISOString(),
-  },
-  {
-    id: 'MAT002',
-    name: 'Asphalt Binder PG 64-22',
-    type: 'asphalt',
-    validationRules: { minTemperature: 135, maxTemperature: 165 },
-    createdAt: new Date('2023-02-10T11:30:00Z').toISOString(),
-    updatedAt: new Date('2024-03-15T09:45:00Z').toISOString(),
-  },
-  {
-    id: 'MAT003',
-    name: 'Crushed Limestone Aggregate 3/4"',
-    type: 'gravel',
-    validationRules: { minDensity: 1600, maxDensity: 1800 },
-    createdAt: new Date('2023-03-05T14:15:00Z').toISOString(),
-    updatedAt: new Date('2023-03-05T14:15:00Z').toISOString(),
-  },
-  {
-    id: 'MAT004',
-    name: 'Washed Construction Sand',
-    type: 'sand',
-    createdAt: new Date('2023-04-01T09:00:00Z').toISOString(),
-    updatedAt: new Date('2023-04-01T09:00:00Z').toISOString(),
-  },
-  {
-    id: 'MAT005',
-    name: 'Geotextile Fabric Type II',
-    type: 'other',
-    createdAt: new Date('2023-05-12T16:30:00Z').toISOString(),
-    updatedAt: new Date('2024-01-10T12:00:00Z').toISOString(),
-  },
-];
+import { getMaterials } from '@/services/materialService'; // Import the new service
 
 const materialTypeFilterOptions: { value: Material['type'] | 'ALL'; label: string }[] = [
   { value: 'ALL', label: 'All Types' },
@@ -64,12 +23,34 @@ const materialTypeFilterOptions: { value: Material['type'] | 'ALL'; label: strin
 ];
 
 export default function MaterialManagementPage() {
-  const { toast } = useToast(); // For future use with actions
+  const { toast } = useToast();
+  const [materials, setMaterials] = useState<Material[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState<Material['type'] | 'ALL'>('ALL');
 
+  const fetchMaterials = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const fetchedMaterials = await getMaterials();
+      setMaterials(fetchedMaterials);
+    } catch (err) {
+      setError((err as Error).message || "Failed to load materials. Please try again later.");
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchMaterials();
+  }, []);
+
   const handleAddNewMaterial = () => {
-    alert("Add New Material functionality coming soon!");
+    alert("Add New Material functionality using Firestore coming soon!");
     // Would typically open a form dialog
   };
 
@@ -85,18 +66,18 @@ export default function MaterialManagementPage() {
       title: "Delete Material (Simulated)",
       description: `Material ${materialId} would be deleted.`
     });
-    // Implement actual deletion and re-fetch/update `mockMaterialsData`
+    // Implement actual deletion and re-fetch/update materials from Firestore
   };
 
   const filteredMaterials = useMemo(() => {
-    return mockMaterialsData.filter(material => {
+    return materials.filter(material => {
       const matchesSearchTerm = searchTerm === '' ||
         material.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         material.id.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesType = typeFilter === 'ALL' || material.type === typeFilter;
       return matchesSearchTerm && matchesType;
     });
-  }, [searchTerm, typeFilter]);
+  }, [materials, searchTerm, typeFilter]);
 
   return (
     <>
@@ -105,8 +86,8 @@ export default function MaterialManagementPage() {
         icon={TestTube2}
         subtitle="Define materials and their validation parameters."
         actions={
-          <Button className="rounded-lg" onClick={handleAddNewMaterial}>
-            <PlusCircle className="mr-2 h-4 w-4" /> Add New Material
+          <Button className="rounded-lg" onClick={handleAddNewMaterial} disabled>
+            <PlusCircle className="mr-2 h-4 w-4" /> Add New Material (Soon)
           </Button>
         }
       />
@@ -143,13 +124,27 @@ export default function MaterialManagementPage() {
         </div>
       </div>
 
-      <div className="bg-card p-0 md:p-6 rounded-lg shadow-md">
-        <MaterialTable
-          materials={filteredMaterials}
-          onEditMaterial={handleEditMaterial}
-          onDeleteMaterial={handleDeleteMaterial}
-        />
-      </div>
+      {isLoading && (
+        <div className="flex items-center justify-center py-10 text-muted-foreground">
+          <Loader2 className="mr-2 h-6 w-6 animate-spin" /> Loading materials...
+        </div>
+      )}
+      {error && (
+         <div className="text-center py-10 text-destructive bg-destructive/10 p-4 rounded-md">
+            <AlertTriangle className="mx-auto h-8 w-8 mb-2" />
+           <p className="font-semibold">Error Loading Materials</p>
+           <p>{error}</p>
+         </div>
+      )}
+      {!isLoading && !error && (
+        <div className="bg-card p-0 md:p-6 rounded-lg shadow-md">
+          <MaterialTable
+            materials={filteredMaterials}
+            onEditMaterial={handleEditMaterial}
+            onDeleteMaterial={handleDeleteMaterial}
+          />
+        </div>
+      )}
     </>
   );
 }
