@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { getProjects } from '@/services/projectService';
 import { getUsers, addUser, updateUserAssignedProjects, updateUser, deleteUserFirestoreRecord } from '@/services/userService';
-import { sendAssignmentNotification } from '@/ai/flows/assignment-notification-flow';
+import { sendAssignmentNotification } from '@/ai/flows/assignment-notification-flow'; // Added import
 import {
   AlertDialog,
   AlertDialogAction,
@@ -190,12 +190,10 @@ export default function UserManagementPage() {
     }
 
     const oldProjectIds = new Set(targetUser.assignedProjectIds || []);
-    const newlyAssignedProjects = selectedProjectIds
-      .filter(id => !oldProjectIds.has(id))
-      .map(id => allProjects.find(p => p.id === id))
-      .filter(p => p !== undefined) as Project[];
+    
 
     try {
+      // This service call already handles creating the in-app notification
       await updateUserAssignedProjects(userId, selectedProjectIds);
       toast({
         title: "Projects Assigned Successfully",
@@ -203,12 +201,17 @@ export default function UserManagementPage() {
       });
       await fetchUsers(); // Refresh user list to show updated project counts
 
+      const newlyAssignedProjects = selectedProjectIds
+        .filter(id => !oldProjectIds.has(id))
+        .map(id => allProjects.find(p => p.id === id))
+        .filter(p => p !== undefined) as Project[];
+
       // Add a system notification toast for the admin
       if (newlyAssignedProjects.length > 0) {
         toast({
             title: "System Notification",
-            description: `Notification(s) for new project assignments simulated for ${targetUser.name}.`,
-            duration: 5000,
+            description: `Notification(s) for new project assignments simulated for ${targetUser.name}. In-app notifications created.`,
+            duration: 7000,
         });
       }
       
@@ -220,13 +223,13 @@ export default function UserManagementPage() {
             userEmail: targetUser.email,
             projectName: project.name,
             projectLocation: project.location,
-            assignerName: adminAuthUser.displayName || adminAuthUser.email || "Admin", // Use logged-in admin's name
+            assignerName: adminAuthUser.displayName || adminAuthUser.email || "Admin", 
           });
 
           // Simulate email with a toast
           toast({
-            duration: 10000, // Longer duration for email simulation
-            title: `Simulated Email for ${targetUser.name} re: ${project.name}`,
+            duration: 15000, // Longer duration for email simulation
+            title: `Simulated Email to ${targetUser.name} for ${project.name}`,
             description: (
               <div className="text-xs max-h-48 overflow-y-auto">
                 <p className="font-semibold">To: {targetUser.email}</p>
