@@ -22,7 +22,7 @@ import { getProjects } from '@/services/projectService';
 import type { Project, User } from '@/lib/types'; // Added User type
 import { Skeleton } from '@/components/ui/skeleton';
 import { addReport as saveReportToFirestore } from '@/services/reportService';
-import { getUserById } from '@/services/userService'; // Import getUserById
+import { getUserById } from '@/services/userService';
 
 const MAX_FILE_SIZE_MB = 5;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
@@ -90,9 +90,18 @@ export function ReportForm() {
   const form = useForm<ReportFormData>({
     resolver: zodResolver(reportFormSchema),
     defaultValues: {
+      projectId: '', // Will be updated by useEffect if projects are available
+      materialType: undefined, // For Select to show placeholder initially
+      temperature: '' as unknown as number, // Initialize as empty string for input, Zod will coerce
+      volume: '' as unknown as number,      // Initialize as empty string for input
+      density: '' as unknown as number,     // Initialize as empty string for input
+      humidity: '' as unknown as number,    // Initialize as empty string for input
+      batchNumber: '',
+      supplier: '',
+      samplingMethod: undefined, // For Select to show placeholder initially
       notes: '',
+      // photo (FileList) is handled by input type="file", its default value is implicitly undefined/empty
       attachmentUrls: '',
-      projectId: '', 
     },
   });
 
@@ -228,14 +237,15 @@ export function ReportForm() {
           });
       }
       
-      form.reset({
-        notes: '',
-        attachmentUrls: '',
-        projectId: assignedProjects.length > 0 ? assignedProjects[0].id : '', // Reset to first assigned or empty
-        // Keep other fields as they were or reset them as well
-        // For example, to clear all fields:
-        // materialType: undefined, temperature: undefined, volume: undefined, etc.
-      }); 
+      // Reset to initial default values defined in useForm
+      form.reset(); 
+      // Specifically clear projectId if it was auto-selected, to allow re-selection or fresh auto-selection
+      if (assignedProjects.length > 0) {
+        form.setValue('projectId', assignedProjects[0].id);
+      } else {
+        form.setValue('projectId', '');
+      }
+
       setPhotoPreview(null);
       if(photoInputRef.current) photoInputRef.current.value = '';
       // Do not clear anomalyResult here, user should see it. It will be cleared on next submit.
@@ -293,7 +303,7 @@ export function ReportForm() {
                     <Select 
                       onValueChange={field.onChange} 
                       value={field.value || ""} 
-                      defaultValue={field.value || ""}
+                      // defaultValue removed to let react-hook-form control it fully
                       disabled={assignedProjects.length === 0 || !user}
                     >
                       <FormControl>
@@ -331,7 +341,7 @@ export function ReportForm() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Material Type</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value} /*defaultValue={field.value} removed*/>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select material type" />
@@ -418,7 +428,7 @@ export function ReportForm() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Sampling Method</FormLabel>
-                     <Select onValueChange={field.onChange} defaultValue={field.value}>
+                     <Select onValueChange={field.onChange} value={field.value} /*defaultValue={field.value} removed*/>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select sampling method" />
@@ -547,5 +557,3 @@ export function ReportForm() {
     </Card>
   );
 }
-
-    
