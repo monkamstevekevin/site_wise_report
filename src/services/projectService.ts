@@ -15,16 +15,19 @@ import { collection, getDocs, doc, getDoc, Timestamp, query, orderBy, addDoc, se
  */
 
 /**
- * Fetches all projects from the 'projects' collection in Firestore, ordered by name.
+ * Fetches all projects from the 'projects' collection in Firestore.
+ * Projects will be fetched in Firestore's default order (usually by document ID).
+ * For ordering by name, a Firestore index on the 'name' field is required.
  * @returns {Promise<Project[]>} A promise that resolves to an array of Project objects.
  * @throws Will throw an error if fetching projects fails.
  */
 export async function getProjects(): Promise<Project[]> {
   try {
     const projectsCollectionRef = collection(db, 'projects');
-    // Order by name for consistent listing
-    const q = query(projectsCollectionRef, orderBy('name'));
-    const querySnapshot = await getDocs(q);
+    // To order by name, ensure an index exists for the 'name' field in the 'projects' collection.
+    // const q = query(projectsCollectionRef, orderBy('name'));
+    // Using a simple query without ordering for now:
+    const querySnapshot = await getDocs(projectsCollectionRef);
     
     const projects: Project[] = querySnapshot.docs.map(docSnapshot => {
       const data = docSnapshot.data();
