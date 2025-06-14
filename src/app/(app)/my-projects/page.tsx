@@ -11,7 +11,7 @@ import { getUserById } from '@/services/userService';
 import { MyProjectCard } from './components/MyProjectCard';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'; // Added CardFooter
 
 export default function MyProjectsPage() {
   const { user, loading: authLoading } = useAuth();
@@ -156,3 +156,4 @@ export default function MyProjectsPage() {
     </>
   );
 }
+
