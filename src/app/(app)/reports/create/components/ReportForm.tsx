@@ -16,10 +16,10 @@ import type { AnomalyAssessment, FieldReport } from '@/ai/flows/report-anomaly-d
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, Sparkles, AlertTriangleIcon, Camera, Paperclip, Save, Send } from 'lucide-react';
+import { Loader2, Sparkles, AlertTriangleIcon, Camera, Paperclip, Save, Send, X } from 'lucide-react';
 import Image from 'next/image';
 import { getProjects } from '@/services/projectService';
-import type { Project } from '@/lib/types';
+import type { Project, MaterialType, SamplingMethod } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getUserById } from '@/services/userService';
 
@@ -65,10 +65,10 @@ export type ReportSubmitPayload = Omit<FieldReport, 'id' | 'createdAt' | 'update
 const initialReportFormValues: ReportFormData = {
   projectId: '',
   materialType: undefined as unknown as ReportFormData['materialType'],
-  temperature: '' as unknown as number,
-  volume: '' as unknown as number,
-  density: '' as unknown as number,
-  humidity: '' as unknown as number,
+  temperature: '' as unknown as number, // Controlled input: init with string
+  volume: '' as unknown as number,       // Controlled input: init with string
+  density: '' as unknown as number,      // Controlled input: init with string
+  humidity: '' as unknown as number,     // Controlled input: init with string
   batchNumber: '',
   supplier: '',
   samplingMethod: undefined as unknown as ReportFormData['samplingMethod'],
@@ -76,6 +76,21 @@ const initialReportFormValues: ReportFormData = {
   photo: undefined,
   attachmentUrls: '',
 };
+
+const materialTypeOptions: { value: MaterialType; label: string }[] = [
+  { value: 'cement', label: 'Cement' },
+  { value: 'asphalt', label: 'Asphalt' },
+  { value: 'gravel', label: 'Gravel' },
+  { value: 'sand', label: 'Sand' },
+  { value: 'other', label: 'Other' },
+];
+
+const samplingMethodOptions: { value: SamplingMethod; label: string }[] = [
+  { value: 'grab', label: 'Grab Sample' },
+  { value: 'composite', label: 'Composite Sample' },
+  { value: 'core', label: 'Core Sample' },
+  { value: 'other', label: 'Other Method' },
+];
 
 interface ReportFormProps {
   reportToEdit?: FieldReport;
@@ -117,7 +132,7 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
       setIsLoadingProjectsData(true);
       try {
         const allFetchedProjects = await getProjects();
-        const userProfile = await getUserById(user.uid); // Fetch current user's profile
+        const userProfile = await getUserById(user.uid);
         const currentUserAssignedIds = userProfile?.assignedProjectIds || [];
         
         const userProjects = allFetchedProjects.filter(p => currentUserAssignedIds.includes(p.id));
@@ -164,12 +179,16 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
         setPhotoPreviewUrl(null);
       }
     } else if (!isEditMode) {
-        form.reset(initialReportFormValues); // Ensure reset for create mode
+        form.reset(initialReportFormValues);
         setPhotoPreviewUrl(null);
         if(photoInputRef.current) photoInputRef.current.value = '';
-        // Default project setting is now handled in fetchProjectDataForForm
+        if (assignedProjectsList.length > 0) {
+            form.setValue('projectId', assignedProjectsList[0].id);
+        } else {
+            form.setValue('projectId', '');
+        }
     }
-  }, [reportToEdit, isEditMode, form]);
+  }, [reportToEdit, isEditMode, form, assignedProjectsList]); // Added assignedProjectsList dependency
 
   const handlePhotoInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -199,7 +218,7 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
     }
     setIsSubmittingForm(true);
     setSubmitActionType(status);
-    setCurrentAnomalyResult(null); // Clear previous anomaly result
+    setCurrentAnomalyResult(null); 
 
     const reportPayload: ReportSubmitPayload = {
       projectId: data.projectId,
@@ -233,39 +252,35 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
       const anomalyMessage = anomalyAssessment?.isAnomalous ? `Report ${actionVerb} and AI analysis complete.` : `Report ${actionVerb}. No anomalies detected.`;
       
       toast({
-        variant: anomalyAssessment?.isAnomalous && status === 'SUBMITTED' ? 'default' : (anomalyAssessment?.isAnomalous ? 'destructive' : 'default'), // default for info on draft, destructive for anomaly on submit attempt
+        variant: anomalyAssessment?.isAnomalous && status === 'SUBMITTED' ? 'default' : (anomalyAssessment?.isAnomalous ? 'destructive' : 'default'),
         title: isEditMode ? 'Report Updated' : 'Report Created',
         description: `${reportId ? `ID: ${reportId}. ` : ''}${anomalyMessage} ${status === 'DRAFT' && anomalyAssessment?.isAnomalous ? 'Anomaly detected in draft.' : ''}`,
         duration: 7000,
       });
 
-      // Reset form only in create mode OR if it was a DRAFT submission (even in edit mode)
+      // Reset form logic:
+      // - In create mode, always reset.
+      // - In edit mode, reset only if it was a DRAFT submission.
+      // - If it was a SUBMITTED action in edit mode, the parent page handles navigation, so don't reset here.
       if (!isEditMode || status === 'DRAFT') {
         form.reset(initialReportFormValues);
         setPhotoPreviewUrl(null);
         if(photoInputRef.current) photoInputRef.current.value = '';
-        // Re-set default project if available
         if (assignedProjectsList.length > 0) {
             form.setValue('projectId', assignedProjectsList[0].id);
         } else {
             form.setValue('projectId', '');
         }
-        form.setValue('materialType', undefined as unknown as ReportFormData['materialType']);
-        form.setValue('samplingMethod', undefined as unknown as ReportFormData['samplingMethod']);
       }
-      // Navigation for successful "SUBMITTED" in edit mode is handled by the parent EditReportPage
     } else {
-      // This case is now specifically for when success is false,
-      // which primarily happens if AI blocks a "SUBMITTED" action.
       toast({ 
         variant: 'destructive', 
         title: status === 'SUBMITTED' && anomalyAssessment?.isAnomalous ? 'Submission Prevented by AI' : 'Error', 
         description: anomalyAssessment?.isAnomalous 
           ? anomalyAssessment.explanation 
           : `Failed to ${isEditMode ? 'update' : 'create'} report.`,
-        duration: 10000 // Longer duration for errors user needs to read
+        duration: 10000 
       });
-      // DO NOT RESET THE FORM, so user can make corrections
     }
 
     setIsSubmittingForm(false);
@@ -528,7 +543,7 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
                     onClick={form.handleSubmit(data => handleSubmitClick(data, 'DRAFT'))} 
                     variant="outline" 
                     className="w-full sm:w-auto rounded-lg" 
-                    disabled={isSubmittingForm || !user || assignedProjectsList.length === 0 || pageLoading}
+                    disabled={isSubmittingForm || !user || (assignedProjectsList.length === 0 && !isEditMode) || pageLoading}
                 >
                 {isSubmittingForm && submitActionType === 'DRAFT' ? (
                     <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</>
@@ -540,7 +555,7 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
                     type="button" 
                     onClick={form.handleSubmit(data => handleSubmitClick(data, 'SUBMITTED'))} 
                     className="w-full sm:w-auto rounded-lg" 
-                    disabled={isSubmittingForm || !user || assignedProjectsList.length === 0 || pageLoading}
+                    disabled={isSubmittingForm || !user || (assignedProjectsList.length === 0 && !isEditMode) || pageLoading}
                 >
                 {isSubmittingForm && submitActionType === 'SUBMITTED' ? (
                     <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting...</>
@@ -567,3 +582,4 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
     </Card>
   );
 }
+
