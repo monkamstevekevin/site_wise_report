@@ -18,11 +18,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Loader2, Sparkles, AlertTriangleIcon, Camera, Paperclip, Save, Send } from 'lucide-react';
 import Image from 'next/image';
-import { getProjects } from '@/services/projectService'; // Import project service
-import type { Project } from '@/lib/types';
+import { getProjects } from '@/services/projectService';
+import type { Project, User } from '@/lib/types'; // Added User type
 import { Skeleton } from '@/components/ui/skeleton';
-import { MOCK_TECHNICIAN_REPORTS_ID } from '@/lib/constants'; // Assuming technician ID is used for assigned projects logic
-import { addReport as saveReportToFirestore } from '@/services/reportService'; // Import the addReport function
+import { addReport as saveReportToFirestore } from '@/services/reportService';
+import { getUserById } from '@/services/userService'; // Import getUserById
 
 const MAX_FILE_SIZE_MB = 5;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
@@ -74,8 +74,6 @@ const samplingMethodOptions: { value: ReportFormData['samplingMethod']; label: s
   { value: 'other', label: 'Other Method' },
 ];
 
-const MOCK_USER_ASSIGNED_PROJECT_IDS_TEMP = ['PJT001', 'PJT003', MOCK_TECHNICIAN_REPORTS_ID]; 
-
 export function ReportForm() {
   const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
@@ -99,7 +97,7 @@ export function ReportForm() {
   });
 
   useEffect(() => {
-    const fetchAllProjects = async () => {
+    const fetchProjectData = async () => {
       if (authLoading) return; 
       setIsLoadingProjects(true);
       try {
@@ -107,7 +105,7 @@ export function ReportForm() {
         setAllProjects(fetchedProjects);
 
         if (user) {
-          const userProfile = initialMockUsersData.find(u => u.id === user.uid || (user.email === 'tech@example.com' && u.id === MOCK_TECHNICIAN_REPORTS_ID));
+          const userProfile = await getUserById(user.uid);
           const currentUserAssignedIds = userProfile?.assignedProjectIds || [];
           
           const userProjects = fetchedProjects.filter(p => currentUserAssignedIds.includes(p.id));
@@ -128,29 +126,8 @@ export function ReportForm() {
         setIsLoadingProjects(false);
       }
     };
-    fetchAllProjects();
+    fetchProjectData();
   }, [user, authLoading, form, toast]);
-  
-   const initialMockUsersData: User[] = [
-    {
-      id: MOCK_TECHNICIAN_REPORTS_ID, 
-      name: 'Test Technician',
-      email: 'tech@example.com',
-      role: 'TECHNICIAN',
-      assignedProjectIds: ['PJT001', 'PJT002', 'PJT003', 'PJT005'], 
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    },
-     {
-      id: 'janesteve237', // Example UID for janesteve237@gmail.com
-      name: 'Jane Steve (Admin)',
-      email: 'janesteve237@gmail.com',
-      role: 'ADMIN',
-      assignedProjectIds: ['PJT001', 'PJT002', 'PJT003', 'PJT004', 'PJT005'], // Admins might see all or many
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    }
-  ];
 
 
   const handlePhotoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -196,9 +173,7 @@ export function ReportForm() {
         return;
       }
     }
-
-    // Prepare data for Firestore (excluding id, createdAt, updatedAt which are set by service/server)
-    // and also excluding the 'photo' FileList object.
+    
     const reportDataToSave: Omit<FieldReport, 'id' | 'createdAt' | 'updatedAt'> = {
       projectId: data.projectId,
       technicianId: user.uid, 
@@ -217,10 +192,9 @@ export function ReportForm() {
     };
 
     try {
-      // This is the FieldReport structure expected by detectReportAnomaly, including a temporary ID and timestamps
       const fullReportDataForAI: FieldReport = {
         ...reportDataToSave,
-        id: 'temp-for-ai-' + crypto.randomUUID(), // Temporary ID for AI check
+        id: 'temp-for-ai-' + crypto.randomUUID(), 
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -229,7 +203,6 @@ export function ReportForm() {
       const assessment = await detectReportAnomaly(fullReportDataForAI);
       setAnomalyResult(assessment);
 
-      // Now, save to Firestore
       const newReportId = await saveReportToFirestore(reportDataToSave);
 
       if (status === 'SUBMITTED') {
@@ -255,10 +228,17 @@ export function ReportForm() {
           });
       }
       
-      form.reset(); 
+      form.reset({
+        notes: '',
+        attachmentUrls: '',
+        projectId: assignedProjects.length > 0 ? assignedProjects[0].id : '', // Reset to first assigned or empty
+        // Keep other fields as they were or reset them as well
+        // For example, to clear all fields:
+        // materialType: undefined, temperature: undefined, volume: undefined, etc.
+      }); 
       setPhotoPreview(null);
       if(photoInputRef.current) photoInputRef.current.value = '';
-      setAnomalyResult(null); // Clear previous anomaly result
+      // Do not clear anomalyResult here, user should see it. It will be cleared on next submit.
 
     } catch (error) {
       console.error('Error processing report:', error);
@@ -310,9 +290,14 @@ export function ReportForm() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Project (Assigned to you)</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value || ""} defaultValue={field.value || ""}>
+                    <Select 
+                      onValueChange={field.onChange} 
+                      value={field.value || ""} 
+                      defaultValue={field.value || ""}
+                      disabled={assignedProjects.length === 0 || !user}
+                    >
                       <FormControl>
-                        <SelectTrigger disabled={assignedProjects.length === 0 && !user}>
+                        <SelectTrigger>
                           <SelectValue placeholder={assignedProjects.length === 0 ? "No projects assigned or loadable" : "Select an assigned project"} />
                         </SelectTrigger>
                       </FormControl>
@@ -523,7 +508,7 @@ export function ReportForm() {
                     onClick={form.handleSubmit(data => processSubmit(data, 'DRAFT'))} 
                     variant="outline" 
                     className="w-full sm:w-auto rounded-lg" 
-                    disabled={isSubmitting || !user}
+                    disabled={isSubmitting || !user || assignedProjects.length === 0}
                 >
                 {isSubmitting && submitAction === 'DRAFT' ? (
                     <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</>
@@ -535,7 +520,7 @@ export function ReportForm() {
                     type="button" 
                     onClick={form.handleSubmit(data => processSubmit(data, 'SUBMITTED'))} 
                     className="w-full sm:w-auto rounded-lg" 
-                    disabled={isSubmitting || !user}
+                    disabled={isSubmitting || !user || assignedProjects.length === 0}
                 >
                 {isSubmitting && submitAction === 'SUBMITTED' ? (
                     <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting...</>
@@ -563,13 +548,4 @@ export function ReportForm() {
   );
 }
 
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: 'ADMIN' | 'SUPERVISOR' | 'TECHNICIAN';
-  avatarUrl?: string;
-  assignedProjectIds: string[];
-  createdAt: string;
-  updatedAt: string;
-}
+    
