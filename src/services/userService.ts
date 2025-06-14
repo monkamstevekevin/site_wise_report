@@ -3,7 +3,7 @@
 
 import { auth, db } from '@/lib/firebase';
 import type { User, UserRole } from '@/lib/types';
-import { collection, getDocs, doc, getDoc, Timestamp, query, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, Timestamp, query, setDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 
 /**
@@ -12,6 +12,7 @@ import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
  * - getUsers - Fetches all users from Firestore.
  * - getUserById - Fetches a single user by their ID from Firestore.
  * - addUser - Creates a new user in Firebase Auth and Firestore.
+ * - updateUserAssignedProjects - Updates the assigned projects for a user in Firestore.
  */
 
 const formatTimestamp = (timestampField: any): string => {
@@ -119,24 +120,22 @@ export async function addUser(
     // 2. Update Firebase Auth user's profile (displayName)
     await updateProfile(firebaseUser, {
       displayName: userData.displayName,
-      // photoURL can be added later if needed
     });
 
     // 3. Create user document in Firestore 'users' collection
     const userDocRef = doc(db, 'users', firebaseUser.uid);
     await setDoc(userDocRef, {
-      name: userData.displayName, // Using displayName as 'name' in Firestore
-      email: firebaseUser.email, // Use email from Auth to ensure consistency
+      name: userData.displayName, 
+      email: firebaseUser.email,
       role: userData.role,
-      avatarUrl: firebaseUser.photoURL || '', // Or a default placeholder
-      assignedProjectIds: [], // New users start with no assigned projects
+      avatarUrl: firebaseUser.photoURL || '',
+      assignedProjectIds: [], 
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
 
     return firebaseUser.uid;
   } catch (error: any) {
-    // More specific error handling could be added here (e.g., auth/email-already-in-use)
     console.error("Error adding user: ", error);
     const errorMessage = error.message || "Failed to add user. Ensure email is not already in use and password is valid.";
     if (error.code === 'auth/email-already-in-use') {
@@ -149,6 +148,27 @@ export async function addUser(
   }
 }
 
-// TODO: Implement updateUser and deleteUser functions
+/**
+ * Updates the assigned projects for a user in Firestore.
+ * @param {string} userId The ID of the user to update.
+ * @param {string[]} projectIds An array of project IDs to assign to the user.
+ * @returns {Promise<void>} A promise that resolves when the user's projects are successfully updated.
+ * @throws Will throw an error if updating the user's projects fails.
+ */
+export async function updateUserAssignedProjects(userId: string, projectIds: string[]): Promise<void> {
+  try {
+    const userDocRef = doc(db, 'users', userId);
+    await updateDoc(userDocRef, {
+      assignedProjectIds: projectIds,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error(`Error updating assigned projects for user ${userId}: `, error);
+    throw new Error(`Failed to update assigned projects for user ${userId} in database.`);
+  }
+}
+
+// TODO: Implement updateUser (for role, name, etc.) and deleteUser functions
 // updateUser would update both Auth (if needed, e.g. email) and Firestore
 // deleteUser would delete from Auth and Firestore (requires careful implementation, possibly a Firebase Function for atomicity)
+

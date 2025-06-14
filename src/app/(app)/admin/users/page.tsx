@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { getProjects } from '@/services/projectService';
-import { getUsers, addUser } from '@/services/userService'; // Import addUser
+import { getUsers, addUser, updateUserAssignedProjects } from '@/services/userService'; 
 import { sendAssignmentNotification } from '@/ai/flows/assignment-notification-flow';
 
 const userRoleFilterOptions: { value: UserRole | 'ALL'; label: string }[] = [
@@ -34,7 +34,6 @@ export default function UserManagementPage() {
   const [isLoadingProjects, setIsLoadingProjects] = useState(true);
 
   const [isUserFormOpen, setIsUserFormOpen] = useState(false);
-  // UserFormData includes optional password fields.
   const [editingUser, setEditingUser] = useState< (Partial<UserFormData> & { id?: string }) | undefined >(undefined);
   
   const [isAssignProjectsDialogOpen, setIsAssignProjectsDialogOpen] = useState(false);
@@ -88,7 +87,6 @@ export default function UserManagementPage() {
     setEditingUser(user);
     setIsUserFormOpen(true);
      toast({ title: "Edit User (Simulated)", description: `Editing for ${user.displayName} will be connected to Firestore soon.` });
-     // Actual update logic will be implemented in a later step
   };
 
   const handleDeleteUser = (userId: string) => {
@@ -97,13 +95,12 @@ export default function UserManagementPage() {
       description: `User ${userId} deletion will be connected to Firestore soon.`,
       variant: "destructive"
     });
-    // Actual delete logic will be implemented in a later step
   };
 
   const handleUserFormSubmit = async (data: UserFormData & { password?: string }, id?: string) => {
     setIsUserFormOpen(false);
 
-    if (id) { // Editing existing user (to be implemented)
+    if (id) { 
       try {
         // await updateUser(id, data); // Placeholder for updateUserService function
         toast({
@@ -117,17 +114,17 @@ export default function UserManagementPage() {
           description: (err as Error).message || "An unexpected error occurred.",
         });
       }
-    } else { // Adding new user
+    } else { 
       if (!data.password) {
         toast({ variant: "destructive", title: "Missing Password", description: "Password is required to create a new user." });
-        setIsUserFormOpen(true); // Re-open form
+        setIsUserFormOpen(true); 
         return;
       }
       try {
         const newUserId = await addUser({ 
           displayName: data.displayName, 
           email: data.email, 
-          role: data.role as UserRole // UserFormData role is enum, UserRole is type. They should align.
+          role: data.role as UserRole 
         }, data.password);
         toast({
           title: "User Added Successfully!",
@@ -139,10 +136,10 @@ export default function UserManagementPage() {
           title: "Failed to Add User",
           description: (err as Error).message || "An unexpected error occurred.",
         });
-        setIsUserFormOpen(true); // Re-open form on failure to allow correction
+        setIsUserFormOpen(true); 
       }
     }
-    await fetchUsers(); // Refresh user list
+    await fetchUsers(); 
     setEditingUser(undefined);
   };
 
@@ -166,39 +163,50 @@ export default function UserManagementPage() {
       .map(id => allProjects.find(p => p.id === id))
       .filter(p => p !== undefined) as Project[];
     
-    toast({
-      title: "Projects Assigned (Simulated)",
-      description: `${targetUser.name} project assignments will be saved to Firestore soon.`,
-    });
+    try {
+      await updateUserAssignedProjects(userId, selectedProjectIds);
+      toast({
+        title: "Projects Assigned Successfully",
+        description: `${targetUser.name}'s project assignments have been updated.`,
+      });
+      await fetchUsers(); // Refresh user list to show updated count
 
-    for (const project of newlyAssignedProjects) {
-      try {
-        const notificationContent = await sendAssignmentNotification({
-          userName: targetUser.name,
-          userEmail: targetUser.email,
-          projectName: project.name,
-          projectLocation: project.location,
-          assignerName: adminAuthUser.displayName || adminAuthUser.email || "Admin",
-        });
-        
-        toast({
-          duration: 10000, 
-          title: `Simulated Email for ${project.name}`,
-          description: (
-            <div className="text-xs">
-              <p className="font-semibold">To: {targetUser.email}</p>
-              <p className="font-semibold">Subject: {notificationContent.emailSubject}</p>
-              <p className="mt-2 whitespace-pre-wrap">{notificationContent.emailBody}</p>
-            </div>
-          ),
-        });
-      } catch (error) {
-        console.error("Error generating assignment email:", error);
-        toast({ variant: "destructive", title: `Email Gen Error for ${project.name}`, description: "Could not simulate email notification."});
+      for (const project of newlyAssignedProjects) {
+        try {
+          const notificationContent = await sendAssignmentNotification({
+            userName: targetUser.name,
+            userEmail: targetUser.email,
+            projectName: project.name,
+            projectLocation: project.location,
+            assignerName: adminAuthUser.displayName || adminAuthUser.email || "Admin",
+          });
+          
+          toast({
+            duration: 10000, 
+            title: `Simulated Email for ${project.name}`,
+            description: (
+              <div className="text-xs">
+                <p className="font-semibold">To: {targetUser.email}</p>
+                <p className="font-semibold">Subject: {notificationContent.emailSubject}</p>
+                <p className="mt-2 whitespace-pre-wrap">{notificationContent.emailBody}</p>
+              </div>
+            ),
+          });
+        } catch (error) {
+          console.error("Error generating assignment email:", error);
+          toast({ variant: "destructive", title: `Email Gen Error for ${project.name}`, description: "Could not simulate email notification."});
+        }
       }
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Failed to Assign Projects",
+        description: (error as Error).message || "An unexpected error occurred.",
+      });
+    } finally {
+      setIsProcessingAssignment(false);
+      setIsAssignProjectsDialogOpen(false); // Close dialog on completion or error
     }
-    setIsProcessingAssignment(false);
-    // After actual save: await fetchUsers();
   };
 
   const filteredUsers = useMemo(() => {
@@ -308,3 +316,4 @@ export default function UserManagementPage() {
     </>
   );
 }
+

@@ -29,7 +29,7 @@ interface UserTableProps {
   users: User[];
   onEditUser: (user: Partial<UserFormData> & { id: string }) => void; // Adjusted type
   onDeleteUser: (userId: string) => void;
-  onAssignProjects: (user: User) => void; // New prop
+  onAssignProjects: (user: User) => void; 
 }
 
 const roleBadgeVariant: Record<UserRole, "default" | "secondary" | "outline" | "destructive"> = {
@@ -42,13 +42,11 @@ const roleBadgeVariant: Record<UserRole, "default" | "secondary" | "outline" | "
 export function UserTable({ users, onEditUser, onDeleteUser, onAssignProjects }: UserTableProps) {
 
   const handleEdit = (user: User) => {
-    // Map User type to the expected type for UserFormDialog (Partial<UserFormData> & { id: string })
     const userToPass = {
       id: user.id,
-      displayName: user.name, // User has 'name', UserFormData expects 'displayName'
+      displayName: user.name, 
       email: user.email,
       role: user.role,
-      // Password fields are not part of User type and not needed for edit form prefill
     };
     onEditUser(userToPass);
   };
@@ -95,6 +93,7 @@ export function UserTable({ users, onEditUser, onDeleteUser, onAssignProjects }:
                 <Badge variant={roleBadgeVariant[user.role] || 'outline'}>{user.role}</Badge>
               </TableCell>
               <TableCell className="text-xs">
+                {/* Ensure assignedProjectIds is treated as potentially undefined and default to 0 */}
                 {user.assignedProjectIds ? user.assignedProjectIds.length : 0}
               </TableCell>
               <TableCell>{new Date(user.createdAt).toLocaleDateString()}</TableCell>
@@ -111,7 +110,7 @@ export function UserTable({ users, onEditUser, onDeleteUser, onAssignProjects }:
                       <Edit className="mr-2 h-4 w-4" /> Edit User (Simulated)
                     </DropdownMenuItem>
                      <DropdownMenuItem onClick={() => onAssignProjects(user)}>
-                      <Briefcase className="mr-2 h-4 w-4" /> Assign Projects (Simulated)
+                      <Briefcase className="mr-2 h-4 w-4" /> Assign Projects
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={() => handleDelete(user.id)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
