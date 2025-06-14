@@ -21,7 +21,7 @@ export const mockReportsData: FieldReport[] = [
   {
     id: 'RPT001',
     projectId: 'PJT001',
-    technicianId: MOCK_TECHNICIAN_REPORTS_ID, // Aisha Khan -> Now our mock tech
+    technicianId: MOCK_TECHNICIAN_REPORTS_ID, 
     materialType: 'cement',
     temperature: 22.5,
     volume: 15.0,
@@ -39,7 +39,7 @@ export const mockReportsData: FieldReport[] = [
   {
     id: 'RPT002',
     projectId: 'PJT002',
-    technicianId: 'USR004', // David Lee - Stays as another tech
+    technicianId: 'USR004', 
     materialType: 'asphalt',
     temperature: 150.2,
     volume: 50.0,
@@ -58,7 +58,7 @@ export const mockReportsData: FieldReport[] = [
   {
     id: 'RPT003',
     projectId: 'PJT001',
-    technicianId: MOCK_TECHNICIAN_REPORTS_ID, // Aisha Khan -> Now our mock tech
+    technicianId: MOCK_TECHNICIAN_REPORTS_ID, 
     materialType: 'gravel',
     temperature: 18.0,
     volume: 100.0,
@@ -76,7 +76,7 @@ export const mockReportsData: FieldReport[] = [
   {
     id: 'RPT004',
     projectId: 'PJT003',
-    technicianId: MOCK_TECHNICIAN_REPORTS_ID, // Robert Downy -> Now our mock tech
+    technicianId: MOCK_TECHNICIAN_REPORTS_ID, 
     materialType: 'sand',
     temperature: 25.0,
     volume: 30.0,
@@ -94,7 +94,7 @@ export const mockReportsData: FieldReport[] = [
   {
     id: 'RPT005',
     projectId: 'PJT004',
-    technicianId: MOCK_TECHNICIAN_REPORTS_ID, // Aisha Khan -> Now our mock tech
+    technicianId: MOCK_TECHNICIAN_REPORTS_ID, 
     materialType: 'other',
     temperature: 20,
     volume: 5,
@@ -118,7 +118,7 @@ export const mockReportsData: FieldReport[] = [
     batchNumber: 'DRAFT-001', supplier: 'Test Supplier', samplingMethod: 'grab',
     status: 'DRAFT', attachments: [],
     notes: "This is a draft report for testing.",
-    createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), // 2 days ago
+    createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), 
     updatedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
   },
    {
@@ -136,7 +136,7 @@ export const mockReportsData: FieldReport[] = [
     notes: 'Core sample from new highway section. Looks good.',
     status: 'VALIDATED',
     attachments: [],
-    createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days ago
+    createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), 
     updatedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
   },
   {
@@ -154,7 +154,7 @@ export const mockReportsData: FieldReport[] = [
     notes: 'Sand sample for concrete mix. Submitted for review.',
     status: 'SUBMITTED',
     attachments: [],
-    createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(), // 1 day ago
+    createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(), 
     updatedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
   },
   {
@@ -172,7 +172,7 @@ export const mockReportsData: FieldReport[] = [
     notes: 'Small patch work, concrete looks fine. Submitted.',
     status: 'SUBMITTED',
     attachments: [],
-    createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(), // 5 hours ago
+    createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(), 
     updatedAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
   },
   {
@@ -191,7 +191,7 @@ export const mockReportsData: FieldReport[] = [
     status: 'DRAFT',
     attachments: [],
     photoDataUri: 'https://placehold.co/600x400.png',
-    createdAt: new Date(Date.now() - 10 * 60 * 60 * 1000).toISOString(), // 10 hours ago
+    createdAt: new Date(Date.now() - 10 * 60 * 60 * 1000).toISOString(), 
     updatedAt: new Date(Date.now() - 10 * 60 * 60 * 1000).toISOString(),
   },
 ];
@@ -213,21 +213,24 @@ const materialTypeFilterOptions: { value: FieldReport['materialType'] | 'ALL'; l
   { value: 'other', label: 'Other' },
 ];
 
-interface MappedUserRole {
+interface MappedUserRoleAndId { 
   role: UserRole;
   effectiveTechnicianId: string | null;
 }
 
-const mapFirebaseUserToAppRoleAndId = (firebaseUser: any): MappedUserRole => {
+const mapFirebaseUserToAppRoleAndId = (firebaseUser: any): MappedUserRoleAndId => {
   if (!firebaseUser) return { role: 'TECHNICIAN', effectiveTechnicianId: null };
   
+  // TEMPORARY: Assign ADMIN role to janesteve237@gmail.com for testing
+  if (firebaseUser.email === 'janesteve237@gmail.com') {
+    return { role: 'ADMIN', effectiveTechnicianId: null }; 
+  }
   if (firebaseUser.email === MOCK_TECHNICIAN_EMAIL) {
     return { role: 'TECHNICIAN', effectiveTechnicianId: MOCK_TECHNICIAN_REPORTS_ID };
   }
   if (firebaseUser.email?.includes('admin@example.com')) return { role: 'ADMIN', effectiveTechnicianId: null };
   if (firebaseUser.email?.includes('supervisor@example.com')) return { role: 'SUPERVISOR', effectiveTechnicianId: null };
   
-  // Default for other authenticated users, could be their firebaseUser.uid if we adapt mock data further
   return { role: 'TECHNICIAN', effectiveTechnicianId: firebaseUser.uid }; 
 };
 
@@ -255,7 +258,7 @@ export default function ReportsPage() {
       } else if (role === 'ADMIN' || role === 'SUPERVISOR') {
         setReportsToDisplay(mockReportsData); 
       } else {
-         setReportsToDisplay([]); // Default to empty if no specific role or ID match
+         setReportsToDisplay([]); 
       }
 
     } else if (!authLoading && !user){
@@ -278,12 +281,7 @@ export default function ReportsPage() {
 
   const handleDeleteReport = (reportId: string) => {
     console.log("Delete report:", reportId);
-    // Simulate deletion from the currently displayed list
     setReportsToDisplay(prevReports => prevReports.filter(r => r.id !== reportId));
-    // Also update mockReportsData if you want deletion to persist across navigations (for mock purposes)
-    // const indexInMock = mockReportsData.findIndex(r => r.id === reportId);
-    // if (indexInMock > -1) mockReportsData.splice(indexInMock, 1);
-
     toast({ variant: "destructive", title: "Delete Report (Simulated)", description: `Report ${reportId} would be deleted.`});
   };
 
@@ -301,7 +299,7 @@ export default function ReportsPage() {
     });
   }, [reportsToDisplay, searchTerm, statusFilter, materialFilter]);
 
-  if (authLoading || currentUserRole === null && user) { // Show loading if auth is loading OR if user exists but role not yet determined
+  if (authLoading || currentUserRole === null && user) { 
     return (
       <>
         <PageTitle title="Field Reports" icon={FileText} subtitle="Loading reports..." />
@@ -392,12 +390,10 @@ export default function ReportsPage() {
           onViewReport={handleViewReport}
           onEditReport={handleEditReport}
           onDeleteReport={handleDeleteReport}
-          currentUserId={user?.uid} 
+          currentUserId={effectiveTechnicianId || user?.uid} // Use effective ID for mock technician
           currentUserRole={currentUserRole}
         />
       </div>
     </>
   );
 }
-
-    

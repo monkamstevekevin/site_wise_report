@@ -22,21 +22,25 @@ import { Badge } from '@/components/ui/badge';
 import { formatDistanceToNow } from 'date-fns';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend } from 'recharts';
 
-interface MappedUserRole {
+interface MappedUserRoleAndId { // Renamed from MappedUserRole to avoid conflict with UserRole type
   role: UserRole;
   effectiveTechnicianId: string | null;
 }
 
-const mapFirebaseUserToAppRoleAndId = (firebaseUser: any): MappedUserRole => {
+const mapFirebaseUserToAppRoleAndId = (firebaseUser: any): MappedUserRoleAndId => {
   if (!firebaseUser) return { role: 'TECHNICIAN', effectiveTechnicianId: null };
   
+  // TEMPORARY: Assign ADMIN role to janesteve237@gmail.com for testing
+  if (firebaseUser.email === 'janesteve237@gmail.com') {
+    return { role: 'ADMIN', effectiveTechnicianId: null }; 
+  }
   if (firebaseUser.email === MOCK_TECHNICIAN_EMAIL) {
     return { role: 'TECHNICIAN', effectiveTechnicianId: MOCK_TECHNICIAN_REPORTS_ID };
   }
   if (firebaseUser.email?.includes('admin@example.com')) return { role: 'ADMIN', effectiveTechnicianId: null };
   if (firebaseUser.email?.includes('supervisor@example.com')) return { role: 'SUPERVISOR', effectiveTechnicianId: null };
   
-  return { role: 'TECHNICIAN', effectiveTechnicianId: firebaseUser.uid }; // Default for others, could use actual UID
+  return { role: 'TECHNICIAN', effectiveTechnicianId: firebaseUser.uid }; 
 };
 
 const reportStatusBadgeVariant: Record<FieldReport['status'], "default" | "secondary" | "outline" | "destructive"> = {
@@ -107,7 +111,7 @@ export default function DashboardPage() {
   }, [technicianReports]);
 
 
-  if (authLoading || (user && currentUserRole === null) ) { // Show skeleton if auth is loading OR if user is present but role not yet mapped
+  if (authLoading || (user && currentUserRole === null) ) { 
     return (
       <>
         <PageTitle title="Dashboard Overview" icon={LayoutDashboard} subtitle="Loading your personalized insights..." />
@@ -265,5 +269,3 @@ export default function DashboardPage() {
     </>
   );
 }
-
-    

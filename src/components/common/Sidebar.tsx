@@ -18,12 +18,12 @@ import { useAuth } from '@/contexts/AuthContext'; // Import useAuth
 import type { User as FirebaseUser } from 'firebase/auth';
 
 // Helper to map Firebase user to app's UserRole type
-// In a real app, user role would come from custom claims or Firestore
 const mapFirebaseUserToAppRole = (firebaseUser: FirebaseUser | null): UserRole => {
-  if (!firebaseUser) return 'TECHNICIAN'; // Default or guest role
+  if (!firebaseUser) return 'TECHNICIAN'; 
 
-  // This is a MOCK mapping. In a real app, get role from custom claims or database.
-  // For example, if admin UIDs are known or based on email.
+  // TEMPORARY: Assign ADMIN role to janesteve237@gmail.com for testing
+  if (firebaseUser.email === 'janesteve237@gmail.com') return 'ADMIN';
+
   if (firebaseUser.email?.includes('admin@example.com')) return 'ADMIN';
   if (firebaseUser.email?.includes('supervisor@example.com')) return 'SUPERVISOR';
   return 'TECHNICIAN';
@@ -34,7 +34,6 @@ const SidebarNavItem: React.FC<{ item: NavItem; isChild?: boolean; currentRole: 
   const pathname = usePathname();
   const isActive = pathname === item.href || (item.href !== '/' && item.href !== '/admin' && pathname.startsWith(item.href));
   
-  // Explicitly check if parent admin route is active if child is active
   const isAdminParentActive = item.href === '/admin' && pathname.startsWith('/admin/');
 
   if (item.roles && !item.roles.includes(currentRole)) {
@@ -45,7 +44,6 @@ const SidebarNavItem: React.FC<{ item: NavItem; isChild?: boolean; currentRole: 
     const accessibleChildren = item.children.filter(child => !child.roles || child.roles.includes(currentRole));
     if (accessibleChildren.length === 0) return null;
 
-    // Determine if this accordion item should be open by default
     const isExpandedByDefault = accessibleChildren.some(child => pathname.startsWith(child.href)) || isAdminParentActive;
 
 
@@ -94,19 +92,21 @@ const SidebarNavItem: React.FC<{ item: NavItem; isChild?: boolean; currentRole: 
 export function Sidebar() {
   const { user, loading } = useAuth();
   const [navItems, setNavItems] = useState<NavItem[]>([]);
-  const [currentUserRole, setCurrentUserRole] = useState<UserRole>('TECHNICIAN'); // Default
+  const [currentUserRole, setCurrentUserRole] = useState<UserRole>('TECHNICIAN'); 
   const pathname = usePathname();
 
 
   useEffect(() => {
     if (!loading && user) {
-      const role = mapFirebaseUserToAppRole(user); // Get role from user
+      const role = mapFirebaseUserToAppRole(user); 
       setCurrentUserRole(role);
       setNavItems(getNavItemsForRole(role));
     } else if (!loading && !user) {
-      // Handle case where user is not logged in (e.g., show minimal nav or public nav)
-      // For now, default to technician to show something if roles are not fully set up
-      setNavItems(getNavItemsForRole('TECHNICIAN'));
+      // For a logged-out user, we might show no items or public items.
+      // For now, defaulting to TECHNICIAN to show something if roles are not fully set up for public.
+      const role = mapFirebaseUserToAppRole(null); // Or 'GUEST' if we define such a role
+      setCurrentUserRole(role);
+      setNavItems(getNavItemsForRole(role));
     }
   }, [user, loading]);
   
@@ -164,4 +164,3 @@ export function Sidebar() {
     </aside>
   );
 }
-
