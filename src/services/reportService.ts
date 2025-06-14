@@ -3,13 +3,14 @@
 
 import { db } from '@/lib/firebase';
 import type { FieldReport } from '@/lib/types';
-import { collection, getDocs, Timestamp, query, where, orderBy } from 'firebase/firestore';
+import { collection, getDocs, Timestamp, query, where, orderBy, addDoc, serverTimestamp } from 'firebase/firestore';
 
 /**
  * @fileOverview Report service for interacting with Firestore.
  *
  * - getReports - Fetches all reports from Firestore, ordered by creation date (desc).
  * - getReportsByTechnicianId - Fetches reports for a specific technician, ordered by creation date (desc).
+ * - addReport - Adds a new report to Firestore.
  * - formatTimestamp - Utility to format Firestore Timestamps.
  */
 
@@ -101,5 +102,29 @@ export async function getReportsByTechnicianId(technicianId: string): Promise<Fi
   } catch (error) {
     console.error(`Error fetching reports for technician ${technicianId}: `, error);
     throw new Error(`Failed to fetch reports for technician ${technicianId}. Check server logs.`);
+  }
+}
+
+/**
+ * Adds a new report to the 'reports' collection in Firestore.
+ * @param reportData The data for the new report, excluding id, createdAt, and updatedAt.
+ * @returns {Promise<string>} A promise that resolves to the ID of the newly created report.
+ * @throws Will throw an error if adding the report fails.
+ */
+export async function addReport(
+  reportData: Omit<FieldReport, 'id' | 'createdAt' | 'updatedAt'>
+): Promise<string> {
+  try {
+    const reportsCollectionRef = collection(db, 'reports');
+    const reportPayload = {
+      ...reportData,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+    const docRef = await addDoc(reportsCollectionRef, reportPayload);
+    return docRef.id;
+  } catch (error) {
+    console.error("Error adding report: ", error);
+    throw new Error("Failed to add report to database. Check server logs for details.");
   }
 }
