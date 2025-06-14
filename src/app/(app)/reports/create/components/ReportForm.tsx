@@ -19,7 +19,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Loader2, Sparkles, AlertTriangleIcon, Camera, Paperclip, Save, Send } from 'lucide-react';
 import Image from 'next/image';
 import { getProjects } from '@/services/projectService';
-import type { Project, User } from '@/lib/types'; // Added User type
+import type { Project, User } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { addReport as saveReportToFirestore } from '@/services/reportService';
 import { getUserById } from '@/services/userService';
@@ -74,6 +74,22 @@ const samplingMethodOptions: { value: ReportFormData['samplingMethod']; label: s
   { value: 'other', label: 'Other Method' },
 ];
 
+const initialReportFormValues: ReportFormData = {
+  projectId: '',
+  materialType: undefined as unknown as ReportFormData['materialType'], // Zod enum will require a value
+  temperature: '' as unknown as number,
+  volume: '' as unknown as number,
+  density: '' as unknown as number,
+  humidity: '' as unknown as number,
+  batchNumber: '',
+  supplier: '',
+  samplingMethod: undefined as unknown as ReportFormData['samplingMethod'], // Zod enum will require a value
+  notes: '',
+  photo: undefined, // FileList is optional
+  attachmentUrls: '',
+};
+
+
 export function ReportForm() {
   const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
@@ -89,20 +105,7 @@ export function ReportForm() {
 
   const form = useForm<ReportFormData>({
     resolver: zodResolver(reportFormSchema),
-    defaultValues: {
-      projectId: '', // Will be updated by useEffect if projects are available
-      materialType: undefined, // For Select to show placeholder initially
-      temperature: '' as unknown as number, // Initialize as empty string for input, Zod will coerce
-      volume: '' as unknown as number,      // Initialize as empty string for input
-      density: '' as unknown as number,     // Initialize as empty string for input
-      humidity: '' as unknown as number,    // Initialize as empty string for input
-      batchNumber: '',
-      supplier: '',
-      samplingMethod: undefined, // For Select to show placeholder initially
-      notes: '',
-      // photo (FileList) is handled by input type="file", its default value is implicitly undefined/empty
-      attachmentUrls: '',
-    },
+    defaultValues: initialReportFormValues,
   });
 
   useEffect(() => {
@@ -122,15 +125,19 @@ export function ReportForm() {
           
           if (userProjects.length > 0 && !form.getValues('projectId')) {
             form.setValue('projectId', userProjects[0].id); 
+          } else if (userProjects.length === 0) {
+            form.setValue('projectId', ''); // Ensure it's empty if no projects
           }
         } else {
           setAssignedProjects([]); 
+          form.setValue('projectId', ''); // Ensure it's empty if no user
         }
 
       } catch (error) {
         console.error("Failed to fetch projects for report form:", error);
         toast({ variant: "destructive", title: "Error", description: "Could not load projects." });
         setAssignedProjects([]); 
+        form.setValue('projectId', ''); // Ensure it's empty on error
       } finally {
         setIsLoadingProjects(false);
       }
@@ -142,12 +149,14 @@ export function ReportForm() {
   const handlePhotoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      form.setValue('photo', event.target.files); // Set the FileList for validation
       const reader = new FileReader();
       reader.onloadend = () => {
         setPhotoPreview(reader.result as string);
       };
       reader.readAsDataURL(file);
     } else {
+      form.setValue('photo', undefined);
       setPhotoPreview(null);
     }
   };
@@ -183,6 +192,7 @@ export function ReportForm() {
       }
     }
     
+    // Ensure all required fields from schema (even if not directly in ReportFormData if optional) are present for FieldReport
     const reportDataToSave: Omit<FieldReport, 'id' | 'createdAt' | 'updatedAt'> = {
       projectId: data.projectId,
       technicianId: user.uid, 
@@ -237,18 +247,22 @@ export function ReportForm() {
           });
       }
       
-      // Reset to initial default values defined in useForm
-      form.reset(); 
-      // Specifically clear projectId if it was auto-selected, to allow re-selection or fresh auto-selection
+      form.reset(initialReportFormValues); 
+      
       if (assignedProjects.length > 0) {
         form.setValue('projectId', assignedProjects[0].id);
       } else {
+        // This case should be covered by initialReportFormValues.projectId = ''
+        // but explicitly setting it ensures the Select updates if its value was different.
         form.setValue('projectId', '');
       }
+      // Ensure materialType and samplingMethod are reset to undefined for placeholders
+      form.setValue('materialType', undefined as unknown as ReportFormData['materialType']);
+      form.setValue('samplingMethod', undefined as unknown as ReportFormData['samplingMethod']);
+
 
       setPhotoPreview(null);
       if(photoInputRef.current) photoInputRef.current.value = '';
-      // Do not clear anomalyResult here, user should see it. It will be cleared on next submit.
 
     } catch (error) {
       console.error('Error processing report:', error);
@@ -303,7 +317,6 @@ export function ReportForm() {
                     <Select 
                       onValueChange={field.onChange} 
                       value={field.value || ""} 
-                      // defaultValue removed to let react-hook-form control it fully
                       disabled={assignedProjects.length === 0 || !user}
                     >
                       <FormControl>
@@ -341,7 +354,7 @@ export function ReportForm() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Material Type</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value} /*defaultValue={field.value} removed*/>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select material type" />
@@ -428,7 +441,7 @@ export function ReportForm() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Sampling Method</FormLabel>
-                     <Select onValueChange={field.onChange} value={field.value} /*defaultValue={field.value} removed*/>
+                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select sampling method" />
@@ -448,7 +461,7 @@ export function ReportForm() {
               <FormField
                 control={form.control}
                 name="photo"
-                render={({ field: { onChange, value, ...rest } }) => (
+                render={({ field: { onChange, value, ...rest } }) => ( // `value` is destructured but not directly used for <Input type="file">
                   <FormItem>
                     <FormLabel>Upload Photo (Optional)</FormLabel>
                     <FormControl>
@@ -456,11 +469,13 @@ export function ReportForm() {
                         type="file"
                         accept="image/*"
                         onChange={(e) => {
-                          onChange(e.target.files);
-                          handlePhotoChange(e);
+                          // field.onChange from RHF expects the value, not the event.
+                          // For file inputs, pass e.target.files to RHF.
+                          onChange(e.target.files); 
+                          handlePhotoChange(e); // Your custom handler for preview
                         }}
-                        {...rest}
-                        ref={photoInputRef}
+                        {...rest} // Spread other RHF props like ref, name, onBlur
+                        ref={photoInputRef} // Your ref for clearing
                         className="pt-2"
                       />
                     </FormControl>
@@ -473,7 +488,7 @@ export function ReportForm() {
                         <Image src={photoPreview} alt="Photo preview" width={200} height={200} className="rounded-md object-cover max-h-48 w-auto" data-ai-hint="material sample" />
                          <Button variant="link" size="sm" className="text-xs h-auto p-0 mt-1" onClick={() => {
                             setPhotoPreview(null);
-                            form.setValue('photo', undefined);
+                            form.setValue('photo', undefined); // Clear RHF state for photo
                             if(photoInputRef.current) photoInputRef.current.value = '';
                          }}>Remove photo</Button>
                       </div>
@@ -557,3 +572,4 @@ export function ReportForm() {
     </Card>
   );
 }
+
