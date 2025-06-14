@@ -2,15 +2,16 @@
 'use server';
 
 import { db } from '@/lib/firebase';
-import type { Material } from '@/lib/types';
-import { collection, getDocs, doc, getDoc, Timestamp, query, orderBy } from 'firebase/firestore';
+import type { Material, MaterialType, MaterialValidationRules } from '@/lib/types';
+import { collection, getDocs, doc, getDoc, Timestamp, query, orderBy, addDoc, serverTimestamp, updateDoc, deleteDoc } from 'firebase/firestore';
 
 /**
  * @fileOverview Material service for interacting with Firestore.
  *
  * - getMaterials - Fetches all materials from Firestore.
  * - getMaterialById - Fetches a single material by its ID from Firestore.
- * - (Future: addMaterial, updateMaterial, deleteMaterial)
+ * - addMaterial - Adds a new material to Firestore.
+ * - (Future: updateMaterial, deleteMaterial)
  */
 
 const formatTimestamp = (timestampField: any): string => {
@@ -98,7 +99,30 @@ export async function getMaterialById(materialId: string): Promise<Material | nu
   }
 }
 
-// Placeholder for future CRUD operations:
-// export async function addMaterial(materialData: Omit<Material, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> { ... }
+/**
+ * Adds a new material to the 'materials' collection in Firestore.
+ * @param materialData The data for the new material.
+ * @returns {Promise<string>} A promise that resolves to the ID of the newly created material.
+ * @throws Will throw an error if adding the material fails.
+ */
+export async function addMaterial(
+  materialData: { name: string; type: MaterialType; validationRules?: MaterialValidationRules }
+): Promise<string> {
+  try {
+    const materialsCollectionRef = collection(db, 'materials');
+    const docRef = await addDoc(materialsCollectionRef, {
+      ...materialData,
+      validationRules: materialData.validationRules || {}, // Ensure it's an object
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    return docRef.id;
+  } catch (error) {
+    console.error("Error adding material: ", error);
+    throw new Error("Failed to add material to database.");
+  }
+}
+
+
 // export async function updateMaterial(materialId: string, materialData: Partial<Omit<Material, 'id' | 'createdAt' | 'updatedAt'>>): Promise<void> { ... }
 // export async function deleteMaterial(materialId: string): Promise<void> { ... }

@@ -28,16 +28,20 @@ export interface Project {
   updatedAt: string;
 }
 
+export type MaterialType = 'cement' | 'asphalt' | 'gravel' | 'sand' | 'other';
+
+export interface MaterialValidationRules {
+  minDensity?: number;
+  maxDensity?: number;
+  minTemperature?: number;
+  maxTemperature?: number;
+}
+
 export interface Material {
   id: string;
   name: string;
-  type: 'cement' | 'asphalt' | 'gravel' | 'sand' | 'other'; // Example types
-  validationRules?: {
-    minDensity?: number;
-    maxDensity?: number;
-    minTemperature?: number;
-    maxTemperature?: number;
-  };
+  type: MaterialType;
+  validationRules?: MaterialValidationRules;
   createdAt: string;
   updatedAt: string;
 }

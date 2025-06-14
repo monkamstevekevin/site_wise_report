@@ -6,14 +6,15 @@ import { PageTitle } from '@/components/common/PageTitle';
 import { TestTube2, PlusCircle, Filter, Loader2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { MaterialTable } from './components/MaterialTable';
-import type { Material } from '@/lib/types';
+import { MaterialFormDialog, type MaterialSubmitData } from './components/MaterialFormDialog';
+import type { Material, MaterialType } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { getMaterials } from '@/services/materialService'; // Import the new service
+import { getMaterials, addMaterial } from '@/services/materialService';
 
-const materialTypeFilterOptions: { value: Material['type'] | 'ALL'; label: string }[] = [
+const materialTypeFilterOptions: { value: MaterialType | 'ALL'; label: string }[] = [
   { value: 'ALL', label: 'All Types' },
   { value: 'cement', label: 'Cement' },
   { value: 'asphalt', label: 'Asphalt' },
@@ -28,8 +29,11 @@ export default function MaterialManagementPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [isMaterialFormOpen, setIsMaterialFormOpen] = useState(false);
+  const [editingMaterial, setEditingMaterial] = useState<Material | undefined>(undefined);
+
   const [searchTerm, setSearchTerm] = useState('');
-  const [typeFilter, setTypeFilter] = useState<Material['type'] | 'ALL'>('ALL');
+  const [typeFilter, setTypeFilter] = useState<MaterialType | 'ALL'>('ALL');
 
   const fetchMaterials = async () => {
     setIsLoading(true);
@@ -50,11 +54,13 @@ export default function MaterialManagementPage() {
   }, []);
 
   const handleAddNewMaterial = () => {
-    alert("Add New Material functionality using Firestore coming soon!");
-    // Would typically open a form dialog
+    setEditingMaterial(undefined);
+    setIsMaterialFormOpen(true);
   };
 
   const handleEditMaterial = (material: Material) => {
+    setEditingMaterial(material);
+    // setIsMaterialFormOpen(true); // Enable this when edit is implemented
     console.log("Edit material (simulated):", material.id);
     toast({ title: "Edit Material (Simulated)", description: `Form for material ${material.id} would open.`});
   };
@@ -68,6 +74,45 @@ export default function MaterialManagementPage() {
     });
     // Implement actual deletion and re-fetch/update materials from Firestore
   };
+
+  const handleMaterialFormSubmit = async (data: MaterialSubmitData, id?: string) => {
+    setIsMaterialFormOpen(false);
+
+    if (id) {
+      // Update logic will go here
+      try {
+        // await updateMaterial(id, data); // Example call
+        toast({
+          title: "Material Updated Successfully (Simulated)",
+          description: `Material "${data.name}" has been updated.`,
+        });
+      } catch (err) {
+        toast({
+          variant: "destructive",
+          title: "Failed to Update Material",
+          description: (err as Error).message || "An unexpected error occurred.",
+        });
+      }
+    } else {
+      // Add logic
+      try {
+        const newMaterialId = await addMaterial(data);
+        toast({
+          title: "Material Added Successfully",
+          description: `Material "${data.name}" (ID: ${newMaterialId}) has been added.`,
+        });
+      } catch (err) {
+        toast({
+          variant: "destructive",
+          title: "Failed to Add Material",
+          description: (err as Error).message || "An unexpected error occurred.",
+        });
+      }
+    }
+    await fetchMaterials();
+    setEditingMaterial(undefined);
+  };
+
 
   const filteredMaterials = useMemo(() => {
     return materials.filter(material => {
@@ -86,9 +131,19 @@ export default function MaterialManagementPage() {
         icon={TestTube2}
         subtitle="Define materials and their validation parameters."
         actions={
-          <Button className="rounded-lg" onClick={handleAddNewMaterial} disabled>
-            <PlusCircle className="mr-2 h-4 w-4" /> Add New Material (Soon)
-          </Button>
+          <MaterialFormDialog
+            open={isMaterialFormOpen}
+            onOpenChange={(isOpen) => {
+              setIsMaterialFormOpen(isOpen);
+              if (!isOpen) setEditingMaterial(undefined);
+            }}
+            materialToEdit={editingMaterial}
+            onFormSubmit={handleMaterialFormSubmit}
+          >
+            <Button className="rounded-lg" onClick={handleAddNewMaterial}>
+              <PlusCircle className="mr-2 h-4 w-4" /> Add New Material
+            </Button>
+          </MaterialFormDialog>
         }
       />
 
@@ -107,7 +162,7 @@ export default function MaterialManagementPage() {
           </div>
           <div>
             <Label htmlFor="type-filter" className="mb-1 block text-sm font-medium">Filter by Type</Label>
-            <Select value={typeFilter} onValueChange={(value: Material['type'] | 'ALL') => setTypeFilter(value)}>
+            <Select value={typeFilter} onValueChange={(value: MaterialType | 'ALL') => setTypeFilter(value)}>
               <SelectTrigger className="w-full md:w-[180px]" id="type-filter">
                 <SelectValue placeholder="Filter by type" />
               </SelectTrigger>
