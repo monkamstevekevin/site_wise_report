@@ -3,7 +3,7 @@
 
 import { db } from '@/lib/firebase';
 import type { FieldReport } from '@/lib/types';
-import { collection, getDocs, Timestamp, query, where, orderBy, addDoc, serverTimestamp, doc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, Timestamp, query, where, orderBy, addDoc, serverTimestamp, doc, getDoc, updateDoc, deleteDoc, type FirestoreError } from 'firebase/firestore';
 
 /**
  * @fileOverview Report service for interacting with Firestore.
@@ -74,8 +74,9 @@ export async function getReports(): Promise<FieldReport[]> {
     const reports: FieldReport[] = querySnapshot.docs.map(mapDocToFieldReport);
     return reports;
   } catch (error) {
-    console.error("Error fetching all reports: ", error);
-    throw new Error("Failed to fetch reports from database. Check server logs for Firebase error details.");
+    const firestoreError = error as FirestoreError;
+    console.error("Error fetching all reports: ", firestoreError.code, firestoreError.message, firestoreError);
+    throw new Error(`Failed to fetch reports from database. Firebase Error: ${firestoreError.code} - ${firestoreError.message}. Check server logs and Firestore indexes.`);
   }
 }
 
@@ -103,8 +104,10 @@ export async function getReportsByTechnicianId(technicianId: string): Promise<Fi
     const reports: FieldReport[] = querySnapshot.docs.map(mapDocToFieldReport);
     return reports;
   } catch (error) {
-    console.error(`Error fetching reports for technician ${technicianId}: `, error);
-    throw new Error(`Failed to fetch reports for technician ${technicianId}. Check server logs.`);
+    const firestoreError = error as FirestoreError;
+    console.error(`Error fetching reports for technician ${technicianId}: `, firestoreError.code, firestoreError.message, firestoreError);
+    // Log the actual Firestore error
+    throw new Error(`Failed to fetch reports for technician ${technicianId}. Firebase Error: ${firestoreError.code} - ${firestoreError.message}. Check server logs and Firestore indexes.`);
   }
 }
 
@@ -125,8 +128,9 @@ export async function getReportById(reportId: string): Promise<FieldReport | nul
       return null;
     }
   } catch (error) {
-    console.error(`Error fetching report by ID ${reportId}: `, error);
-    throw new Error(`Failed to fetch report ${reportId} from database.`);
+    const firestoreError = error as FirestoreError;
+    console.error(`Error fetching report by ID ${reportId}: `, firestoreError.code, firestoreError.message, firestoreError);
+    throw new Error(`Failed to fetch report ${reportId} from database. Firebase Error: ${firestoreError.code} - ${firestoreError.message}.`);
   }
 }
 
@@ -150,8 +154,9 @@ export async function addReport(
     const docRef = await addDoc(reportsCollectionRef, reportPayload);
     return docRef.id;
   } catch (error) {
-    console.error("Error adding report: ", error);
-    throw new Error("Failed to add report to database. Check server logs for details.");
+    const firestoreError = error as FirestoreError;
+    console.error("Error adding report: ", firestoreError.code, firestoreError.message, firestoreError);
+    throw new Error(`Failed to add report to database. Firebase Error: ${firestoreError.code} - ${firestoreError.message}.`);
   }
 }
 
@@ -171,20 +176,17 @@ export async function updateReport(
     
     const updatePayload: any = { ...reportData };
     if (reportData.photoDataUri === undefined && reportData.hasOwnProperty('photoDataUri')) {
-      // This means the photo was explicitly removed in the form
-      // We can set it to null or use deleteField if necessary, 
-      // but for simplicity, we'll ensure it can be set to undefined or null
-      updatePayload.photoDataUri = null; // Or undefined, depending on how Firestore handles it
+      updatePayload.photoDataUri = null; 
     }
-
 
     await updateDoc(reportDocRef, {
       ...updatePayload,
       updatedAt: serverTimestamp(),
     });
   } catch (error) {
-    console.error(`Error updating report ${reportId}: `, error);
-    throw new Error(`Failed to update report ${reportId} in database.`);
+    const firestoreError = error as FirestoreError;
+    console.error(`Error updating report ${reportId}: `, firestoreError.code, firestoreError.message, firestoreError);
+    throw new Error(`Failed to update report ${reportId} in database. Firebase Error: ${firestoreError.code} - ${firestoreError.message}.`);
   }
 }
 
@@ -199,7 +201,8 @@ export async function deleteReport(reportId: string): Promise<void> {
     const reportDocRef = doc(db, 'reports', reportId);
     await deleteDoc(reportDocRef);
   } catch (error) {
-    console.error(`Error deleting report ${reportId}: `, error);
-    throw new Error(`Failed to delete report ${reportId} from database.`);
+    const firestoreError = error as FirestoreError;
+    console.error(`Error deleting report ${reportId}: `, firestoreError.code, firestoreError.message, firestoreError);
+    throw new Error(`Failed to delete report ${reportId} from database. Firebase Error: ${firestoreError.code} - ${firestoreError.message}.`);
   }
 }
