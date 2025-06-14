@@ -3,14 +3,16 @@
 
 import { db } from '@/lib/firebase';
 import type { FieldReport } from '@/lib/types';
-import { collection, getDocs, Timestamp, query, where, orderBy, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, Timestamp, query, where, orderBy, addDoc, serverTimestamp, doc, getDoc, updateDoc } from 'firebase/firestore';
 
 /**
  * @fileOverview Report service for interacting with Firestore.
  *
  * - getReports - Fetches all reports from Firestore, ordered by creation date (desc).
  * - getReportsByTechnicianId - Fetches reports for a specific technician, ordered by creation date (desc).
+ * - getReportById - Fetches a single report by its ID.
  * - addReport - Adds a new report to Firestore.
+ * - updateReport - Updates an existing report in Firestore.
  * - formatTimestamp - Utility to format Firestore Timestamps.
  */
 
@@ -106,6 +108,29 @@ export async function getReportsByTechnicianId(technicianId: string): Promise<Fi
 }
 
 /**
+ * Fetches a single report by its ID from Firestore.
+ * @param {string} reportId The ID of the report to fetch.
+ * @returns {Promise<FieldReport | null>} A promise that resolves to the FieldReport object or null if not found.
+ */
+export async function getReportById(reportId: string): Promise<FieldReport | null> {
+  try {
+    const reportDocRef = doc(db, 'reports', reportId);
+    const docSnap = await getDoc(reportDocRef);
+
+    if (docSnap.exists()) {
+      return mapDocToFieldReport(docSnap);
+    } else {
+      console.log("No such report document with ID:", reportId);
+      return null;
+    }
+  } catch (error) {
+    console.error(`Error fetching report by ID ${reportId}: `, error);
+    throw new Error(`Failed to fetch report ${reportId} from database.`);
+  }
+}
+
+
+/**
  * Adds a new report to the 'reports' collection in Firestore.
  * @param reportData The data for the new report, excluding id, createdAt, and updatedAt.
  * @returns {Promise<string>} A promise that resolves to the ID of the newly created report.
@@ -126,5 +151,42 @@ export async function addReport(
   } catch (error) {
     console.error("Error adding report: ", error);
     throw new Error("Failed to add report to database. Check server logs for details.");
+  }
+}
+
+/**
+ * Updates an existing report in Firestore.
+ * @param {string} reportId The ID of the report to update.
+ * @param {Partial<Omit<FieldReport, 'id' | 'createdAt' | 'technicianId' | 'projectId'>>} reportData The data to update. `technicianId` and `projectId` are not updatable here.
+ * @returns {Promise<void>} A promise that resolves when the report is successfully updated.
+ * @throws Will throw an error if updating the report fails.
+ */
+export async function updateReport(
+  reportId: string,
+  reportData: Partial<Omit<FieldReport, 'id' | 'createdAt' | 'updatedAt' | 'technicianId' | 'projectId'>>
+): Promise<void> {
+  try {
+    const reportDocRef = doc(db, 'reports', reportId);
+    // Explicitly set photoDataUri to null if it needs to be deleted from the document
+    const updatePayload: any = { ...reportData };
+    if (reportData.photoDataUri === undefined && reportData.hasOwnProperty('photoDataUri')) {
+        // If photoDataUri is explicitly set to undefined in reportData (meaning it was removed)
+        // we might need to use deleteField() if Firestore supports it or set to null
+        // For simplicity, setting to null or undefined in updateDoc usually removes the field or sets it to null.
+        // Let's assume undefined works to remove it or your schema handles null.
+        // Or, if Firestore requires explicit deletion:
+        // import { deleteField } from "firebase/firestore";
+        // updatePayload.photoDataUri = deleteField();
+        // For now, just passing undefined should work if the field is optional or can be null.
+    }
+
+
+    await updateDoc(reportDocRef, {
+      ...updatePayload,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error(`Error updating report ${reportId}: `, error);
+    throw new Error(`Failed to update report ${reportId} in database.`);
   }
 }

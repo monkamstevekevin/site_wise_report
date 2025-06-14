@@ -2,32 +2,32 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Label } from '@/components/ui/label'; // Not strictly needed if using FormLabel
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
-import { detectReportAnomaly, type FieldReport, type AnomalyAssessment } from '@/ai/flows/report-anomaly-detection';
+import type { AnomalyAssessment, FieldReport } from '@/ai/flows/report-anomaly-detection';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Loader2, Sparkles, AlertTriangleIcon, Camera, Paperclip, Save, Send } from 'lucide-react';
 import Image from 'next/image';
 import { getProjects } from '@/services/projectService';
-import type { Project, User } from '@/lib/types';
+import type { Project } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
-import { addReport as saveReportToFirestore } from '@/services/reportService';
 import { getUserById } from '@/services/userService';
 
 const MAX_FILE_SIZE_MB = 5;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 
+// This schema is used by react-hook-form
 const reportFormSchema = z.object({
   projectId: z.string().min(1, 'Project ID is required'),
   materialType: z.enum(['cement', 'asphalt', 'gravel', 'sand', 'other'], {
@@ -43,7 +43,7 @@ const reportFormSchema = z.object({
     required_error: 'Sampling method is required.',
   }),
   notes: z.string().optional(),
-  photo: z
+  photo: z // FileList or undefined
     .custom<FileList>()
     .optional()
     .refine(
@@ -57,7 +57,14 @@ const reportFormSchema = z.object({
   attachmentUrls: z.string().optional().describe('Comma-separated URLs for other attachments like documents'),
 });
 
-type ReportFormData = z.infer<typeof reportFormSchema>;
+export type ReportFormData = z.infer<typeof reportFormSchema>;
+
+// Data structure passed to the onSubmitReport prop by the form
+export type ReportSubmitPayload = Omit<FieldReport, 'id' | 'createdAt' | 'updatedAt' | 'technicianId' | 'photoDataUri'> & {
+  // technicianId will be added by the parent page from useAuth()
+  // photoDataUri is derived from photoFile by the parent
+};
+
 
 const materialTypeOptions: { value: ReportFormData['materialType']; label: string }[] = [
   { value: 'cement', label: 'Cement' },
@@ -76,32 +83,42 @@ const samplingMethodOptions: { value: ReportFormData['samplingMethod']; label: s
 
 const initialReportFormValues: ReportFormData = {
   projectId: '',
-  materialType: undefined as unknown as ReportFormData['materialType'], // Zod enum will require a value
-  temperature: '' as unknown as number,
+  materialType: undefined as unknown as ReportFormData['materialType'],
+  temperature: '' as unknown as number, // Zod coerce will handle empty string to number
   volume: '' as unknown as number,
   density: '' as unknown as number,
   humidity: '' as unknown as number,
   batchNumber: '',
   supplier: '',
-  samplingMethod: undefined as unknown as ReportFormData['samplingMethod'], // Zod enum will require a value
+  samplingMethod: undefined as unknown as ReportFormData['samplingMethod'],
   notes: '',
-  photo: undefined, // FileList is optional
+  photo: undefined,
   attachmentUrls: '',
 };
 
+interface ReportFormProps {
+  reportToEdit?: FieldReport;
+  isLoadingExternally?: boolean; // Used when parent is fetching reportToEdit
+  onSubmitReport: (
+    data: ReportSubmitPayload,
+    status: 'DRAFT' | 'SUBMITTED',
+    photoFile?: File | null // File for new/changed, null for removed, undefined for untouched
+  ) => Promise<{ success: boolean; reportId?: string; anomalyAssessment?: AnomalyAssessment }>;
+}
 
-export function ReportForm() {
+export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }: ReportFormProps) {
   const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitAction, setSubmitAction] = useState<'DRAFT' | 'SUBMITTED' | null>(null);
-  const [anomalyResult, setAnomalyResult] = useState<AnomalyAssessment | null>(null);
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [isSubmittingForm, setIsSubmittingForm] = useState(false);
+  const [submitActionType, setSubmitActionType] = useState<'DRAFT' | 'SUBMITTED' | null>(null);
+  const [currentAnomalyResult, setCurrentAnomalyResult] = useState<AnomalyAssessment | null>(null);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   
-  const [allProjects, setAllProjects] = useState<Project[]>([]);
-  const [assignedProjects, setAssignedProjects] = useState<Project[]>([]);
-  const [isLoadingProjects, setIsLoadingProjects] = useState(true);
+  const [assignedProjectsList, setAssignedProjectsList] = useState<Project[]>([]);
+  const [isLoadingProjectsData, setIsLoadingProjectsData] = useState(true);
+
+  const isEditMode = !!reportToEdit;
 
   const form = useForm<ReportFormData>({
     resolver: zodResolver(reportFormSchema),
@@ -109,93 +126,109 @@ export function ReportForm() {
   });
 
   useEffect(() => {
-    const fetchProjectData = async () => {
-      if (authLoading) return; 
-      setIsLoadingProjects(true);
+    const fetchProjectDataForForm = async () => {
+      if (authLoading || !user) { // Wait for auth and user
+          setIsLoadingProjectsData(false);
+          setAssignedProjectsList([]);
+          form.setValue('projectId', ''); // Clear project ID if no user
+          return;
+      }
+      setIsLoadingProjectsData(true);
       try {
-        const fetchedProjects = await getProjects();
-        setAllProjects(fetchedProjects);
-
-        if (user) {
-          const userProfile = await getUserById(user.uid);
-          const currentUserAssignedIds = userProfile?.assignedProjectIds || [];
-          
-          const userProjects = fetchedProjects.filter(p => currentUserAssignedIds.includes(p.id));
-          setAssignedProjects(userProjects);
-          
-          if (userProjects.length > 0 && !form.getValues('projectId')) {
-            form.setValue('projectId', userProjects[0].id); 
-          } else if (userProjects.length === 0) {
-            form.setValue('projectId', ''); // Ensure it's empty if no projects
-          }
-        } else {
-          setAssignedProjects([]); 
-          form.setValue('projectId', ''); // Ensure it's empty if no user
+        const allFetchedProjects = await getProjects();
+        const userProfile = await getUserById(user.uid);
+        const currentUserAssignedIds = userProfile?.assignedProjectIds || [];
+        
+        const userProjects = allFetchedProjects.filter(p => currentUserAssignedIds.includes(p.id));
+        setAssignedProjectsList(userProjects);
+        
+        if (!isEditMode) { // Only set default project for new reports
+            if (userProjects.length > 0) {
+                form.setValue('projectId', userProjects[0].id); 
+            } else {
+                form.setValue('projectId', ''); 
+            }
         }
 
       } catch (error) {
         console.error("Failed to fetch projects for report form:", error);
-        toast({ variant: "destructive", title: "Error", description: "Could not load projects." });
-        setAssignedProjects([]); 
-        form.setValue('projectId', ''); // Ensure it's empty on error
+        toast({ variant: "destructive", title: "Error", description: "Could not load projects for selection." });
+        setAssignedProjectsList([]);
+        if (!isEditMode) form.setValue('projectId', '');
       } finally {
-        setIsLoadingProjects(false);
+        setIsLoadingProjectsData(false);
       }
     };
-    fetchProjectData();
-  }, [user, authLoading, form, toast]);
+    fetchProjectDataForForm();
+  }, [user, authLoading, form, toast, isEditMode]); // Added isEditMode dependency
 
 
-  const handlePhotoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  useEffect(() => {
+    if (isEditMode && reportToEdit) {
+      form.reset({
+        projectId: reportToEdit.projectId,
+        materialType: reportToEdit.materialType as ReportFormData['materialType'],
+        temperature: reportToEdit.temperature,
+        volume: reportToEdit.volume,
+        density: reportToEdit.density,
+        humidity: reportToEdit.humidity,
+        batchNumber: reportToEdit.batchNumber,
+        supplier: reportToEdit.supplier,
+        samplingMethod: reportToEdit.samplingMethod as ReportFormData['samplingMethod'],
+        notes: reportToEdit.notes || '',
+        photo: undefined, // photo FileList is for new uploads
+        attachmentUrls: reportToEdit.attachments.join(', ') || '',
+      });
+      if (reportToEdit.photoDataUri) {
+        setPhotoPreviewUrl(reportToEdit.photoDataUri);
+      } else {
+        setPhotoPreviewUrl(null);
+      }
+    } else {
+        // If creating, and projects have loaded, set default project if not already set
+        if (assignedProjectsList.length > 0 && !form.getValues('projectId')) {
+            form.setValue('projectId', assignedProjectsList[0].id);
+        }
+    }
+  }, [reportToEdit, isEditMode, form, assignedProjectsList]); // assignedProjectsList added
+
+  const handlePhotoInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      form.setValue('photo', event.target.files); // Set the FileList for validation
+      form.setValue('photo', event.target.files, { shouldValidate: true }); 
       const reader = new FileReader();
       reader.onloadend = () => {
-        setPhotoPreview(reader.result as string);
+        setPhotoPreviewUrl(reader.result as string);
       };
       reader.readAsDataURL(file);
-    } else {
-      form.setValue('photo', undefined);
-      setPhotoPreview(null);
+    } else { // No file selected or selection cancelled
+      form.setValue('photo', undefined, { shouldValidate: true });
+      // If in edit mode and there was an existing photo, removing it here should clear the preview
+      // but the decision to remove the photo from DB is handled on submit
+      setPhotoPreviewUrl(reportToEdit?.photoDataUri && !form.getValues('photo')?.[0] ? reportToEdit.photoDataUri : null);
     }
   };
 
-  const readFileAsDataURL = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = (error) => reject(error);
-      reader.readAsDataURL(file);
-    });
+  const removePhotoPreview = () => {
+    setPhotoPreviewUrl(null);
+    form.setValue('photo', undefined, { shouldValidate: true }); // Clear RHF state for photo
+    if(photoInputRef.current) photoInputRef.current.value = ''; // Clear file input
+    // This visually removes the preview. On submit, if 'photo' is undefined (and was previously set),
+    // the parent will handle it as photo removal from DB.
   };
 
-  const processSubmit = async (data: ReportFormData, status: 'DRAFT' | 'SUBMITTED') => {
+  const handleSubmitClick = async (data: ReportFormData, status: 'DRAFT' | 'SUBMITTED') => {
     if (!user) {
       toast({ variant: 'destructive', title: 'Authentication Error', description: 'You must be logged in.' });
       return;
     }
-    setIsSubmitting(true);
-    setSubmitAction(status);
-    setAnomalyResult(null);
+    setIsSubmittingForm(true);
+    setSubmitActionType(status);
+    setCurrentAnomalyResult(null);
 
-    let photoDataUri: string | undefined = undefined;
-    if (data.photo && data.photo.length > 0) {
-      try {
-        photoDataUri = await readFileAsDataURL(data.photo[0]);
-      } catch (error) {
-        console.error("Error reading photo file:", error);
-        toast({ variant: 'destructive', title: 'Photo Error', description: 'Could not process the photo.' });
-        setIsSubmitting(false);
-        setSubmitAction(null);
-        return;
-      }
-    }
-    
-    // Ensure all required fields from schema (even if not directly in ReportFormData if optional) are present for FieldReport
-    const reportDataToSave: Omit<FieldReport, 'id' | 'createdAt' | 'updatedAt'> = {
+    const reportPayload: ReportSubmitPayload = {
       projectId: data.projectId,
-      technicianId: user.uid, 
+      // technicianId is added by the parent based on logged-in user
       materialType: data.materialType,
       temperature: data.temperature,
       volume: data.volume,
@@ -205,87 +238,70 @@ export function ReportForm() {
       supplier: data.supplier,
       samplingMethod: data.samplingMethod,
       notes: data.notes || '',
-      status: status,
+      status: status, // status will be set here
       attachments: data.attachmentUrls ? data.attachmentUrls.split(',').map(url => url.trim()).filter(url => url) : [],
-      photoDataUri: photoDataUri,
+      // photoDataUri is handled by parent based on photoFile
     };
+    
+    // Determine photoFile status: File, null (removed), or undefined (untouched)
+    let photoFileArg: File | null | undefined = undefined;
+    if (data.photo && data.photo.length > 0) {
+        photoFileArg = data.photo[0]; // New or changed photo
+    } else if (isEditMode && reportToEdit?.photoDataUri && !photoPreviewUrl) {
+        photoFileArg = null; // Photo was present and explicitly removed
+    } // Else, photoFileArg remains undefined (no change or no photo initially)
 
-    try {
-      const fullReportDataForAI: FieldReport = {
-        ...reportDataToSave,
-        id: 'temp-for-ai-' + crypto.randomUUID(), 
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
+
+    toast({ title: 'Processing Report...', description: 'AI checking for anomalies...' });
+    
+    const { success, reportId, anomalyAssessment } = await onSubmitReport(reportPayload, status, photoFileArg);
+    setCurrentAnomalyResult(anomalyAssessment || null);
+
+    if (success) {
+      const actionVerb = isEditMode ? "updated" : "created";
+      const anomalyMessage = anomalyAssessment?.isAnomalous ? `Report ${actionVerb} but flagged by AI.` : `Report ${actionVerb}. No anomalies detected.`;
       
-      toast({ title: 'Analyzing Report...', description: 'AI checking for anomalies...' });
-      const assessment = await detectReportAnomaly(fullReportDataForAI);
-      setAnomalyResult(assessment);
+      toast({
+        variant: anomalyAssessment?.isAnomalous ? 'destructive' : 'default',
+        title: isEditMode ? 'Report Updated' : 'Report Created',
+        description: `${reportId ? `ID: ${reportId}. ` : ''}${anomalyMessage}`,
+        duration: 7000,
+      });
 
-      const newReportId = await saveReportToFirestore(reportDataToSave);
-
-      if (status === 'SUBMITTED') {
-        if (assessment.isAnomalous) {
-          toast({
-            variant: 'destructive',
-            title: 'Anomaly Detected!',
-            description: `Report ${newReportId} submitted but flagged. Review details.`,
-            duration: 10000,
-          });
+      if (!isEditMode) { // Only reset form completely in create mode
+        form.reset(initialReportFormValues);
+        setPhotoPreviewUrl(null);
+        if(photoInputRef.current) photoInputRef.current.value = '';
+        // Re-set default project if available
+        if (assignedProjectsList.length > 0) {
+            form.setValue('projectId', assignedProjectsList[0].id);
         } else {
-          toast({
-            title: 'Report Submitted & Analyzed',
-            description: `Report ${newReportId} submitted. No anomalies detected.`,
-            duration: 7000,
-          });
+            form.setValue('projectId', '');
         }
-      } else { 
-         toast({
-            title: 'Report Saved as Draft',
-            description: `Report ${newReportId} saved. ${assessment.isAnomalous ? 'Anomaly detected in draft.' : 'No anomalies detected by AI.'}`,
-            duration: 7000,
-          });
+        form.setValue('materialType', undefined as unknown as ReportFormData['materialType']);
+        form.setValue('samplingMethod', undefined as unknown as ReportFormData['samplingMethod']);
       }
-      
-      form.reset(initialReportFormValues); 
-      
-      if (assignedProjects.length > 0) {
-        form.setValue('projectId', assignedProjects[0].id);
-      } else {
-        // This case should be covered by initialReportFormValues.projectId = ''
-        // but explicitly setting it ensures the Select updates if its value was different.
-        form.setValue('projectId', '');
-      }
-      // Ensure materialType and samplingMethod are reset to undefined for placeholders
-      form.setValue('materialType', undefined as unknown as ReportFormData['materialType']);
-      form.setValue('samplingMethod', undefined as unknown as ReportFormData['samplingMethod']);
-
-
-      setPhotoPreview(null);
-      if(photoInputRef.current) photoInputRef.current.value = '';
-
-    } catch (error) {
-      console.error('Error processing report:', error);
-      toast({ variant: 'destructive', title: 'Error Processing Report', description: (error as Error).message || 'Could not process report.' });
-    } finally {
-      setIsSubmitting(false);
-      setSubmitAction(null);
+      // Navigation for edit mode is handled by the parent page
+    } else {
+      toast({ variant: 'destructive', title: 'Error', description: `Failed to ${isEditMode ? 'update' : 'create'} report.` });
     }
+
+    setIsSubmittingForm(false);
+    setSubmitActionType(null);
   };
 
-  if (authLoading || isLoadingProjects) {
+  const pageLoading = authLoading || isLoadingProjectsData || (isEditMode && isLoadingExternally);
+
+  if (pageLoading) {
       return (
         <Card className="shadow-xl">
           <CardHeader>
-            <CardTitle>Submit Field Report</CardTitle>
-            <CardDescription>Enter the details for the material test report.</CardDescription>
+            <CardTitle>{isEditMode ? "Edit Field Report" : "Submit Field Report"}</CardTitle>
+            <CardDescription>Loading form data...</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
+              {[...Array(8)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
             </div>
              <Skeleton className="h-20 w-full" />
              <div className="flex gap-3">
@@ -301,8 +317,11 @@ export function ReportForm() {
   return (
     <Card className="shadow-xl">
       <CardHeader>
-        <CardTitle>Submit Field Report</CardTitle>
-        <CardDescription>Enter the details for the material test report. All fields are required unless marked optional.</CardDescription>
+        <CardTitle>{isEditMode ? "Edit Field Report" : "Submit Field Report"}</CardTitle>
+        <CardDescription>
+          {isEditMode ? `Editing report ID: ${reportToEdit?.id}. ` : ""}
+          Enter the details for the material test report. All fields are required unless marked optional.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <Form {...form}>
@@ -317,16 +336,16 @@ export function ReportForm() {
                     <Select 
                       onValueChange={field.onChange} 
                       value={field.value || ""} 
-                      disabled={assignedProjects.length === 0 || !user}
+                      disabled={assignedProjectsList.length === 0 || !user || isSubmittingForm}
                     >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder={assignedProjects.length === 0 ? "No projects assigned or loadable" : "Select an assigned project"} />
+                          <SelectValue placeholder={assignedProjectsList.length === 0 ? "No projects assigned or loadable" : "Select an assigned project"} />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {assignedProjects.length === 0 && <SelectItem value="-" disabled>{user ? "No projects assigned to you" : "Login to see projects"}</SelectItem>}
-                        {assignedProjects.map(project => (
+                        {assignedProjectsList.length === 0 && <SelectItem value="-" disabled>{user ? "No projects assigned to you" : "Login to see projects"}</SelectItem>}
+                        {assignedProjectsList.map(project => (
                           <SelectItem key={project.id} value={project.id}>{project.name} ({project.id})</SelectItem>
                         ))}
                       </SelectContent>
@@ -342,7 +361,7 @@ export function ReportForm() {
                   <FormItem>
                     <FormLabel>Batch Number</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., BATCH-XYZ-123" {...field} />
+                      <Input placeholder="e.g., BATCH-XYZ-123" {...field} disabled={isSubmittingForm} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -354,7 +373,7 @@ export function ReportForm() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Material Type</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value} disabled={isSubmittingForm}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select material type" />
@@ -377,7 +396,7 @@ export function ReportForm() {
                   <FormItem>
                     <FormLabel>Supplier</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., Acme Materials Co." {...field} />
+                      <Input placeholder="e.g., Acme Materials Co." {...field} disabled={isSubmittingForm} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -390,7 +409,7 @@ export function ReportForm() {
                   <FormItem>
                     <FormLabel>Temperature (°C)</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.1" placeholder="e.g., 25.5" {...field} />
+                      <Input type="number" step="0.1" placeholder="e.g., 25.5" {...field} disabled={isSubmittingForm} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -403,7 +422,7 @@ export function ReportForm() {
                   <FormItem>
                     <FormLabel>Volume (m³)</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.01" placeholder="e.g., 10.25" {...field} />
+                      <Input type="number" step="0.01" placeholder="e.g., 10.25" {...field} disabled={isSubmittingForm} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -416,7 +435,7 @@ export function ReportForm() {
                   <FormItem>
                     <FormLabel>Density (kg/m³)</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.1" placeholder="e.g., 1500.0" {...field} />
+                      <Input type="number" step="0.1" placeholder="e.g., 1500.0" {...field} disabled={isSubmittingForm} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -429,7 +448,7 @@ export function ReportForm() {
                   <FormItem>
                     <FormLabel>Humidity (%)</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.1" placeholder="e.g., 60.5" {...field} />
+                      <Input type="number" step="0.1" placeholder="e.g., 60.5" {...field} disabled={isSubmittingForm} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -441,7 +460,7 @@ export function ReportForm() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Sampling Method</FormLabel>
-                     <Select onValueChange={field.onChange} value={field.value}>
+                     <Select onValueChange={field.onChange} value={field.value} disabled={isSubmittingForm}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select sampling method" />
@@ -461,21 +480,17 @@ export function ReportForm() {
               <FormField
                 control={form.control}
                 name="photo"
-                render={({ field: { onChange, value, ...rest } }) => ( // `value` is destructured but not directly used for <Input type="file">
+                render={({ field }) => ( 
                   <FormItem>
                     <FormLabel>Upload Photo (Optional)</FormLabel>
                     <FormControl>
                       <Input
                         type="file"
                         accept="image/*"
-                        onChange={(e) => {
-                          // field.onChange from RHF expects the value, not the event.
-                          // For file inputs, pass e.target.files to RHF.
-                          onChange(e.target.files); 
-                          handlePhotoChange(e); // Your custom handler for preview
-                        }}
-                        {...rest} // Spread other RHF props like ref, name, onBlur
-                        ref={photoInputRef} // Your ref for clearing
+                        onChange={handlePhotoInputChange}
+                        name={field.name} // RHF needs name
+                        ref={photoInputRef}
+                        disabled={isSubmittingForm}
                         className="pt-2"
                       />
                     </FormControl>
@@ -483,14 +498,12 @@ export function ReportForm() {
                       <Camera className="mr-2 h-4 w-4" /> Max {MAX_FILE_SIZE_MB}MB. JPG, PNG, WEBP.
                     </FormDescription>
                     <FormMessage />
-                    {photoPreview && (
-                      <div className="mt-2">
-                        <Image src={photoPreview} alt="Photo preview" width={200} height={200} className="rounded-md object-cover max-h-48 w-auto" data-ai-hint="material sample" />
-                         <Button variant="link" size="sm" className="text-xs h-auto p-0 mt-1" onClick={() => {
-                            setPhotoPreview(null);
-                            form.setValue('photo', undefined); // Clear RHF state for photo
-                            if(photoInputRef.current) photoInputRef.current.value = '';
-                         }}>Remove photo</Button>
+                    {photoPreviewUrl && (
+                      <div className="mt-2 relative w-fit">
+                        <Image src={photoPreviewUrl} alt="Photo preview" width={200} height={200} className="rounded-md object-cover max-h-48 w-auto" data-ai-hint="material sample" />
+                         <Button variant="destructive" size="sm" className="absolute -top-2 -right-2 h-6 w-6 p-0 rounded-full" onClick={removePhotoPreview} type="button" disabled={isSubmittingForm} title="Remove photo">
+                            <X className="h-3 w-3"/>
+                         </Button>
                       </div>
                     )}
                   </FormItem>
@@ -503,7 +516,7 @@ export function ReportForm() {
                   <FormItem className="md:col-span-2">
                     <FormLabel>Notes (Optional)</FormLabel>
                     <FormControl>
-                      <Textarea placeholder="Any additional observations or comments..." {...field} />
+                      <Textarea placeholder="Any additional observations or comments..." {...field} disabled={isSubmittingForm} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -516,7 +529,7 @@ export function ReportForm() {
                   <FormItem className="md:col-span-2">
                     <FormLabel>Other Attachment URLs (Optional, e.g., PDFs)</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., https://example.com/doc.pdf" {...field} />
+                      <Input placeholder="e.g., https://example.com/doc.pdf" {...field} disabled={isSubmittingForm} />
                     </FormControl>
                     <FormDescription className="flex items-center">
                       <Paperclip className="mr-2 h-4 w-4" /> Comma-separated URLs for any attached documents, specs, etc.
@@ -530,41 +543,41 @@ export function ReportForm() {
             <div className="flex flex-col sm:flex-row gap-3 pt-4">
                 <Button 
                     type="button" 
-                    onClick={form.handleSubmit(data => processSubmit(data, 'DRAFT'))} 
+                    onClick={form.handleSubmit(data => handleSubmitClick(data, 'DRAFT'))} 
                     variant="outline" 
                     className="w-full sm:w-auto rounded-lg" 
-                    disabled={isSubmitting || !user || assignedProjects.length === 0}
+                    disabled={isSubmittingForm || !user || assignedProjectsList.length === 0 || pageLoading}
                 >
-                {isSubmitting && submitAction === 'DRAFT' ? (
+                {isSubmittingForm && submitActionType === 'DRAFT' ? (
                     <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</>
                 ) : (
-                    <><Save className="mr-2 h-4 w-4" /> Save as Draft</>
+                    <><Save className="mr-2 h-4 w-4" /> {isEditMode ? "Save Draft Changes" : "Save as Draft"}</>
                 )}
                 </Button>
                 <Button 
                     type="button" 
-                    onClick={form.handleSubmit(data => processSubmit(data, 'SUBMITTED'))} 
+                    onClick={form.handleSubmit(data => handleSubmitClick(data, 'SUBMITTED'))} 
                     className="w-full sm:w-auto rounded-lg" 
-                    disabled={isSubmitting || !user || assignedProjects.length === 0}
+                    disabled={isSubmittingForm || !user || assignedProjectsList.length === 0 || pageLoading}
                 >
-                {isSubmitting && submitAction === 'SUBMITTED' ? (
+                {isSubmittingForm && submitActionType === 'SUBMITTED' ? (
                     <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting...</>
                 ) : (
-                    <><Send className="mr-2 h-4 w-4" /> Submit for Validation</>
+                    <><Send className="mr-2 h-4 w-4" /> {isEditMode ? "Submit Updated Report" : "Submit for Validation"}</>
                 )}
                 </Button>
             </div>
           </form>
         </Form>
 
-        {anomalyResult && (
-          <Alert variant={anomalyResult.isAnomalous ? "destructive" : "default"} className="mt-6">
-             {anomalyResult.isAnomalous ? <AlertTriangleIcon className="h-4 w-4" /> : <Sparkles className="h-4 w-4 text-green-500" />}
-            <AlertTitle className={anomalyResult.isAnomalous ? "" : "text-green-700 dark:text-green-400"}>
-              {anomalyResult.isAnomalous ? 'AI Anomaly Detection Result: Potential Anomaly Found' : 'AI Anomaly Detection Result: No Anomaly Detected'}
+        {currentAnomalyResult && (
+          <Alert variant={currentAnomalyResult.isAnomalous ? "destructive" : "default"} className="mt-6">
+             {currentAnomalyResult.isAnomalous ? <AlertTriangleIcon className="h-4 w-4" /> : <Sparkles className="h-4 w-4 text-green-500" />}
+            <AlertTitle className={currentAnomalyResult.isAnomalous ? "" : "text-green-700 dark:text-green-400"}>
+              {currentAnomalyResult.isAnomalous ? 'AI Anomaly Detection Result: Potential Anomaly Found' : 'AI Anomaly Detection Result: No Anomaly Detected'}
             </AlertTitle>
             <AlertDescription className="whitespace-pre-wrap">
-              {anomalyResult.explanation}
+              {currentAnomalyResult.explanation}
             </AlertDescription>
           </Alert>
         )}
@@ -572,4 +585,3 @@ export function ReportForm() {
     </Card>
   );
 }
-

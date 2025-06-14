@@ -17,9 +17,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import type { UserRole } from '@/lib/constants';
 import { MOCK_TECHNICIAN_EMAIL, MOCK_TECHNICIAN_REPORTS_ID } from '@/lib/constants';
 import { getReports, getReportsByTechnicianId } from '@/services/reportService'; // Import the service
+import { useRouter } from 'next/navigation'; // Import useRouter
 
-// Remove mockReportsData as it's no longer needed
-// export const mockReportsData: FieldReport[] = [ ... ];
 
 const reportStatusFilterOptions: { value: FieldReport['status'] | 'ALL'; label: string }[] = [
   { value: 'ALL', label: 'All Statuses' },
@@ -62,6 +61,7 @@ const mapFirebaseUserToAppRoleAndId = (firebaseUser: any): MappedUserRoleAndId =
 export default function ReportsPage() {
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
+  const router = useRouter(); // Initialize useRouter
 
   const [allFetchedReports, setAllFetchedReports] = useState<FieldReport[]>([]);
   const [isLoadingReports, setIsLoadingReports] = useState(true);
@@ -115,9 +115,19 @@ export default function ReportsPage() {
   };
 
   const handleEditReport = (report: FieldReport) => {
-    console.log("Edit report:", report.id);
-    // Later, this will navigate to /reports/edit/[reportId] or open a dialog
-    toast({ title: "Edit Report (Simulated)", description: `Form to edit report ${report.id} would open.` });
+    // Navigate to the edit page for this report
+    const canEdit = (currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') ||
+                    (currentUserRole === 'TECHNICIAN' && report.technicianId === effectiveTechnicianId && report.status === 'DRAFT');
+    
+    if (canEdit) {
+      router.push(`/reports/edit/${report.id}`);
+    } else {
+      toast({
+        variant: "destructive",
+        title: "Cannot Edit Report",
+        description: "This report cannot be edited, either due to its status or your permissions.",
+      });
+    }
   };
 
   const handleDeleteReport = (reportId: string) => {
