@@ -12,7 +12,17 @@ import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { getMaterials, addMaterial, updateMaterial } from '@/services/materialService';
+import { getMaterials, addMaterial, updateMaterial, deleteMaterial } from '@/services/materialService';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const materialTypeFilterOptions: { value: MaterialType | 'ALL'; label: string }[] = [
   { value: 'ALL', label: 'All Types' },
@@ -31,6 +41,9 @@ export default function MaterialManagementPage() {
 
   const [isMaterialFormOpen, setIsMaterialFormOpen] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState<Material | undefined>(undefined);
+
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [materialToDelete, setMaterialToDelete] = useState<Material | null>(null);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState<MaterialType | 'ALL'>('ALL');
@@ -63,14 +76,30 @@ export default function MaterialManagementPage() {
     setIsMaterialFormOpen(true);
   };
 
-  const handleDeleteMaterial = (materialId: string) => {
-    console.log("Delete material (simulated):", materialId);
-    toast({
-      variant: "destructive",
-      title: "Delete Material (Simulated)",
-      description: `Material ${materialId} would be deleted.`
-    });
-    // Implement actual deletion and re-fetch/update materials from Firestore
+  const openDeleteDialog = (material: Material) => {
+    setMaterialToDelete(material);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteMaterial = async () => {
+    if (!materialToDelete) return;
+    try {
+      await deleteMaterial(materialToDelete.id);
+      toast({
+        title: "Material Deleted",
+        description: `Material "${materialToDelete.name}" (ID: ${materialToDelete.id}) has been deleted.`,
+      });
+      await fetchMaterials();
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Failed to Delete Material",
+        description: (err as Error).message || "An unexpected error occurred.",
+      });
+    } finally {
+      setIsDeleteDialogOpen(false);
+      setMaterialToDelete(null);
+    }
   };
 
   const handleMaterialFormSubmit = async (data: MaterialSubmitData, id?: string) => {
@@ -194,10 +223,33 @@ export default function MaterialManagementPage() {
           <MaterialTable
             materials={filteredMaterials}
             onEditMaterial={handleEditMaterial}
-            onDeleteMaterial={handleDeleteMaterial}
+            onDeleteMaterial={openDeleteDialog}
           />
         </div>
       )}
+
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <div className="flex items-center">
+              <AlertTriangle className="h-6 w-6 mr-2 text-destructive" />
+              <AlertDialogTitle>Confirm Material Deletion</AlertDialogTitle>
+            </div>
+            <AlertDialogDescription>
+              Are you sure you want to delete the material "{materialToDelete?.name}" (ID: {materialToDelete?.id})? This action is irreversible.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setIsDeleteDialogOpen(false)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteMaterial}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete Material
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

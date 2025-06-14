@@ -23,9 +23,9 @@ import { Badge } from '@/components/ui/badge';
 import type { Material } from '@/lib/types';
 
 interface MaterialTableProps {
-  materials: Material[]; 
+  materials: Material[];
   onEditMaterial?: (material: Material) => void;
-  onDeleteMaterial?: (materialId: string) => void;
+  onDeleteMaterial?: (material: Material) => void; // Pass full material for context in dialog
 }
 
 const materialTypeBadgeVariant: Record<Material['type'], "default" | "secondary" | "outline" | "destructive"> = {
@@ -63,8 +63,8 @@ export function MaterialTable({ materials, onEditMaterial, onDeleteMaterial }: M
     onEditMaterial?.(material);
   };
 
-  const handleDelete = (materialId: string) => {
-    onDeleteMaterial?.(materialId);
+  const handleDelete = (material: Material) => {
+    onDeleteMaterial?.(material);
   };
 
   if (materials.length === 0) {
@@ -107,8 +107,8 @@ export function MaterialTable({ materials, onEditMaterial, onDeleteMaterial }: M
                     <DropdownMenuItem onClick={() => handleEdit(material)}>
                        <Edit className="mr-2 h-4 w-4" /> Edit
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleDelete(material.id)} className="text-destructive focus:text-destructive focus:bg-destructive/10" disabled>
-                      <Trash2 className="mr-2 h-4 w-4" /> Delete (Soon)
+                    <DropdownMenuItem onClick={() => handleDelete(material)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
+                      <Trash2 className="mr-2 h-4 w-4" /> Delete
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>

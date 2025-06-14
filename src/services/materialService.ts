@@ -14,7 +14,7 @@ import type { MaterialSubmitData } from '@/app/(app)/admin/materials/components/
  * - getMaterialById - Fetches a single material by its ID from Firestore.
  * - addMaterial - Adds a new material to Firestore.
  * - updateMaterial - Updates an existing material in Firestore.
- * - (Future: deleteMaterial)
+ * - deleteMaterial - Deletes a material from Firestore.
  */
 
 const formatTimestamp = (timestampField: any): string => {
@@ -37,7 +37,7 @@ const formatTimestamp = (timestampField: any): string => {
     }
   }
   // Fallback for any other unexpected format
-  return new Date().toISOString(); 
+  return new Date().toISOString();
 };
 
 
@@ -53,7 +53,7 @@ export async function getMaterials(): Promise<Material[]> {
     // const q = query(materialsCollectionRef, orderBy('name'));
     const q = query(materialsCollectionRef); // Query without ordering for now to avoid index issues
     const querySnapshot = await getDocs(q);
-    
+
     const materials: Material[] = querySnapshot.docs.map(docSnapshot => {
       const data = docSnapshot.data();
       return {
@@ -63,7 +63,7 @@ export async function getMaterials(): Promise<Material[]> {
         validationRules: data.validationRules || {}, // Default to empty object
         createdAt: formatTimestamp(data.createdAt),
         updatedAt: formatTimestamp(data.updatedAt),
-      } as Material; 
+      } as Material;
     });
     return materials;
   } catch (error) {
@@ -147,5 +147,18 @@ export async function updateMaterial(materialId: string, materialData: MaterialS
   }
 }
 
-
-// export async function deleteMaterial(materialId: string): Promise<void> { ... }
+/**
+ * Deletes a material from Firestore.
+ * @param {string} materialId The ID of the material to delete.
+ * @returns {Promise<void>} A promise that resolves when the material is successfully deleted.
+ * @throws Will throw an error if deleting the material fails.
+ */
+export async function deleteMaterial(materialId: string): Promise<void> {
+  try {
+    const materialDocRef = doc(db, 'materials', materialId);
+    await deleteDoc(materialDocRef);
+  } catch (error) {
+    console.error(`Error deleting material ${materialId}: `, error);
+    throw new Error(`Failed to delete material ${materialId} from database.`);
+  }
+}
