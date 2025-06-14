@@ -77,9 +77,9 @@ export function ReportTable({ reports, onViewReport, onEditReport, onDeleteRepor
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center bg-card rounded-lg shadow-md">
         <FileText className="w-16 h-16 mb-4 text-muted-foreground" />
-        <h3 className="text-xl font-semibold mb-2 text-foreground">No Reports Found</h3>
+        <h3 className="text-xl font-semibold mb-2 text-foreground">Aucun Rapport Trouvé</h3>
         <p className="text-muted-foreground">
-          {currentUserRole === 'TECHNICIAN' ? "You haven't created any reports yet, or none match the current filters." : "No reports match the current filters. Try adjusting your search."}
+          {currentUserRole === 'TECHNICIAN' ? "Vous n'avez encore créé aucun rapport, ou aucun ne correspond aux filtres actuels." : "Aucun rapport ne correspond aux filtres actuels. Essayez d'ajuster votre recherche."}
         </p>
       </div>
     );
@@ -89,16 +89,16 @@ export function ReportTable({ reports, onViewReport, onEditReport, onDeleteRepor
     <div className="rounded-lg border shadow-sm overflow-hidden bg-card">
       <Table>
         <TableCaption>
-          { currentUserRole === 'TECHNICIAN' ? `A list of your ${reports.length} field report(s).` : `A list of ${reports.length} field reports.`}
+          { currentUserRole === 'TECHNICIAN' ? `Une liste de vos ${reports.length} rapport(s) de terrain.` : `Une liste de ${reports.length} rapports de terrain.`}
         </TableCaption>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-[120px]">Report ID</TableHead>
-            <TableHead>Project ID</TableHead>
-            <TableHead>Technician</TableHead>
-            <TableHead>Material</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Created</TableHead>
+            <TableHead className="w-[120px]">ID Rapport</TableHead>
+            <TableHead>ID Projet</TableHead>
+            <TableHead>Technicien</TableHead>
+            <TableHead>Matériau</TableHead>
+            <TableHead>Statut</TableHead>
+            <TableHead>Créé le</TableHead>
             <TableHead className="text-right w-[100px]">Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -108,14 +108,17 @@ export function ReportTable({ reports, onViewReport, onEditReport, onDeleteRepor
             
             let canEdit = false;
             if (currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') {
-              canEdit = true;
+              if (report.status === 'DRAFT' || report.status === 'SUBMITTED') {
+                canEdit = true;
+              }
             } else if (currentUserRole === 'TECHNICIAN' && isOwner && report.status === 'DRAFT') {
               canEdit = true;
             }
 
             let canDelete = false;
             if (currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') {
-              canDelete = true;
+              // Admins/Supervisors can delete any report for now. Could be restricted by status too.
+              canDelete = true; 
             } else if (currentUserRole === 'TECHNICIAN' && isOwner && report.status === 'DRAFT') {
               canDelete = true;
             }
@@ -137,17 +140,17 @@ export function ReportTable({ reports, onViewReport, onEditReport, onDeleteRepor
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" className="h-8 w-8 p-0">
-                        <span className="sr-only">Open menu</span>
+                        <span className="sr-only">Ouvrir le menu</span>
                         <MoreVertical className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuLabel>Actions</DropdownMenuLabel>
                       <DropdownMenuItem onClick={() => handleView(report)}>
-                        <Eye className="mr-2 h-4 w-4" /> View Details
+                        <Eye className="mr-2 h-4 w-4" /> Voir Détails
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => handleEdit(report)} disabled={!canEdit}>
-                         <Edit className="mr-2 h-4 w-4" /> {canEdit ? "Edit Report" : "Edit (Locked)"}
+                         <Edit className="mr-2 h-4 w-4" /> {canEdit ? "Modifier Rapport" : "Modifier (Verrouillé)"}
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
@@ -155,7 +158,7 @@ export function ReportTable({ reports, onViewReport, onEditReport, onDeleteRepor
                         className="text-destructive focus:text-destructive focus:bg-destructive/10"
                         disabled={!canDelete}
                       >
-                        <Trash2 className="mr-2 h-4 w-4" /> {canDelete ? "Delete" : "Delete (Locked)"}
+                        <Trash2 className="mr-2 h-4 w-4" /> {canDelete ? "Supprimer" : "Supprimer (Verrouillé)"}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>

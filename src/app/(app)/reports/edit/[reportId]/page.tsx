@@ -14,6 +14,8 @@ import { getReportById, updateReport } from '@/services/reportService';
 import { detectReportAnomaly, type FieldReport, type AnomalyAssessment } from '@/ai/flows/report-anomaly-detection';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import type { UserRole } from '@/lib/constants';
+import { MOCK_TECHNICIAN_EMAIL, MOCK_TECHNICIAN_REPORTS_ID } from '@/lib/constants';
 
 
 const readFileAsDataURL = (file: File): Promise<string> => {
@@ -23,6 +25,16 @@ const readFileAsDataURL = (file: File): Promise<string> => {
     reader.onerror = (error) => reject(error);
     reader.readAsDataURL(file);
   });
+};
+
+// Helper to determine user role based on email for permission checks
+// This should ideally come from a more robust role management system or user profile in DB
+const mapFirebaseUserToAppRole = (firebaseUser: any): UserRole => {
+  if (!firebaseUser || !firebaseUser.email) return 'TECHNICIAN'; // Default if no email
+  if (firebaseUser.email === 'janesteve237@gmail.com') return 'ADMIN';
+  if (firebaseUser.email.includes('admin@example.com')) return 'ADMIN';
+  if (firebaseUser.email.includes('supervisor@example.com')) return 'SUPERVISOR';
+  return 'TECHNICIAN';
 };
 
 
@@ -45,27 +57,37 @@ export default function EditReportPage() {
       getReportById(reportId)
         .then(data => {
           if (data) {
-            const isOwner = data.technicianId === user.uid;
-            const isAdminOrSupervisor = user.email?.includes('admin@') || user.email?.includes('supervisor@'); 
-            
-            if (isOwner || isAdminOrSupervisor || data.status === 'DRAFT') { 
+            const currentUserRole = mapFirebaseUserToAppRole(user);
+            const effectiveTechnicianId = user.email === MOCK_TECHNICIAN_EMAIL ? MOCK_TECHNICIAN_REPORTS_ID : user.uid;
+            const isOwner = data.technicianId === effectiveTechnicianId;
+
+            let canAccessEditPage = false;
+            if (currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') {
+              if (data.status === 'DRAFT' || data.status === 'SUBMITTED') {
+                canAccessEditPage = true;
+              }
+            } else if (currentUserRole === 'TECHNICIAN' && isOwner && data.status === 'DRAFT') {
+              canAccessEditPage = true;
+            }
+
+            if (canAccessEditPage) {
                  setReportToEdit(data);
             } else {
-                setErrorLoadingReport("You do not have permission to edit this report, or it's not in a state that allows editing by you.");
-                toast({variant: "destructive", title: "Permission Denied", description: "Cannot edit this report."});
+                setErrorLoadingReport("Vous n'avez pas la permission de modifier ce rapport ou il n'est pas dans un état modifiable.");
+                toast({variant: "destructive", title: "Permission Refusée", description: "Impossible de modifier ce rapport."});
             }
           } else {
-            setErrorLoadingReport(`Report with ID ${reportId} not found.`);
+            setErrorLoadingReport(`Rapport avec ID ${reportId} non trouvé.`);
           }
         })
         .catch(err => {
           console.error("Error fetching report for editing:", err);
-          setErrorLoadingReport("Failed to load report data for editing.");
+          setErrorLoadingReport("Échec du chargement des données du rapport pour modification.");
         })
         .finally(() => setIsLoadingReport(false));
     } else if (!user && !authLoading) {
         setIsLoadingReport(false);
-        setErrorLoadingReport("You must be logged in to edit reports.");
+        setErrorLoadingReport("Vous devez être connecté pour modifier les rapports.");
     }
 
   }, [reportId, user, authLoading, toast]);
@@ -76,7 +98,7 @@ export default function EditReportPage() {
     photoFile?: File | null | undefined
   ): Promise<{ success: boolean; reportId?: string; anomalyAssessment?: AnomalyAssessment }> => {
     if (!user || !reportToEdit) {
-      toast({ variant: 'destructive', title: 'Error', description: 'User or report data missing.' });
+      toast({ variant: 'destructive', title: 'Erreur', description: 'Données utilisateur ou rapport manquantes.' });
       return { success: false };
     }
 
@@ -89,17 +111,17 @@ export default function EditReportPage() {
         finalPhotoDataUri = await readFileAsDataURL(photoFile);
       } catch (error) {
         console.error("Error reading photo file for update:", error);
-        toast({ variant: 'destructive', title: 'Photo Error', description: 'Could not process the new photo.' });
+        toast({ variant: 'destructive', title: 'Erreur Photo', description: 'Impossible de traiter la nouvelle photo.' });
         return { success: false };
       }
     }
     
     const tempReportForAI: FieldReport = {
-        ...reportToEdit, // Start with existing data
-        ...data, // Overlay with form data
+        ...reportToEdit, 
+        ...data, 
         photoDataUri: finalPhotoDataUri,
-        status: status, // Use the new status for AI check
-        updatedAt: new Date().toISOString(), // Approximate for AI check
+        status: status, 
+        updatedAt: new Date().toISOString(), 
     };
     const assessment = await detectReportAnomaly(tempReportForAI);
 
@@ -115,9 +137,8 @@ export default function EditReportPage() {
 
     try {
       await updateReport(reportToEdit.id, reportDataToUpdate);
-      // If it was a draft and had an anomaly, the assessment is still returned for informational purposes.
-      // If it was submitted without anomaly, that's also returned.
-      if (status === 'SUBMITTED') { // Only navigate away if it was a successful submission
+      
+      if (status === 'SUBMITTED') { 
           router.push('/reports'); 
       }
       return { success: true, reportId: reportToEdit.id, anomalyAssessment: assessment };
@@ -130,7 +151,7 @@ export default function EditReportPage() {
   if (authLoading || isLoadingReport) {
     return (
       <>
-        <PageTitle title="Edit Field Report" icon={FileText} subtitle="Loading report data..." />
+        <PageTitle title="Modifier Rapport de Terrain" icon={FileText} subtitle="Chargement des données du rapport..." />
         <Skeleton className="h-[500px] w-full" />
       </>
     );
@@ -139,12 +160,12 @@ export default function EditReportPage() {
   if (errorLoadingReport) {
     return (
       <>
-        <PageTitle title="Error Loading Report" icon={AlertTriangleIcon} subtitle={errorLoadingReport} />
+        <PageTitle title="Erreur de Chargement du Rapport" icon={AlertTriangleIcon} subtitle={errorLoadingReport} />
         <Button variant="outline" asChild className="rounded-lg">
-          <Link href="/reports"><ArrowLeft className="mr-2 h-4 w-4" /> Back to Reports</Link>
+          <Link href="/reports"><ArrowLeft className="mr-2 h-4 w-4" /> Retour aux Rapports</Link>
         </Button>
          <Card className="mt-4">
-            <CardHeader><CardTitle>Details</CardTitle></CardHeader>
+            <CardHeader><CardTitle>Détails</CardTitle></CardHeader>
             <CardContent><p>{errorLoadingReport}</p></CardContent>
         </Card>
       </>
@@ -154,9 +175,9 @@ export default function EditReportPage() {
   if (!reportToEdit) {
      return (
       <>
-        <PageTitle title="Report Not Found" icon={AlertTriangleIcon} subtitle={`Could not find report with ID ${reportId}.`} />
+        <PageTitle title="Rapport Non Trouvé" icon={AlertTriangleIcon} subtitle={`Impossible de trouver le rapport avec ID ${reportId}.`} />
         <Button variant="outline" asChild className="rounded-lg">
-          <Link href="/reports"><ArrowLeft className="mr-2 h-4 w-4" /> Back to Reports</Link>
+          <Link href="/reports"><ArrowLeft className="mr-2 h-4 w-4" /> Retour aux Rapports</Link>
         </Button>
       </>
     );
@@ -165,13 +186,13 @@ export default function EditReportPage() {
   return (
     <>
       <PageTitle 
-        title="Edit Field Report" 
+        title="Modifier Rapport de Terrain" 
         icon={FileText}
-        subtitle={`Modifying report ID: ${reportToEdit.id}`}
+        subtitle={`Modification du rapport ID: ${reportToEdit.id}`}
         actions={
           <Button variant="outline" asChild className="rounded-lg">
             <Link href="/reports">
-               <ArrowLeft className="mr-2 h-4 w-4" /> Cancel & Back to Reports
+               <ArrowLeft className="mr-2 h-4 w-4" /> Annuler & Retour aux Rapports
             </Link>
           </Button>
         }
