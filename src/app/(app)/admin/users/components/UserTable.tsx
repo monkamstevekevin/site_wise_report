@@ -23,10 +23,11 @@ import {
 import { Badge } from '@/components/ui/badge';
 import type { User, UserRole } from '@/lib/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import type { UserFormData } from './UserFormDialog'; // For typing onEditUser
 
 interface UserTableProps {
   users: User[];
-  onEditUser: (user: any) => void;
+  onEditUser: (user: Partial<UserFormData> & { id: string }) => void; // Adjusted type
   onDeleteUser: (userId: string) => void;
   onAssignProjects: (user: User) => void; // New prop
 }
@@ -41,11 +42,13 @@ const roleBadgeVariant: Record<UserRole, "default" | "secondary" | "outline" | "
 export function UserTable({ users, onEditUser, onDeleteUser, onAssignProjects }: UserTableProps) {
 
   const handleEdit = (user: User) => {
+    // Map User type to the expected type for UserFormDialog (Partial<UserFormData> & { id: string })
     const userToPass = {
       id: user.id,
-      displayName: user.name,
+      displayName: user.name, // User has 'name', UserFormData expects 'displayName'
       email: user.email,
       role: user.role,
+      // Password fields are not part of User type and not needed for edit form prefill
     };
     onEditUser(userToPass);
   };
@@ -105,14 +108,14 @@ export function UserTable({ users, onEditUser, onDeleteUser, onAssignProjects }:
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={() => handleEdit(user)}>
-                      <Edit className="mr-2 h-4 w-4" /> Edit User
+                      <Edit className="mr-2 h-4 w-4" /> Edit User (Simulated)
                     </DropdownMenuItem>
                      <DropdownMenuItem onClick={() => onAssignProjects(user)}>
-                      <Briefcase className="mr-2 h-4 w-4" /> Assign Projects
+                      <Briefcase className="mr-2 h-4 w-4" /> Assign Projects (Simulated)
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={() => handleDelete(user.id)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
-                      <Trash2 className="mr-2 h-4 w-4" /> Delete User
+                      <Trash2 className="mr-2 h-4 w-4" /> Delete User (Simulated)
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -124,3 +127,4 @@ export function UserTable({ users, onEditUser, onDeleteUser, onAssignProjects }:
     </div>
   );
 }
+

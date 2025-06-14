@@ -5,7 +5,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { PageTitle } from '@/components/common/PageTitle';
 import { Users, UserPlus, Filter, Loader2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { UserFormDialog } from './components/UserFormDialog';
+import { UserFormDialog, type UserFormData } from './components/UserFormDialog';
 import { UserTable } from './components/UserTable';
 import { AssignProjectsDialog } from './components/AssignProjectsDialog';
 import type { User, UserRole, Project } from '@/lib/types';
@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { getProjects } from '@/services/projectService';
-import { getUsers } from '@/services/userService'; // Import user service
+import { getUsers, addUser } from '@/services/userService'; // Import addUser
 import { sendAssignmentNotification } from '@/ai/flows/assignment-notification-flow';
 
 const userRoleFilterOptions: { value: UserRole | 'ALL'; label: string }[] = [
@@ -34,7 +34,8 @@ export default function UserManagementPage() {
   const [isLoadingProjects, setIsLoadingProjects] = useState(true);
 
   const [isUserFormOpen, setIsUserFormOpen] = useState(false);
-  const [editingUser, setEditingUser] = useState<Partial<User> & {displayName?: string} | undefined>(undefined);
+  // UserFormData includes optional password fields.
+  const [editingUser, setEditingUser] = useState< (Partial<UserFormData> & { id?: string }) | undefined >(undefined);
   
   const [isAssignProjectsDialogOpen, setIsAssignProjectsDialogOpen] = useState(false);
   const [userToAssignProjects, setUserToAssignProjects] = useState<User | null>(null);
@@ -83,22 +84,66 @@ export default function UserManagementPage() {
     setIsUserFormOpen(true);
   };
 
-  const handleEditUser = (user: Partial<User> & {displayName?: string}) => {
-    // User edit will be connected to Firestore later
+  const handleEditUser = (user: Partial<UserFormData> & { id?: string }) => {
     setEditingUser(user);
     setIsUserFormOpen(true);
      toast({ title: "Edit User (Simulated)", description: `Editing for ${user.displayName} will be connected to Firestore soon.` });
+     // Actual update logic will be implemented in a later step
   };
 
   const handleDeleteUser = (userId: string) => {
-    // User delete will be connected to Firestore later
-    // For now, just filter out from local state for UI feedback
-    // setUsersData(prevUsers => prevUsers.filter(user => user.id !== userId));
     toast({
       title: "Delete User (Simulated)",
       description: `User ${userId} deletion will be connected to Firestore soon.`,
       variant: "destructive"
     });
+    // Actual delete logic will be implemented in a later step
+  };
+
+  const handleUserFormSubmit = async (data: UserFormData & { password?: string }, id?: string) => {
+    setIsUserFormOpen(false);
+
+    if (id) { // Editing existing user (to be implemented)
+      try {
+        // await updateUser(id, data); // Placeholder for updateUserService function
+        toast({
+          title: "User Update (Simulated)",
+          description: `User "${data.displayName}" update will be implemented soon.`,
+        });
+      } catch (err) {
+        toast({
+          variant: "destructive",
+          title: "Failed to Update User (Simulated)",
+          description: (err as Error).message || "An unexpected error occurred.",
+        });
+      }
+    } else { // Adding new user
+      if (!data.password) {
+        toast({ variant: "destructive", title: "Missing Password", description: "Password is required to create a new user." });
+        setIsUserFormOpen(true); // Re-open form
+        return;
+      }
+      try {
+        const newUserId = await addUser({ 
+          displayName: data.displayName, 
+          email: data.email, 
+          role: data.role as UserRole // UserFormData role is enum, UserRole is type. They should align.
+        }, data.password);
+        toast({
+          title: "User Added Successfully!",
+          description: `User "${data.displayName}" (ID: ${newUserId}) has been created.`,
+        });
+      } catch (err) {
+        toast({
+          variant: "destructive",
+          title: "Failed to Add User",
+          description: (err as Error).message || "An unexpected error occurred.",
+        });
+        setIsUserFormOpen(true); // Re-open form on failure to allow correction
+      }
+    }
+    await fetchUsers(); // Refresh user list
+    setEditingUser(undefined);
   };
 
   const handleOpenAssignProjectsDialog = (user: User) => {
@@ -120,13 +165,6 @@ export default function UserManagementPage() {
       .filter(id => !oldProjectIds.has(id))
       .map(id => allProjects.find(p => p.id === id))
       .filter(p => p !== undefined) as Project[];
-
-    // Simulate updating user data (this will be a Firestore update later)
-    // setUsersData(prevUsers =>
-    //   prevUsers.map(u =>
-    //     u.id === userId ? { ...u, assignedProjectIds: selectedProjectIds, updatedAt: new Date().toISOString() } : u
-    //   )
-    // );
     
     toast({
       title: "Projects Assigned (Simulated)",
@@ -182,9 +220,12 @@ export default function UserManagementPage() {
         actions={
           <UserFormDialog
             open={isUserFormOpen}
-            onOpenChange={setIsUserFormOpen}
+            onOpenChange={(isOpen) => {
+              setIsUserFormOpen(isOpen);
+              if (!isOpen) setEditingUser(undefined);
+            }}
             userToEdit={editingUser}
-            // onFormSubmit will be connected to Firestore later
+            onFormSubmit={handleUserFormSubmit}
           >
             <Button className="rounded-lg" onClick={handleAddNewUser}>
               <UserPlus className="mr-2 h-4 w-4" /> Add New User
@@ -267,4 +308,3 @@ export default function UserManagementPage() {
     </>
   );
 }
-
