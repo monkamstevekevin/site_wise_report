@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { getProjects } from '@/services/projectService';
 import { getUsers, addUser, updateUserAssignedProjects, updateUser, deleteUserFirestoreRecord } from '@/services/userService';
-import { generateAssignmentNotificationData } from '@/ai/flows/assignment-notification-flow'; // Updated import
+import { generateAssignmentNotificationData } from '@/ai/flows/assignment-notification-flow.ts';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,8 +29,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { collection, addDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { render } from 'react-email/render'; // Added for React Email
-import AssignmentNotificationEmail from '@/emails/AssignmentNotificationEmail'; // Added for React Email
+import { render } from 'react-email'; // Corrected import for React Email
+import AssignmentNotificationEmail from '@/emails/AssignmentNotificationEmail';
 
 const userRoleFilterOptions: { value: UserRole | 'ALL'; label: string }[] = [
   { value: 'ALL', label: 'All Roles' },
@@ -210,7 +210,7 @@ export default function UserManagementPage() {
       
       if (newlyAssignedProjects.length > 0) {
         toast({
-            title: "Email Notifications",
+            title: "Email Notifications Pending",
             description: `Preparing to queue emails for ${targetUser.name} for ${newlyAssignedProjects.length} newly assigned project(s).`,
             duration: 7000,
         });
@@ -219,16 +219,15 @@ export default function UserManagementPage() {
       for (const project of newlyAssignedProjects) {
         try {
           // 1. Generate structured email data using Genkit
-          const emailData = await generateAssignmentNotificationData({
+          const emailGenData = await generateAssignmentNotificationData({ 
             userName: targetUser.name,
             projectName: project.name,
             projectLocation: project.location,
             assignerName: adminAuthUser.displayName || adminAuthUser.email || "Admin",
-            appName: "SiteWise Reports", // You can make this a constant or env var
+            appName: "SiteWise Reports", 
           });
 
           // 2. Render React Email template to HTML string
-          // Consider making APP_URL an environment variable
           const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
           const emailHtml = render(
             <AssignmentNotificationEmail
@@ -238,10 +237,10 @@ export default function UserManagementPage() {
               assignerName={adminAuthUser.displayName || adminAuthUser.email || "Admin"}
               appUrl={appBaseUrl}
               appName="SiteWise Reports"
-              greeting={emailData.greeting}
-              detailsIntro={emailData.detailsIntro}
-              callToActionText={emailData.callToActionText}
-              closingText={emailData.closingText}
+              greeting={emailGenData.greeting}
+              detailsIntro={emailGenData.detailsIntro}
+              callToActionText={emailGenData.callToActionText}
+              closingText={emailGenData.closingText}
             />
           );
           
@@ -250,7 +249,7 @@ export default function UserManagementPage() {
           await addDoc(mailCollectionRef, {
             to: [targetUser.email],
             message: {
-              subject: emailData.emailSubject,
+              subject: emailGenData.emailSubject,
               html: emailHtml,
             },
           });
