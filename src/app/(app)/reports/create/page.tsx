@@ -36,6 +36,9 @@ export default function CreateReportPage() {
       toast({ variant: 'destructive', title: 'Error', description: 'You must be logged in to create a report.' });
       return { success: false };
     }
+    
+    console.log('[CreateReportPage] User UID (technicianId being saved):', user.uid);
+
 
     let photoDataUriInSubmit: string | undefined = undefined;
     if (photoFile) {
@@ -48,9 +51,8 @@ export default function CreateReportPage() {
       }
     }
     
-    // For AI analysis, create a temporary full FieldReport object. ID and timestamps will be approximate for AI check.
     const tempReportForAI: FieldReport = {
-        ...data, // from ReportSubmitPayload
+        ...data, 
         technicianId: user.uid,
         photoDataUri: photoDataUriInSubmit,
         id: 'temp-ai-check', 
@@ -61,13 +63,11 @@ export default function CreateReportPage() {
     const assessment = await detectReportAnomaly(tempReportForAI);
 
     if (status === 'SUBMITTED' && assessment.isAnomalous) {
-      // Do not save if submitting and anomaly detected
       return { success: false, anomalyAssessment: assessment };
     }
 
-    // Proceed to save for DRAFT or if SUBMITTED and no anomaly
     const reportDataToSave: Omit<FieldReport, 'id' | 'createdAt' | 'updatedAt'> = {
-      ...data, // from ReportSubmitPayload
+      ...data, 
       technicianId: user.uid,
       photoDataUri: photoDataUriInSubmit, 
       status: status,
@@ -75,11 +75,9 @@ export default function CreateReportPage() {
 
     try {
       const newReportId = await addReport(reportDataToSave);
-      // If it was a draft and had an anomaly, the assessment is still returned for informational purposes.
       return { success: true, reportId: newReportId, anomalyAssessment: assessment };
     } catch (error) {
       console.error('Error creating report:', error);
-      // If addReport fails, return the assessment if available, otherwise undefined
       return { success: false, anomalyAssessment: assessment };
     }
   };
@@ -103,3 +101,4 @@ export default function CreateReportPage() {
     </>
   );
 }
+

@@ -16,7 +16,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { UserRole } from '@/lib/constants';
 import { MOCK_TECHNICIAN_EMAIL, MOCK_TECHNICIAN_REPORTS_ID } from '@/lib/constants';
-import { getReports, getReportsByTechnicianId, deleteReport as deleteReportService } from '@/services/reportService'; // Import the service
+import { getReports, getReportsByTechnicianId, deleteReport as deleteReportService } from '@/services/reportService'; 
 import { useRouter } from 'next/navigation'; 
 import {
   AlertDialog,
@@ -52,18 +52,24 @@ interface MappedUserRoleAndId {
   effectiveTechnicianId: string | null;
 }
 
+// NOTE: This mapping is critical. Ensure it aligns with how technician IDs are stored and expected.
+// For "normal users", effectiveTechnicianId should be their Firebase UID.
+// For special mock users like MOCK_TECHNICIAN_EMAIL, it uses MOCK_TECHNICIAN_REPORTS_ID.
 const mapFirebaseUserToAppRoleAndId = (firebaseUser: any): MappedUserRoleAndId => {
   if (!firebaseUser) return { role: 'TECHNICIAN', effectiveTechnicianId: null };
 
   if (firebaseUser.email === 'janesteve237@gmail.com') {
-    return { role: 'ADMIN', effectiveTechnicianId: null };
+    return { role: 'ADMIN', effectiveTechnicianId: null }; // Admins see all reports or based on other logic
   }
-  if (firebaseUser.email === MOCK_TECHNICIAN_EMAIL) {
-    return { role: 'TECHNICIAN', effectiveTechnicianId: MOCK_TECHNICIAN_REPORTS_ID };
+  if (firebaseUser.email === MOCK_TECHNICIAN_EMAIL) { // tech@example.com
+    return { role: 'TECHNICIAN', effectiveTechnicianId: MOCK_TECHNICIAN_REPORTS_ID }; // tech001
   }
+  // For roles like SUPERVISOR, they might see all reports or reports for their team.
+  // For this example, we'll assume SUPERVISOR also sees all reports like ADMIN.
   if (firebaseUser.email?.includes('admin@example.com')) return { role: 'ADMIN', effectiveTechnicianId: null };
   if (firebaseUser.email?.includes('supervisor@example.com')) return { role: 'SUPERVISOR', effectiveTechnicianId: null };
 
+  // Default: "Normal" technician users. Their reports are identified by their Firebase UID.
   return { role: 'TECHNICIAN', effectiveTechnicianId: firebaseUser.uid };
 };
 
@@ -101,12 +107,16 @@ export default function ReportsPage() {
     setCurrentUserRole(role);
     setEffectiveTechnicianId(mappedTechId);
 
+    console.log(`[ReportsPage] User: ${user?.email}, Role: ${role}, EffectiveTechnicianId for query: ${mappedTechId}`);
+
     try {
       let fetchedReports: FieldReport[] = [];
       if (role === 'TECHNICIAN' && mappedTechId) {
         fetchedReports = await getReportsByTechnicianId(mappedTechId);
+        console.log(`[ReportsPage] Fetched ${fetchedReports.length} reports for technician ${mappedTechId}`, fetchedReports);
       } else if (role === 'ADMIN' || role === 'SUPERVISOR') {
         fetchedReports = await getReports();
+         console.log(`[ReportsPage] Fetched ${fetchedReports.length} reports for admin/supervisor`, fetchedReports);
       }
       setAllFetchedReports(fetchedReports);
     } catch (err) {
@@ -124,8 +134,13 @@ export default function ReportsPage() {
 
 
   const handleViewReport = (report: FieldReport) => {
-    console.log("View report:", report.id);
-    toast({ title: "View Report (Simulated)", description: `Details for report ${report.id} would be shown here.` });
+    // For now, simple toast. Could navigate to a ReportViewPage.
+    // Example: router.push(`/reports/view/${report.id}`);
+    toast({ 
+      title: "View Report (Action)", 
+      description: `Viewing details for report ID: ${report.id}. (Full view page TBD)`,
+      duration: 5000 
+    });
   };
 
   const handleEditReport = (report: FieldReport) => {
@@ -144,8 +159,18 @@ export default function ReportsPage() {
   };
 
   const openDeleteDialog = (report: FieldReport) => {
-    setReportToDelete(report);
-    setIsDeleteDialogOpen(true);
+    const canDelete = (currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') ||
+                      (currentUserRole === 'TECHNICIAN' && report.technicianId === effectiveTechnicianId && report.status === 'DRAFT');
+    if (canDelete) {
+      setReportToDelete(report);
+      setIsDeleteDialogOpen(true);
+    } else {
+       toast({
+        variant: "destructive",
+        title: "Cannot Delete Report",
+        description: "This report cannot be deleted, either due to its status or your permissions.",
+      });
+    }
   };
 
   const confirmDeleteReport = async () => {
@@ -156,7 +181,7 @@ export default function ReportsPage() {
         title: "Report Deleted",
         description: `Report ID: ${reportToDelete.id} has been deleted.`,
       });
-      await fetchReportsForUser(); // Refetch reports
+      await fetchReportsForUser(); 
     } catch (err) {
       toast({
         variant: "destructive",
@@ -285,8 +310,8 @@ export default function ReportsPage() {
             reports={filteredReports}
             onViewReport={handleViewReport}
             onEditReport={handleEditReport}
-            onDeleteReport={openDeleteDialog} // Changed to openDeleteDialog
-            currentUserId={effectiveTechnicianId || user?.uid}
+            onDeleteReport={openDeleteDialog} 
+            currentUserId={effectiveTechnicianId || user?.uid} // Pass the effective ID for UI checks
             currentUserRole={currentUserRole}
           />
         </div>
@@ -317,3 +342,4 @@ export default function ReportsPage() {
     </>
   );
 }
+
