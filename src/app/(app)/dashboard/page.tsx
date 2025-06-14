@@ -3,7 +3,7 @@
 
 import { PageTitle } from '@/components/common/PageTitle';
 import { KpiCard } from './components/KpiCard';
-import { FileText, CheckCircle, AlertTriangle, BarChart3, LayoutDashboard, ListChecks, UserCheck, Clock, AlertTriangleIcon } from 'lucide-react';
+import { FileText, CheckCircle, AlertTriangle, BarChart3, LayoutDashboard, ListChecks, UserCheck, Clock, AlertTriangleIcon, Bot } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { MaterialReportsChart } from './components/MaterialReportsChart';
@@ -20,7 +20,10 @@ import type { FieldReport, MaterialType } from '@/lib/types';
 import { getReportsByTechnicianId, getReports as getAllReports } from '@/services/reportService'; 
 import { Badge } from '@/components/ui/badge';
 import { formatDistanceToNow } from 'date-fns';
-import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend } from 'recharts';
+import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip, Legend as RechartsLegend } from 'recharts'; // Renamed to avoid conflict
+import { predictCompliancePercentage, type CompliancePredictionOutput } from '@/ai/flows/compliance-prediction';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+
 
 interface MappedUserRoleAndId { 
   role: UserRole;
@@ -51,7 +54,7 @@ const reportStatusBadgeVariant: Record<FieldReport['status'], "default" | "secon
   REJECTED: "destructive",
 };
 
-const materialTypeDisplay: Record<string, string> = { // Allow any string for materialType
+const materialTypeDisplay: Record<string, string> = { 
   cement: "Cement",
   asphalt: "Asphalt",
   gravel: "Gravel",
@@ -86,6 +89,11 @@ export default function DashboardPage() {
   const [isLoadingDashboardData, setIsLoadingDashboardData] = useState(true);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
 
+  const [currentCompliancePrediction, setCurrentCompliancePrediction] = useState<CompliancePredictionOutput | null>(null);
+  const [isLoadingCompliance, setIsLoadingCompliance] = useState(false);
+  const [complianceError, setComplianceError] = useState<string | null>(null);
+
+
   useEffect(() => {
     const loadDashboardData = async () => {
       if (authLoading) { 
@@ -116,9 +124,6 @@ export default function DashboardPage() {
         } else if (role === 'TECHNICIAN' && mappedTechId) {
           reportsToSetForDashboard = await getReportsByTechnicianId(mappedTechId);
           setTechnicianReports(reportsToSetForDashboard);
-          // For technician view, allReportsData might be a subset or same as technicianReports
-          // Depending on if they should see global charts or just their own.
-          // For now, let's assume global charts use 'allReportsData' which for a tech could be their own.
           setAllReportsData(reportsToSetForDashboard); 
         } else if (role === 'TECHNICIAN' && !mappedTechId) {
            setTechnicianReports([]);
@@ -134,16 +139,62 @@ export default function DashboardPage() {
 
     loadDashboardData();
   }, [user, authLoading]); 
+
+  useEffect(() => {
+    if (currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') {
+      const fetchCompliancePrediction = async () => {
+        setIsLoadingCompliance(true);
+        setComplianceError(null);
+        try {
+          // TODO: Replace with actual dynamic data or a more sophisticated way to gather this for prediction
+          const mockHistoricalData = "Past 3 months: 85% compliance. Previous project X: 90% compliance. Project Y: 78% with similar conditions.";
+          const mockCurrentConditions = "Current project: Roadway Paving. Weather: Fair, 25°C. Staffing: Full team. Material delivery: On schedule for asphalt, slight delay on aggregates. Equipment: All operational.";
+          const mockValidationRules = "Asphalt PG 64-22: Temperature range 135-160°C. Density: 92-97% of Marshall. Compaction: Min 8 passes. Concrete Slump: 75-125mm.";
+          
+          const prediction = await predictCompliancePercentage({
+            historicalData: mockHistoricalData,
+            currentConditions: mockCurrentConditions,
+            validationRules: mockValidationRules,
+          });
+          setCurrentCompliancePrediction(prediction);
+        } catch (err) {
+          console.error("Error fetching compliance prediction:", err);
+          setComplianceError((err as Error).message || "Failed to get AI compliance prediction.");
+        } finally {
+          setIsLoadingCompliance(false);
+        }
+      };
+      fetchCompliancePrediction();
+    }
+  }, [currentUserRole]);
   
   const adminKpiData = useMemo(() => {
-    const reportsForKpi = allReportsData; // Admin/Supervisor see all reports
+    const reportsForKpi = allReportsData; 
+    const predictedComplianceValue = currentCompliancePrediction?.predictedCompliancePercentage;
+    const complianceTrend = currentCompliancePrediction ? (predictedComplianceValue && predictedComplianceValue > 90 ? "Improving" : "Stable") : "N/A";
+
     return [
         { title: "Total Reports", value: reportsForKpi.length, icon: FileText, trend: "", trendDirection: "neutral" as const }, 
         { title: "Pending Validation", value: reportsForKpi.filter(r => r.status === 'SUBMITTED').length, icon: AlertTriangle, trend: "", trendDirection: "neutral" as const },
         { title: "Validated Reports", value: reportsForKpi.filter(r => r.status === 'VALIDATED').length, icon: CheckCircle, trend: "", trendDirection: "neutral" as const },
-        { title: "Avg. Compliance", value: "XX%", icon: BarChart3, trend: "Maintained", trendDirection: "neutral" as const }, 
+        { 
+          title: "AI Predicted Compliance", 
+          value: isLoadingCompliance ? "..." : (predictedComplianceValue !== undefined ? `${predictedComplianceValue.toFixed(1)}%` : "N/A"), 
+          icon: Bot, 
+          trend: isLoadingCompliance ? "" : (complianceError ? "Error" : complianceTrend), 
+          trendDirection: complianceError ? "neutral" : (predictedComplianceValue && predictedComplianceValue > 90 ? "up" : "neutral" as const),
+          description: complianceError ? complianceError : (isLoadingCompliance ? "Calculating..." : ""),
+          tooltipContent: currentCompliancePrediction ? (
+             <div className="text-xs p-1 max-w-xs">
+                <p className="font-semibold">Reasons:</p>
+                <p className="whitespace-pre-wrap mb-2">{currentCompliancePrediction.reasons}</p>
+                <p className="font-semibold">Suggested Actions:</p>
+                <p className="whitespace-pre-wrap">{currentCompliancePrediction.suggestedActions}</p>
+             </div>
+          ) : (complianceError ? <p className="text-xs">{complianceError}</p> : undefined),
+        }, 
     ];
-  }, [allReportsData]);
+  }, [allReportsData, currentCompliancePrediction, isLoadingCompliance, complianceError]);
 
 
   const technicianKpiData = useMemo(() => [
@@ -159,12 +210,12 @@ export default function DashboardPage() {
 
   const materialUsageData = useMemo(() => {
     const reportsSource = (currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') ? allReportsData : technicianReports;
-    const counts: { [key in MaterialType]: number } = { cement: 0, asphalt: 0, gravel: 0, sand: 0, other: 0 };
+    const counts: { [key in MaterialType | string]: number } = { cement: 0, asphalt: 0, gravel: 0, sand: 0, other: 0 }; // Allow string for key
     reportsSource.forEach(report => {
       if (counts[report.materialType] !== undefined) {
         counts[report.materialType]++;
       } else {
-        counts.other++; // Default to 'other' if materialType is somehow unknown
+        counts.other++; 
       }
     });
     return Object.entries(counts).map(([material, reportCount]) => ({
@@ -198,7 +249,7 @@ export default function DashboardPage() {
       chartData.push({
         name: 'Other Suppliers',
         reports: otherCount,
-        fill: supplierChartColors[4], // Last color in palette for 'Other'
+        fill: supplierChartColors[4], 
       });
     }
     return chartData;
@@ -264,7 +315,7 @@ export default function DashboardPage() {
                                ((currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') && allReportsData.length === 0);
 
   return (
-    <>
+    <TooltipProvider>
       <PageTitle
         title={currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR' ? "Dashboard Overview" : "My Dashboard"}
         icon={LayoutDashboard}
@@ -295,14 +346,35 @@ export default function DashboardPage() {
             <>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
                 {adminKpiData.map((kpi) => (
-                <KpiCard
-                    key={kpi.title}
-                    title={kpi.title}
-                    value={kpi.value}
-                    icon={kpi.icon}
-                    trend={kpi.trend}
-                    trendDirection={kpi.trendDirection}
-                />
+                  kpi.tooltipContent ? (
+                    <Tooltip key={kpi.title} delayDuration={100}>
+                      <TooltipTrigger asChild>
+                        <div> {/* KpiCard is not a valid child for TooltipTrigger directly sometimes, wrap it */}
+                           <KpiCard
+                              title={kpi.title}
+                              value={kpi.value}
+                              icon={kpi.icon}
+                              trend={kpi.trend}
+                              trendDirection={kpi.trendDirection}
+                              description={kpi.description}
+                            />
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent className="bg-card border-border shadow-xl">
+                        {kpi.tooltipContent}
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : (
+                    <KpiCard
+                      key={kpi.title}
+                      title={kpi.title}
+                      value={kpi.value}
+                      icon={kpi.icon}
+                      trend={kpi.trend}
+                      trendDirection={kpi.trendDirection}
+                      description={kpi.description}
+                    />
+                  )
                 ))}
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -382,8 +454,8 @@ export default function DashboardPage() {
                             <Cell key={`cell-${index}`} fill={entry.fill} />
                             ))}
                         </Pie>
-                        <Tooltip formatter={(value, name) => [`${value} reports`, name]}/>
-                        <Legend wrapperStyle={{ fontSize: '12px' }}/>
+                        <RechartsTooltip formatter={(value, name) => [`${value} reports`, name as string]}/>
+                        <RechartsLegend wrapperStyle={{ fontSize: '12px' }}/>
                         </PieChart>
                     </ResponsiveContainer>
                     ) : (
@@ -418,8 +490,6 @@ export default function DashboardPage() {
           )}
         </>
       )}
-    </>
+    </TooltipProvider>
   );
 }
-
-    
