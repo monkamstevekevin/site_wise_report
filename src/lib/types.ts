@@ -53,18 +53,19 @@ export interface Material {
 export type NotificationType = 'new_chat_message' | 'report_update' | 'project_assignment' | 'system_update' | 'generic' | 'project_assigned_admin_confirm';
 
 export interface Notification {
-  id: string;
+  id: string; // Firestore document ID
   message: string;
   type: NotificationType;
   isRead: boolean;
   targetId?: string; // e.g., projectId for chat, reportId for report, userId for assignment confirmation
-  link?: string; // Optional direct link, takes precedence if both targetId and link exist
-  createdAt: string; // ISO string, for sorting and display
-  displayTime: string; // User-friendly time like "5m ago"
-  icon?: LucideIcon;
-  iconClass?: string;
-  roles?: UserRole[]; // Added to specify which roles should see this mock notification
+  link?: string; // Optional direct link for navigation
+  createdAt: string; // ISO string (converted from Firestore Timestamp)
+  // Removed displayTime, icon, iconClass, roles as these will be determined client-side or are less relevant for stored data
 }
+
+// Data used when creating a new notification, 'id', 'createdAt', 'isRead' are set by the service/server.
+export type NewNotificationPayload = Omit<Notification, 'id' | 'createdAt' | 'isRead'>;
+
 
 export type SamplingMethod = 'grab' | 'composite' | 'core' | 'other';
 
@@ -90,3 +91,4 @@ export type NewChatMessagePayload = {
   imageUrl?: string | null; // Explicitly allow null for Firestore
   // timestamp is serverTimestamp()
 };
+
