@@ -1,22 +1,24 @@
-
 'use server';
 
 /**
  * @fileOverview This file defines a Genkit flow for anomaly detection in field reports.
+ * It now dynamically uses material validation rules fetched from Firestore.
  *
  * - detectReportAnomaly - An async function that takes a FieldReport as input and returns an anomaly assessment.
- * - FieldReport - The input type, representing the field report data.
+ * - FieldReportInput - The input type for the flow, now includes all material rules.
  * - AnomalyAssessment - The output type, indicating whether the report contains anomalous data.
  */
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import { getMaterials } from '@/services/materialService'; // Import service to get materials
+import type { Material } from '@/lib/types';
 
 const FieldReportSchema = z.object({
   id: z.string(),
   projectId: z.string(),
   technicianId: z.string(),
-  materialType: z.string(),
+  materialType: z.string(), // This will be used to find the correct validation rules
   temperature: z.number(),
   volume: z.number(),
   density: z.number(),
@@ -39,28 +41,73 @@ const FieldReportSchema = z.object({
 
 export type FieldReport = z.infer<typeof FieldReportSchema>;
 
+// Define a schema for the material validation rules to be passed to the prompt
+const MaterialRuleSchema = z.object({
+  name: z.string(),
+  type: z.string(),
+  minDensity: z.number().optional(),
+  maxDensity: z.number().optional(),
+  minTemperature: z.number().optional(),
+  maxTemperature: z.number().optional(),
+});
+
+const FieldReportInputSchema = FieldReportSchema.extend({
+  allMaterialRules: z.array(MaterialRuleSchema).describe('A list of all defined material validation rules for reference.'),
+});
+export type FieldReportInput = z.infer<typeof FieldReportInputSchema>;
+
+
 const AnomalyAssessmentSchema = z.object({
   isAnomalous: z.boolean().describe('True if the report contains anomalous data, false otherwise.'),
   explanation: z
     .string()
     .describe(
-      'A detailed explanation of why the report is considered anomalous, including specific data points that deviate from expected norms or validation rules. If a photo was provided, mention if it contributed to the assessment.'
+      'A detailed explanation of why the report is considered anomalous, including specific data points that deviate from expected norms or dynamic validation rules. If a photo was provided, mention if it contributed to the assessment.'
     ),
 });
 
 export type AnomalyAssessment = z.infer<typeof AnomalyAssessmentSchema>;
 
+// Wrapper function that fetches materials and then calls the flow
 export async function detectReportAnomaly(report: FieldReport): Promise<AnomalyAssessment> {
-  return detectReportAnomalyFlow(report);
+  try {
+    const materialsFromDb = await getMaterials();
+    const allMaterialRules = materialsFromDb.map(m => ({
+      name: m.name,
+      type: m.type, // The type like 'cement', 'asphalt'
+      minDensity: m.validationRules?.minDensity,
+      maxDensity: m.validationRules?.maxDensity,
+      minTemperature: m.validationRules?.minTemperature,
+      maxTemperature: m.validationRules?.maxTemperature,
+    }));
+
+    const flowInput: FieldReportInput = {
+      ...report,
+      allMaterialRules,
+    };
+    return detectReportAnomalyFlow(flowInput);
+
+  } catch (error) {
+    console.error("Error fetching material rules for anomaly detection:", error);
+    // Fallback to a generic non-anomalous assessment if rules can't be fetched
+    // Or, you could re-throw the error or use hardcoded rules as a last resort
+    return {
+      isAnomalous: false,
+      explanation: "Could not fetch dynamic material validation rules. Anomaly check was based on general plausibility.",
+    };
+  }
 }
+
 
 const detectReportAnomalyPrompt = ai.definePrompt({
   name: 'detectReportAnomalyPrompt',
-  input: {schema: FieldReportSchema},
+  input: {schema: FieldReportInputSchema}, // Use the extended input schema
   output: {schema: AnomalyAssessmentSchema},
   prompt: `You are an AI assistant specialized in identifying anomalous data in civil engineering field reports.
 
-  Analyze the following field report and determine if it contains any potentially anomalous data entries, based on typical values, material properties, and validation rules. Explain your reasoning in detail.
+  Analyze the following field report and determine if it contains any potentially anomalous data entries.
+  You will be provided with a list of all defined material validation rules. First, identify the validation rules that apply to the '{{{materialType}}}' reported.
+  Then, use those specific rules to assess temperature and density.
 
   Report Details:
   - Project ID: {{{projectId}}}
@@ -79,27 +126,37 @@ const detectReportAnomalyPrompt = ai.definePrompt({
   Photo: {{media url=photoDataUri}}
   {{/if}}
 
-  Assess whether the combination of these values is plausible and consistent. Consider typical ranges for each material type and flag any significant deviations or inconsistencies.
+  List of all Material Validation Rules (use the one matching the report's materialType):
+  {{#if allMaterialRules.length}}
+  {{#each allMaterialRules}}
+  - Material: {{this.name}} (Type: {{this.type}})
+    {{#if this.minDensity}}Min Density: {{this.minDensity}} kg/m³{{/if}}{{#if this.maxDensity}} Max Density: {{this.maxDensity}} kg/m³{{/if}}
+    {{#if this.minTemperature}}Min Temperature: {{this.minTemperature}} °C{{/if}}{{#if this.maxTemperature}} Max Temperature: {{this.maxTemperature}} °C{{/if}}
+  {{/each}}
+  {{else}}
+  No specific material validation rules were provided. Assess based on general knowledge.
+  {{/if}}
+
+  Assess whether the combination of these values is plausible and consistent.
+  If specific validation rules for the '{{{materialType}}}' are found in the list above, prioritize them for temperature and density checks.
+  Flag any significant deviations or inconsistencies.
   If a photo was provided, consider it as part of your assessment. For example, does the photo visually align with the reported material type or conditions? Does it show any visible defects or issues not captured in the numerical data?
 
-  Output your assessment following the AnomalyAssessmentSchema. For example, if the density of a material is unusually high or low for the given material type, or if the temperature and humidity combination seems implausible, or if the photo shows a clear discrepancy, flag the report as anomalous and provide a detailed explanation.
-
-  Consider these validation rules:
-  - Cement density should typically be between 1440 and 1600 kg/m³.
-  - Asphalt density should typically be between 2240 and 2400 kg/m³.
-  - Gravel density should typically be between 1600 and 1800 kg/m³.
-  - Extreme temperature or humidity values for a given material may also indicate an anomaly.
+  Output your assessment following the AnomalyAssessmentSchema. For example, if the density or temperature of a material is outside the defined range for '{{{materialType}}}' based on the provided rules, or if the photo shows a clear discrepancy, flag the report as anomalous and provide a detailed explanation.
+  Extreme humidity values for a given material may also indicate an anomaly.
 `,
 });
 
+// The flow now expects FieldReportInput which includes allMaterialRules
 const detectReportAnomalyFlow = ai.defineFlow(
   {
     name: 'detectReportAnomalyFlow',
-    inputSchema: FieldReportSchema,
+    inputSchema: FieldReportInputSchema, // Expects the extended schema
     outputSchema: AnomalyAssessmentSchema,
   },
-  async report => {
-    const {output} = await detectReportAnomalyPrompt(report);
+  async (flowInput: FieldReportInput) => { // Parameter type updated
+    const {output} = await detectReportAnomalyPrompt(flowInput);
     return output!;
   }
 );
+
