@@ -3,83 +3,20 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { PageTitle } from '@/components/common/PageTitle';
-import { Users, UserPlus, Filter, Loader2 } from 'lucide-react';
+import { Users, UserPlus, Filter, Loader2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UserFormDialog } from './components/UserFormDialog';
 import { UserTable } from './components/UserTable';
-import { AssignProjectsDialog } from './components/AssignProjectsDialog'; // New Dialog
+import { AssignProjectsDialog } from './components/AssignProjectsDialog';
 import type { User, UserRole, Project } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { getProjects } from '@/services/projectService'; // Import project service
-import { sendAssignmentNotification } from '@/ai/flows/assignment-notification-flow'; 
-
-// Using a state for mockUsersData to allow updates
-const initialMockUsersData: User[] = [
-  {
-    id: 'USR001',
-    name: 'Dr. Eleanor Vance',
-    email: 'eleanor.vance@example.com',
-    role: 'ADMIN',
-    avatarUrl: 'https://placehold.co/100x100.png?text=EV',
-    assignedProjectIds: ['PJT001', 'PJT002'],
-    createdAt: new Date('2023-01-15T09:30:00Z').toISOString(),
-    updatedAt: new Date('2023-10-20T14:00:00Z').toISOString()
-  },
-  {
-    id: 'USR002',
-    name: 'Marcus Rivera',
-    email: 'marcus.rivera@example.com',
-    role: 'SUPERVISOR',
-    avatarUrl: 'https://placehold.co/100x100.png?text=MR',
-    assignedProjectIds: ['PJT001', 'PJT003', 'PJT004'],
-    createdAt: new Date('2023-02-20T11:00:00Z').toISOString(),
-    updatedAt: new Date('2023-11-01T10:15:00Z').toISOString()
-  },
-  {
-    id: 'USR003',
-    name: 'Aisha Khan',
-    email: 'aisha.khan@example.com',
-    role: 'TECHNICIAN',
-    avatarUrl: 'https://placehold.co/100x100.png?text=AK',
-    assignedProjectIds: ['PJT002'], // This will be used if user.uid matches USR003 or if MOCK_TECHNICIAN_ID is USR003
-    createdAt: new Date('2023-03-10T14:45:00Z').toISOString(),
-    updatedAt: new Date('2023-03-10T14:45:00Z').toISOString()
-  },
-  {
-    id: 'USR004',
-    name: 'David Lee',
-    email: 'david.lee@example.com',
-    role: 'TECHNICIAN',
-    avatarUrl: 'https://placehold.co/100x100.png?text=DL',
-    assignedProjectIds: ['PJT003'],
-    createdAt: new Date('2023-04-05T08:00:00Z').toISOString(),
-    updatedAt: new Date('2023-09-15T16:30:00Z').toISOString()
-  },
-  {
-    id: 'USR005',
-    name: 'Sofia Chen',
-    email: 'sofia.chen@example.com',
-    role: 'SUPERVISOR',
-    avatarUrl: 'https://placehold.co/100x100.png?text=SC',
-    assignedProjectIds: ['PJT004', 'PJT005'],
-    createdAt: new Date('2023-05-01T10:20:00Z').toISOString(),
-    updatedAt: new Date('2023-10-25T11:00:00Z').toISOString()
-  },
-   {
-    id: 'USR006',
-    name: 'Robert Downy',
-    email: 'robert.d@example.com',
-    role: 'TECHNICIAN',
-    avatarUrl: 'https://placehold.co/100x100.png?text=RD',
-    assignedProjectIds: ['PJT005'],
-    createdAt: new Date('2023-06-11T12:10:00Z').toISOString(),
-    updatedAt: new Date('2023-06-11T12:10:00Z').toISOString()
-  },
-];
+import { getProjects } from '@/services/projectService';
+import { getUsers } from '@/services/userService'; // Import user service
+import { sendAssignmentNotification } from '@/ai/flows/assignment-notification-flow';
 
 const userRoleFilterOptions: { value: UserRole | 'ALL'; label: string }[] = [
   { value: 'ALL', label: 'All Roles' },
@@ -89,7 +26,10 @@ const userRoleFilterOptions: { value: UserRole | 'ALL'; label: string }[] = [
 ];
 
 export default function UserManagementPage() {
-  const [usersData, setUsersData] = useState<User[]>(initialMockUsersData); // User data remains mock for now
+  const [usersData, setUsersData] = useState<User[]>([]);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(true);
+  const [usersError, setUsersError] = useState<string | null>(null);
+
   const [allProjects, setAllProjects] = useState<Project[]>([]);
   const [isLoadingProjects, setIsLoadingProjects] = useState(true);
 
@@ -106,7 +46,23 @@ export default function UserManagementPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<UserRole | 'ALL'>('ALL');
 
+  const fetchUsers = async () => {
+    setIsLoadingUsers(true);
+    setUsersError(null);
+    try {
+      const fetchedUsers = await getUsers();
+      setUsersData(fetchedUsers);
+    } catch (err) {
+      setUsersError((err as Error).message || "Failed to load users. Please try again later.");
+      console.error("Error fetching users:", err);
+    } finally {
+      setIsLoadingUsers(false);
+    }
+  };
+  
   useEffect(() => {
+    fetchUsers();
+
     const fetchAllProjects = async () => {
       setIsLoadingProjects(true);
       try {
@@ -131,14 +87,16 @@ export default function UserManagementPage() {
     // User edit will be connected to Firestore later
     setEditingUser(user);
     setIsUserFormOpen(true);
+     toast({ title: "Edit User (Simulated)", description: `Editing for ${user.displayName} will be connected to Firestore soon.` });
   };
 
   const handleDeleteUser = (userId: string) => {
     // User delete will be connected to Firestore later
-    setUsersData(prevUsers => prevUsers.filter(user => user.id !== userId));
+    // For now, just filter out from local state for UI feedback
+    // setUsersData(prevUsers => prevUsers.filter(user => user.id !== userId));
     toast({
-      title: "User Deleted (Simulated)",
-      description: `User ${userId} has been removed from the list. Firestore update pending.`,
+      title: "Delete User (Simulated)",
+      description: `User ${userId} deletion will be connected to Firestore soon.`,
       variant: "destructive"
     });
   };
@@ -160,19 +118,19 @@ export default function UserManagementPage() {
     const oldProjectIds = new Set(targetUser.assignedProjectIds || []);
     const newlyAssignedProjects = selectedProjectIds
       .filter(id => !oldProjectIds.has(id))
-      .map(id => allProjects.find(p => p.id === id)) // Use fetched allProjects
+      .map(id => allProjects.find(p => p.id === id))
       .filter(p => p !== undefined) as Project[];
 
     // Simulate updating user data (this will be a Firestore update later)
-    setUsersData(prevUsers =>
-      prevUsers.map(u =>
-        u.id === userId ? { ...u, assignedProjectIds: selectedProjectIds, updatedAt: new Date().toISOString() } : u
-      )
-    );
+    // setUsersData(prevUsers =>
+    //   prevUsers.map(u =>
+    //     u.id === userId ? { ...u, assignedProjectIds: selectedProjectIds, updatedAt: new Date().toISOString() } : u
+    //   )
+    // );
     
     toast({
       title: "Projects Assigned (Simulated)",
-      description: `${targetUser.name} has been assigned ${newlyAssignedProjects.length} new project(s). Firestore update pending.`,
+      description: `${targetUser.name} project assignments will be saved to Firestore soon.`,
     });
 
     for (const project of newlyAssignedProjects) {
@@ -202,6 +160,7 @@ export default function UserManagementPage() {
       }
     }
     setIsProcessingAssignment(false);
+    // After actual save: await fetchUsers();
   };
 
   const filteredUsers = useMemo(() => {
@@ -265,20 +224,34 @@ export default function UserManagementPage() {
           </Button>
         </div>
       </div>
-
-      <div className="bg-card p-0 md:p-6 rounded-lg shadow-md">
-        {isProcessingAssignment && 
-          <div className="flex items-center justify-center p-4 text-sm text-muted-foreground">
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing assignments...
-          </div>
-        }
-        <UserTable 
-          users={filteredUsers} 
-          onEditUser={handleEditUser} 
-          onDeleteUser={handleDeleteUser}
-          onAssignProjects={handleOpenAssignProjectsDialog}
-        />
-      </div>
+      
+      {isLoadingUsers && (
+        <div className="flex items-center justify-center py-10 text-muted-foreground">
+          <Loader2 className="mr-2 h-6 w-6 animate-spin" /> Loading users...
+        </div>
+      )}
+      {usersError && (
+         <div className="text-center py-10 text-destructive bg-destructive/10 p-4 rounded-md">
+            <AlertTriangle className="mx-auto h-8 w-8 mb-2" />
+           <p className="font-semibold">Error Loading Users</p>
+           <p>{usersError}</p>
+         </div>
+      )}
+      {!isLoadingUsers && !usersError && (
+        <div className="bg-card p-0 md:p-6 rounded-lg shadow-md">
+          {isProcessingAssignment && 
+            <div className="flex items-center justify-center p-4 text-sm text-muted-foreground">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing assignments...
+            </div>
+          }
+          <UserTable 
+            users={filteredUsers} 
+            onEditUser={handleEditUser} 
+            onDeleteUser={handleDeleteUser}
+            onAssignProjects={handleOpenAssignProjectsDialog}
+          />
+        </div>
+      )}
 
       {isLoadingProjects ? (
          <div className="flex items-center justify-center p-4"><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading projects for assignment...</div>
@@ -287,10 +260,11 @@ export default function UserManagementPage() {
           open={isAssignProjectsDialogOpen}
           onOpenChange={setIsAssignProjectsDialogOpen}
           user={userToAssignProjects}
-          allProjects={allProjects} // Use fetched projects
+          allProjects={allProjects}
           onAssignProjects={handleAssignProjects}
         />
       )}
     </>
   );
 }
+
