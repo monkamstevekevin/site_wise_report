@@ -12,7 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { getProjects, addProject, updateProject } from '@/services/projectService'; // Import updateProject
+import { getProjects, addProject, updateProject, deleteProject } from '@/services/projectService';
 
 const projectStatusFilterOptions: { value: Project['status'] | 'ALL'; label: string }[] = [
   { value: 'ALL', label: 'All Statuses' },
@@ -20,8 +20,6 @@ const projectStatusFilterOptions: { value: Project['status'] | 'ALL'; label: str
   { value: 'INACTIVE', label: 'Inactive' },
   { value: 'COMPLETED', label: 'Completed' },
 ];
-
-// type ProjectFormData is now imported from ProjectFormDialog
 
 export default function ProjectManagementPage() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -54,31 +52,36 @@ export default function ProjectManagementPage() {
   }, []);
 
   const handleAddNewProject = () => {
-    setEditingProject(undefined); // Clear any project being edited
+    setEditingProject(undefined); 
     setIsProjectFormOpen(true);
   };
 
   const handleEditProject = (project: Project) => {
-    setEditingProject(project); // Set the full project object
+    setEditingProject(project); 
     setIsProjectFormOpen(true);
   };
 
-  const handleDeleteProject = (projectId: string) => {
-    console.log("Attempting to delete project ID (Firestore):", projectId);
-    // Firestore delete logic will be added in a future step
-    toast({
-      title: "Delete Action (Simulated)",
-      description: `If implemented with Firestore, project ${projectId} would be deleted. Refreshing list...`,
-      variant: "destructive"
-    });
-    fetchProjects(); // Re-fetch to simulate for now or remove if local delete simulation preferred
+  const handleDeleteProject = async (projectId: string) => {
+    try {
+      await deleteProject(projectId);
+      toast({
+        title: "Project Deleted",
+        description: `Project (ID: ${projectId}) has been successfully deleted.`,
+      });
+      await fetchProjects(); // Refresh the list
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Failed to Delete Project",
+        description: (err as Error).message || "An unexpected error occurred.",
+      });
+    }
   };
 
   const handleProjectFormSubmit = async (data: ProjectFormData, id?: string) => {
-    setIsProjectFormOpen(false); // Close dialog immediately
+    setIsProjectFormOpen(false); 
 
     if (id) {
-      // Update existing project
       try {
         await updateProject(id, data);
         toast({
@@ -93,7 +96,6 @@ export default function ProjectManagementPage() {
         });
       }
     } else {
-      // Add new project
       try {
         const newProjectId = await addProject(data);
         toast({
@@ -109,9 +111,8 @@ export default function ProjectManagementPage() {
       }
     }
     
-    // Re-fetch projects to update the table
     await fetchProjects();
-    setEditingProject(undefined); // Clear editing state
+    setEditingProject(undefined); 
   };
 
   const filteredProjects = useMemo(() => {
@@ -135,9 +136,9 @@ export default function ProjectManagementPage() {
             open={isProjectFormOpen}
             onOpenChange={(isOpen) => {
               setIsProjectFormOpen(isOpen);
-              if (!isOpen) setEditingProject(undefined); // Clear editing project if dialog is closed
+              if (!isOpen) setEditingProject(undefined); 
             }}
-            projectToEdit={editingProject} // Pass the full project object
+            projectToEdit={editingProject}
             onFormSubmit={handleProjectFormSubmit}
           >
             <Button className="rounded-lg" onClick={handleAddNewProject}>
@@ -195,7 +196,7 @@ export default function ProjectManagementPage() {
         <div className="bg-card p-0 md:p-6 rounded-lg shadow-md">
           <ProjectTable
             projects={filteredProjects}
-            onEditProject={handleEditProject} // This will now set the full project object
+            onEditProject={handleEditProject} 
             onDeleteProject={handleDeleteProject}
           />
         </div>

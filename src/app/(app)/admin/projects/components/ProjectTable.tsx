@@ -13,7 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Edit, Trash2, MoreVertical, MessageSquare, MapPin } from 'lucide-react';
+import { Edit, Trash2, MoreVertical, MessageSquare, MapPin, AlertTriangle } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,7 +36,7 @@ import type { Project } from '@/lib/types';
 
 interface ProjectTableProps {
   projects: Project[];
-  onEditProject?: (project: Project) => void; // Expects the full project object
+  onEditProject?: (project: Project) => void;
   onDeleteProject?: (projectId: string) => void;
 }
 
@@ -49,13 +49,24 @@ const projectStatusBadgeVariant: Record<Project['status'], "default" | "secondar
 export function ProjectTable({ projects, onEditProject, onDeleteProject }: ProjectTableProps) {
   const [isNavigateDialogOpen, setIsNavigateDialogOpen] = useState(false);
   const [navigationTarget, setNavigationTarget] = useState<string | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
 
   const handleEdit = (project: Project) => {
     onEditProject?.(project);
   };
 
-  const handleDelete = (projectId: string) => {
-    onDeleteProject?.(projectId);
+  const openDeleteDialog = (project: Project) => {
+    setProjectToDelete(project);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (projectToDelete && onDeleteProject) {
+      onDeleteProject(projectToDelete.id);
+    }
+    setIsDeleteDialogOpen(false);
+    setProjectToDelete(null);
   };
 
   const handleOpenNavigateDialog = (location: string) => {
@@ -125,8 +136,8 @@ export function ProjectTable({ projects, onEditProject, onDeleteProject }: Proje
                       <DropdownMenuItem onClick={() => handleEdit(project)}>
                         <Edit className="mr-2 h-4 w-4" /> Modifier
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleDelete(project.id)} className="text-destructive focus:text-destructive focus:bg-destructive/10" disabled>
-                        <Trash2 className="mr-2 h-4 w-4" /> Supprimer (Bientôt)
+                      <DropdownMenuItem onClick={() => openDeleteDialog(project)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
+                        <Trash2 className="mr-2 h-4 w-4" /> Supprimer
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -148,6 +159,29 @@ export function ProjectTable({ projects, onEditProject, onDeleteProject }: Proje
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setIsNavigateDialogOpen(false)}>Annuler</AlertDialogCancel>
             <AlertDialogAction onClick={handleConfirmNavigation}>Naviguer</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <div className="flex items-center">
+              <AlertTriangle className="h-6 w-6 mr-2 text-destructive" />
+              <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
+            </div>
+            <AlertDialogDescription>
+              Êtes-vous sûr de vouloir supprimer le projet "{projectToDelete?.name}" (ID: {projectToDelete?.id}) ? Cette action est irréversible.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setIsDeleteDialogOpen(false)}>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Supprimer
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

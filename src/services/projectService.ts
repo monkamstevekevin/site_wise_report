@@ -3,7 +3,7 @@
 
 import { db } from '@/lib/firebase';
 import type { Project } from '@/lib/types';
-import { collection, getDocs, doc, getDoc, Timestamp, query, orderBy, addDoc, serverTimestamp, updateDoc, setDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, Timestamp, query, orderBy, addDoc, serverTimestamp, updateDoc, setDoc, deleteDoc } from 'firebase/firestore';
 
 /**
  * @fileOverview Project service for interacting with Firestore.
@@ -12,29 +12,26 @@ import { collection, getDocs, doc, getDoc, Timestamp, query, orderBy, addDoc, se
  * - getProjectById - Fetches a single project by its ID from Firestore.
  * - addProject - Adds a new project to Firestore.
  * - updateProject - Updates an existing project in Firestore.
+ * - deleteProject - Deletes a project from Firestore.
  */
 
 const formatTimestamp = (timestampField: any): string => {
   if (!timestampField) {
-    // console.warn('Timestamp field is missing, returning current date as fallback.');
     return new Date().toISOString();
   }
   if (timestampField instanceof Timestamp) {
     return timestampField.toDate().toISOString();
   }
-  // Handle cases where it might be a plain object from Firestore (e.g. from serverTimestamp before full hydration or manual entry)
   if (timestampField.seconds !== undefined && typeof timestampField.nanoseconds === 'number') {
     return new Timestamp(timestampField.seconds, timestampField.nanoseconds).toDate().toISOString();
   }
-  // Handle string or number dates (less ideal, but common in manual entries or migrations)
   if (typeof timestampField === 'string' || typeof timestampField === 'number') {
     const date = new Date(timestampField);
     if (!isNaN(date.getTime())) {
       return date.toISOString();
     }
   }
-  // console.warn('Invalid or unhandled timestamp data format:', timestampField, 'Returning current date as fallback.');
-  return new Date().toISOString(); // Fallback for unrecognized formats
+  return new Date().toISOString();
 };
 
 /**
@@ -47,21 +44,20 @@ export async function getProjects(): Promise<Project[]> {
     const projectsCollectionRef = collection(db, 'projects');
     // To order by name, ensure an index exists for the 'name' field in the 'projects' collection.
     // const q = query(projectsCollectionRef, orderBy('name')); 
-    // Using a simple query without ordering for now:
-    const querySnapshot = await getDocs(projectsCollectionRef);
+    const q = query(projectsCollectionRef); // Removed orderBy for now, ensure an index exists if you re-enable
+    const querySnapshot = await getDocs(q);
     
     const projects: Project[] = querySnapshot.docs.map(docSnapshot => {
       const data = docSnapshot.data();
-      // Provide default values for fields to prevent errors if data is malformed
       return {
         id: docSnapshot.id,
         name: data.name || 'Unnamed Project',
         location: data.location || 'Unknown Location',
         description: data.description || '',
-        status: data.status || 'INACTIVE', // Ensure this default is a valid Project['status']
+        status: data.status || 'INACTIVE', 
         createdAt: formatTimestamp(data.createdAt),
         updatedAt: formatTimestamp(data.updatedAt),
-      } as Project; // Cast as Project, assuming defaults align with type
+      } as Project; 
     });
     return projects;
   } catch (error) {
@@ -142,5 +138,18 @@ export async function updateProject(projectId: string, projectData: Partial<Omit
   }
 }
 
-
-// Future functions for delete projects will go here.
+/**
+ * Deletes a project from Firestore.
+ * @param {string} projectId The ID of the project to delete.
+ * @returns {Promise<void>} A promise that resolves when the project is successfully deleted.
+ * @throws Will throw an error if deleting the project fails.
+ */
+export async function deleteProject(projectId: string): Promise<void> {
+  try {
+    const projectDocRef = doc(db, 'projects', projectId);
+    await deleteDoc(projectDocRef);
+  } catch (error) {
+    console.error(`Error deleting project ${projectId}: `, error);
+    throw new Error(`Failed to delete project ${projectId} from database.`);
+  }
+}
