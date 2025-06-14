@@ -52,29 +52,20 @@ interface MappedUserRoleAndId {
   effectiveTechnicianId: string | null;
 }
 
-// NOTE: This mapping is critical. Ensure it aligns with how technician IDs are stored and expected.
-// For "normal users", effectiveTechnicianId should be their Firebase UID.
-// For special mock users like MOCK_TECHNICIAN_EMAIL, it uses MOCK_TECHNICIAN_REPORTS_ID.
 const mapFirebaseUserToAppRoleAndId = (firebaseUser: any): MappedUserRoleAndId => {
   if (!firebaseUser) return { role: 'TECHNICIAN', effectiveTechnicianId: null };
 
   if (firebaseUser.email === 'janesteve237@gmail.com') {
-    return { role: 'ADMIN', effectiveTechnicianId: null }; // Admins see all reports or based on other logic
+    return { role: 'ADMIN', effectiveTechnicianId: null }; 
   }
   
-  // For roles like SUPERVISOR, they might see all reports or reports for their team.
-  // For this example, we'll assume SUPERVISOR also sees all reports like ADMIN.
   if (firebaseUser.email?.includes('admin@example.com')) return { role: 'ADMIN', effectiveTechnicianId: null };
   if (firebaseUser.email?.includes('supervisor@example.com')) return { role: 'SUPERVISOR', effectiveTechnicianId: null };
 
-  // MOCK_TECHNICIAN_EMAIL must be checked AFTER admin/supervisor to avoid mock admin being treated as mock tech.
-  // However, if MOCK_TECHNICIAN_EMAIL IS an admin/supervisor email, this order won't matter as it'd be caught above.
-  // Best practice: ensure MOCK_TECHNICIAN_EMAIL is unique and not an admin/supervisor email.
-  if (firebaseUser.email === MOCK_TECHNICIAN_EMAIL) { // tech@example.com
-    return { role: 'TECHNICIAN', effectiveTechnicianId: MOCK_TECHNICIAN_REPORTS_ID }; // tech001
+  if (firebaseUser.email === MOCK_TECHNICIAN_EMAIL) { 
+    return { role: 'TECHNICIAN', effectiveTechnicianId: MOCK_TECHNICIAN_REPORTS_ID }; 
   }
 
-  // Default: "Normal" technician users. Their reports are identified by their Firebase UID.
   return { role: 'TECHNICIAN', effectiveTechnicianId: firebaseUser.uid };
 };
 
@@ -112,20 +103,29 @@ export default function ReportsPage() {
     setCurrentUserRole(role);
     setEffectiveTechnicianId(mappedTechId);
 
-    console.log(`[ReportsPage] User: ${user?.email}, Role: ${role}, EffectiveTechnicianId for query: ${mappedTechId}`);
+    console.log(`[ReportsPage] Logged in user: ${user?.email}, Determined Role: ${role}`);
+    console.log(`[ReportsPage] ID that WILL BE USED for technician's report query (effectiveTechnicianId): ${mappedTechId || 'N/A (Admin/Supervisor or no ID)'}`);
 
     try {
       let fetchedReports: FieldReport[] = [];
       if (role === 'TECHNICIAN' && mappedTechId) {
-        console.log(`[ReportsPage] Querying for technician ID: ${mappedTechId}`);
+        console.log(`[ReportsPage] Querying Firestore for reports where technicianId == "${mappedTechId}"`);
         fetchedReports = await getReportsByTechnicianId(mappedTechId);
-        console.log(`[ReportsPage] Fetched ${fetchedReports.length} reports for technician ${mappedTechId}. Reports:`, fetchedReports.map(r => ({id: r.id, projectId: r.projectId, materialType: r.materialType, status: r.status, techIdOnReport: r.technicianId }) ));
+        console.log(`[ReportsPage] Firestore returned ${fetchedReports.length} reports for technicianId "${mappedTechId}".`);
+        if (fetchedReports.length > 0) {
+            console.log('[ReportsPage] Details of fetched reports:', fetchedReports.map(r => ({id: r.id, projectId: r.projectId, materialType: r.materialType, status: r.status, techIdOnReport: r.technicianId }) ));
+        } else {
+            console.log(`[ReportsPage] No reports found in Firestore for technicianId "${mappedTechId}". Ensure a report exists with this exact technicianId in its 'technicianId' field.`);
+        }
       } else if (role === 'ADMIN' || role === 'SUPERVISOR') {
-        console.log(`[ReportsPage] Querying for all reports (role: ${role})`);
+        console.log(`[ReportsPage] Querying Firestore for all reports (role: ${role})`);
         fetchedReports = await getReports();
-         console.log(`[ReportsPage] Fetched ${fetchedReports.length} reports for admin/supervisor. Reports:`, fetchedReports.map(r => ({id: r.id, projectId: r.projectId, materialType: r.materialType, status: r.status, techIdOnReport: r.technicianId })));
+        console.log(`[ReportsPage] Firestore returned ${fetchedReports.length} reports for admin/supervisor.`);
+         if (fetchedReports.length > 0) {
+            console.log('[ReportsPage] Details of fetched reports (admin/supervisor view):', fetchedReports.map(r => ({id: r.id, projectId: r.projectId, materialType: r.materialType, status: r.status, techIdOnReport: r.technicianId })));
+        }
       } else {
-        console.log(`[ReportsPage] No specific query path for role: ${role} and mappedTechId: ${mappedTechId}. Setting reports to empty.`);
+        console.log(`[ReportsPage] No specific query path. Role: ${role}, EffectiveTechnicianId: ${mappedTechId}. Setting reports to empty.`);
         fetchedReports = [];
       }
       setAllFetchedReports(fetchedReports);
@@ -144,8 +144,6 @@ export default function ReportsPage() {
 
 
   const handleViewReport = (report: FieldReport) => {
-    // For now, simple toast. Could navigate to a ReportViewPage.
-    // Example: router.push(`/reports/view/${report.id}`);
     toast({ 
       title: "View Report (Action)", 
       description: `Viewing details for report ID: ${report.id}. (Full view page TBD)`,
@@ -321,7 +319,7 @@ export default function ReportsPage() {
             onViewReport={handleViewReport}
             onEditReport={handleEditReport}
             onDeleteReport={openDeleteDialog} 
-            currentUserId={effectiveTechnicianId || user?.uid} // Pass the effective ID for UI checks
+            currentUserId={effectiveTechnicianId || user?.uid} 
             currentUserRole={currentUserRole}
           />
         </div>
@@ -352,4 +350,3 @@ export default function ReportsPage() {
     </>
   );
 }
-
