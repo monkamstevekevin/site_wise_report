@@ -60,7 +60,6 @@ export interface Notification {
   targetId?: string; // e.g., projectId for chat, reportId for report, userId for assignment confirmation
   link?: string; // Optional direct link for navigation
   createdAt: string; // ISO string (converted from Firestore Timestamp)
-  // Removed displayTime, icon, iconClass, roles as these will be determined client-side or are less relevant for stored data
 }
 
 // Data used when creating a new notification, 'id', 'createdAt', 'isRead' are set by the service/server.
