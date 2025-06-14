@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { getProjects } from '@/services/projectService';
 import { getUsers, addUser, updateUserAssignedProjects, updateUser, deleteUserFirestoreRecord } from '@/services/userService';
-import { sendAssignmentNotification } from '@/ai/flows/assignment-notification-flow'; // Added import
+import { sendAssignmentNotification } from '@/ai/flows/assignment-notification-flow';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,6 +27,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { collection, addDoc } from 'firebase/firestore'; // Added Firestore imports
+import { db } from '@/lib/firebase'; // Added db import
 
 const userRoleFilterOptions: { value: UserRole | 'ALL'; label: string }[] = [
   { value: 'ALL', label: 'All Roles' },
@@ -54,7 +56,7 @@ export default function UserManagementPage() {
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
 
   const { toast } = useToast();
-  const { user: adminAuthUser } = useAuth(); // This is the logged-in admin
+  const { user: adminAuthUser } = useAuth();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<UserRole | 'ALL'>('ALL');
@@ -144,7 +146,7 @@ export default function UserManagementPage() {
           title: "Failed to Update User",
           description: (err as Error).message || "An unexpected error occurred.",
         });
-        setIsUserFormOpen(true); // Re-open form if update failed
+        setIsUserFormOpen(true); 
       }
     } else { // Adding new user
       if (!data.password) {
@@ -156,7 +158,7 @@ export default function UserManagementPage() {
         const newUserId = await addUser({
           displayName: data.displayName,
           email: data.email,
-          role: data.role as UserRole // Ensure role is correctly typed
+          role: data.role as UserRole 
         }, data.password);
         toast({
           title: "User Added Successfully!",
@@ -168,10 +170,10 @@ export default function UserManagementPage() {
           title: "Failed to Add User",
           description: (err as Error).message || "An unexpected error occurred.",
         });
-        setIsUserFormOpen(true); // Re-open form if add failed
+        setIsUserFormOpen(true); 
       }
     }
-    await fetchUsers(); // Refresh user list
+    await fetchUsers(); 
     setEditingUser(undefined);
   };
 
@@ -191,31 +193,29 @@ export default function UserManagementPage() {
 
     const oldProjectIds = new Set(targetUser.assignedProjectIds || []);
     
-
     try {
-      // This service call already handles creating the in-app notification
+      // This service call handles creating the in-app notification
       await updateUserAssignedProjects(userId, selectedProjectIds);
       toast({
         title: "Projects Assigned Successfully",
-        description: `${targetUser.name}'s project assignments have been updated.`,
+        description: `${targetUser.name}'s project assignments have been updated. In-app notifications sent.`,
       });
-      await fetchUsers(); // Refresh user list to show updated project counts
+      await fetchUsers();
 
       const newlyAssignedProjects = selectedProjectIds
         .filter(id => !oldProjectIds.has(id))
         .map(id => allProjects.find(p => p.id === id))
         .filter(p => p !== undefined) as Project[];
-
-      // Add a system notification toast for the admin
+      
       if (newlyAssignedProjects.length > 0) {
         toast({
-            title: "System Notification",
-            description: `Notification(s) for new project assignments simulated for ${targetUser.name}. In-app notifications created.`,
+            title: "Email Notifications",
+            description: `Initiating email notifications for ${targetUser.name} for newly assigned projects.`,
             duration: 7000,
         });
       }
       
-      // Generate and simulate email notifications for newly assigned projects
+      // Trigger email sending via Firebase Extension for newly assigned projects
       for (const project of newlyAssignedProjects) {
         try {
           const notificationContent = await sendAssignmentNotification({
@@ -226,25 +226,23 @@ export default function UserManagementPage() {
             assignerName: adminAuthUser.displayName || adminAuthUser.email || "Admin", 
           });
 
-          // Simulate email with a toast
-          toast({
-            duration: 15000, // Longer duration for email simulation
-            title: `Simulated Email to ${targetUser.name} for ${project.name}`,
-            description: (
-              <div className="text-xs max-h-48 overflow-y-auto">
-                <p className="font-semibold">To: {targetUser.email}</p>
-                <p className="font-semibold mt-1">From: System (SiteWise Reports)</p>
-                <p className="font-semibold mt-1">Subject: {notificationContent.emailSubject}</p>
-                <p className="mt-2 whitespace-pre-wrap">{notificationContent.emailBody}</p>
-              </div>
-            ),
+          // Write to Firestore 'mail' collection for the Trigger Email extension
+          const mailCollectionRef = collection(db, 'mail');
+          await addDoc(mailCollectionRef, {
+            to: [targetUser.email], // Must be an array
+            message: {
+              subject: notificationContent.emailSubject,
+              html: notificationContent.emailBody, // Assuming body is HTML or Markdown that email clients can render
+            },
           });
-        } catch (aiError) {
-          console.error(`Error generating assignment email for project ${project.name}:`, aiError);
+          console.log(`Email document written to 'mail' collection for ${targetUser.email} for project ${project.name}`);
+
+        } catch (aiErrorOrMailError) {
+          console.error(`Error generating or queueing assignment email for project ${project.name}:`, aiErrorOrMailError);
           toast({ 
             variant: "destructive", 
-            title: `AI Email Gen Error for ${project.name}`, 
-            description: (aiError as Error).message || "Could not simulate email notification content."
+            title: `Email Error for ${project.name}`, 
+            description: (aiErrorOrMailError as Error).message || "Could not generate or queue email notification."
           });
         }
       }
@@ -256,7 +254,7 @@ export default function UserManagementPage() {
       });
     } finally {
       setIsProcessingAssignment(false);
-      setIsAssignProjectsDialogOpen(false); // Close dialog after processing
+      setIsAssignProjectsDialogOpen(false);
     }
   };
 
@@ -391,3 +389,5 @@ export default function UserManagementPage() {
     </>
   );
 }
+
+    
