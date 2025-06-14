@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { getProjects } from '@/services/projectService';
 import { getUsers, addUser, updateUserAssignedProjects, updateUser, deleteUserFirestoreRecord } from '@/services/userService';
-import { sendAssignmentNotification } from '@/ai/flows/assignment-notification-flow';
+import { generateAssignmentNotificationData } from '@/ai/flows/assignment-notification-flow'; // Updated import
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,8 +27,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { collection, addDoc } from 'firebase/firestore'; // Added Firestore imports
-import { db } from '@/lib/firebase'; // Added db import
+import { collection, addDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { render } from 'react-email/render'; // Added for React Email
+import AssignmentNotificationEmail from '@/emails/AssignmentNotificationEmail'; // Added for React Email
 
 const userRoleFilterOptions: { value: UserRole | 'ALL'; label: string }[] = [
   { value: 'ALL', label: 'All Roles' },
@@ -194,11 +196,10 @@ export default function UserManagementPage() {
     const oldProjectIds = new Set(targetUser.assignedProjectIds || []);
     
     try {
-      // This service call handles creating the in-app notification
-      await updateUserAssignedProjects(userId, selectedProjectIds);
+      await updateUserAssignedProjects(userId, selectedProjectIds); // This handles in-app notification
       toast({
-        title: "Projects Assigned Successfully",
-        description: `${targetUser.name}'s project assignments have been updated. In-app notifications sent.`,
+        title: "Projects Assigned & In-App Notifications Sent",
+        description: `${targetUser.name}'s project assignments updated. Email process initiated.`,
       });
       await fetchUsers();
 
@@ -210,35 +211,58 @@ export default function UserManagementPage() {
       if (newlyAssignedProjects.length > 0) {
         toast({
             title: "Email Notifications",
-            description: `Initiating email notifications for ${targetUser.name} for newly assigned projects.`,
+            description: `Preparing to queue emails for ${targetUser.name} for ${newlyAssignedProjects.length} newly assigned project(s).`,
             duration: 7000,
         });
       }
       
-      // Trigger email sending via Firebase Extension for newly assigned projects
       for (const project of newlyAssignedProjects) {
         try {
-          const notificationContent = await sendAssignmentNotification({
+          // 1. Generate structured email data using Genkit
+          const emailData = await generateAssignmentNotificationData({
             userName: targetUser.name,
-            userEmail: targetUser.email,
             projectName: project.name,
             projectLocation: project.location,
-            assignerName: adminAuthUser.displayName || adminAuthUser.email || "Admin", 
+            assignerName: adminAuthUser.displayName || adminAuthUser.email || "Admin",
+            appName: "SiteWise Reports", // You can make this a constant or env var
           });
 
-          // Write to Firestore 'mail' collection for the Trigger Email extension
+          // 2. Render React Email template to HTML string
+          // Consider making APP_URL an environment variable
+          const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+          const emailHtml = render(
+            <AssignmentNotificationEmail
+              userName={targetUser.name}
+              projectName={project.name}
+              projectLocation={project.location}
+              assignerName={adminAuthUser.displayName || adminAuthUser.email || "Admin"}
+              appUrl={appBaseUrl}
+              appName="SiteWise Reports"
+              greeting={emailData.greeting}
+              detailsIntro={emailData.detailsIntro}
+              callToActionText={emailData.callToActionText}
+              closingText={emailData.closingText}
+            />
+          );
+          
+          // 3. Write to Firestore 'mail' collection for the Trigger Email extension
           const mailCollectionRef = collection(db, 'mail');
           await addDoc(mailCollectionRef, {
-            to: [targetUser.email], // Must be an array
+            to: [targetUser.email],
             message: {
-              subject: notificationContent.emailSubject,
-              html: notificationContent.emailBody, // Assuming body is HTML or Markdown that email clients can render
+              subject: emailData.emailSubject,
+              html: emailHtml,
             },
           });
-          console.log(`Email document written to 'mail' collection for ${targetUser.email} for project ${project.name}`);
+          console.log(`Email document for project ${project.name} written to 'mail' collection for ${targetUser.email}.`);
+          toast({
+            title: `Email Queued for ${project.name}`,
+            description: `An assignment email for ${targetUser.name} regarding ${project.name} has been queued for sending.`,
+            duration: 5000,
+          });
 
         } catch (aiErrorOrMailError) {
-          console.error(`Error generating or queueing assignment email for project ${project.name}:`, aiErrorOrMailError);
+          console.error(`Error generating content or queueing assignment email for project ${project.name}:`, aiErrorOrMailError);
           toast({ 
             variant: "destructive", 
             title: `Email Error for ${project.name}`, 
@@ -389,5 +413,3 @@ export default function UserManagementPage() {
     </>
   );
 }
-
-    
