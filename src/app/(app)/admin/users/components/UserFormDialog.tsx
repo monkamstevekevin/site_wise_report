@@ -24,32 +24,37 @@ import { useToast } from '@/hooks/use-toast';
 import type { UserRole } from '@/lib/types';
 import { Loader2, UserPlus, Save } from 'lucide-react';
 
+// Ajustement du schéma Zod pour le mot de passe
 const userFormSchema = z.object({
   displayName: z.string().min(1, 'Name is required').max(100, 'Name is too long'),
   email: z.string().email('Invalid email address'),
   role: z.enum(['ADMIN', 'SUPERVISOR', 'TECHNICIAN'], {
     required_error: 'Role is required.',
   }),
-  password: z.string().min(6, 'Password must be at least 6 characters').optional(),
+  // Permet une chaîne vide OU une chaîne d'au moins 6 caractères, OU undefined
+  password: z.union([
+    z.string().length(0, { message: "Password should not be an empty string if provided." }), // Disallow "" if not optional, but allow optional
+    z.string().min(6, 'Password must be at least 6 characters')
+  ]).optional(),
   confirmPassword: z.string().optional(),
 }).superRefine(({ confirmPassword, password, ...rest }, ctx) => {
-  // This superRefine will only trigger if both password and confirmPassword fields are attempted.
-  // If we are editing a user, password fields won't be there, so this won't run.
-  // If we are creating a new user and password is provided, confirmPassword must match.
-  if (password && confirmPassword !== password) {
-    ctx.addIssue({
-      code: "custom",
-      message: "Passwords do not match",
-      path: ["confirmPassword"],
-    });
-  }
-  // If password is provided (new user) but confirmPassword is not
-  if (password && !confirmPassword) {
-    ctx.addIssue({
+  // Cette superRefine s'appliquera si un mot de passe est effectivement fourni et n'est pas une chaîne vide.
+  // La validation de l'obligation du mot de passe pour la création se fera dans onSubmit.
+  if (password && password.length > 0) {
+    if (confirmPassword !== password) {
+      ctx.addIssue({
         code: "custom",
-        message: "Please confirm your password",
+        message: "Passwords do not match",
         path: ["confirmPassword"],
-    });
+      });
+    }
+    if (!confirmPassword) { // Si un mot de passe est fourni, la confirmation l'est aussi.
+        ctx.addIssue({
+            code: "custom",
+            message: "Please confirm your password",
+            path: ["confirmPassword"],
+        });
+    }
   }
 });
 
@@ -61,8 +66,7 @@ interface UserFormDialogProps {
   userToEdit?: Partial<UserFormData> & { id?: string }; // For editing existing users
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
-  // Allow password to be passed if it's a new user creation
-  onFormSubmit: (data: UserFormData & { password?: string }, id?: string) => Promise<void>;
+  onFormSubmit: (data: Partial<UserFormData> & { password?: string }, id?: string) => Promise<void>;
 }
 
 const userRoleOptions: { value: UserRole; label: string }[] = [
@@ -81,7 +85,7 @@ export function UserFormDialog({ children, userToEdit, open, onOpenChange, onFor
       displayName: '',
       email: '',
       role: 'TECHNICIAN',
-      password: '',
+      password: '', // Laissé vide, le schéma optionnel et length(0) devrait le gérer
       confirmPassword: '',
     },
   });
@@ -93,10 +97,11 @@ export function UserFormDialog({ children, userToEdit, open, onOpenChange, onFor
           displayName: userToEdit.displayName || '',
           email: userToEdit.email || '',
           role: userToEdit.role || 'TECHNICIAN',
-          password: '', // Passwords are not pre-filled for editing
+          password: '', // Les mots de passe ne sont pas pré-remplis pour l'édition
           confirmPassword: '',
         });
       } else {
+        // Pour un nouvel utilisateur, on peut laisser les mots de passe vides pour que l'utilisateur les remplisse
         form.reset({ displayName: '', email: '', role: 'TECHNICIAN', password: '', confirmPassword: '' });
       }
     }
@@ -105,29 +110,37 @@ export function UserFormDialog({ children, userToEdit, open, onOpenChange, onFor
   const onSubmit = async (data: UserFormData) => {
     setIsSubmitting(true);
 
-    const { confirmPassword, ...submissionData } = data; // Exclude confirmPassword from submitted data
-
-    if (!userToEdit && (!submissionData.password || submissionData.password.length < 6)) {
+    // Validation spécifique pour le mode création
+    if (!userToEdit) { // Mode Création
+      if (!data.password || data.password.length < 6) {
          form.setError("password", { type: "manual", message: "Password is required and must be at least 6 characters."});
          setIsSubmitting(false);
-         return;
-    }
-     if (!userToEdit && submissionData.password !== data.confirmPassword) {
+         return; 
+      }
+      if (data.password !== data.confirmPassword) {
         form.setError("confirmPassword", { type: "manual", message: "Passwords do not match."});
         setIsSubmitting(false);
-        return;
+        return; 
+      }
     }
 
+    // Préparer les données pour onFormSubmit
+    const dataToSend: Partial<UserFormData> & { password?: string } = {
+        displayName: data.displayName,
+        email: data.email, // L'email n'est pas modifiable en édition via ce formulaire mais fait partie des données
+        role: data.role,
+    };
+
+    if (!userToEdit && data.password) {
+        dataToSend.password = data.password;
+    }
+    // Exclure confirmPassword n'est plus nécessaire car dataToSend est construit explicitement
+
     try {
-      // Pass password only if it's a new user and password is set
-      const passwordToSend = !userToEdit && submissionData.password ? submissionData.password : undefined;
-      const dataToSend = { ...submissionData, password: passwordToSend };
-      
       await onFormSubmit(dataToSend, userToEdit?.id);
-      // Closing dialog and resetting form is handled by parent via onOpenChange or after submit success
     } catch (error) {
-      // Error is usually handled by the parent's onFormSubmit toast
       console.error("UserFormDialog submission error:", error);
+      // Le toast d'erreur est géré par la page parente via le catch de onFormSubmit
     } finally {
       setIsSubmitting(false);
     }
@@ -179,7 +192,7 @@ export function UserFormDialog({ children, userToEdit, open, onOpenChange, onFor
                     <Input type="email" placeholder="e.g., user@example.com" {...field} disabled={!!userToEdit} />
                   </FormControl>
                   {!!userToEdit && <FormMessage>Email cannot be changed after creation.</FormMessage>}
-                  <FormMessage />
+                  {!userToEdit && <FormMessage />} 
                 </FormItem>
               )}
             />
