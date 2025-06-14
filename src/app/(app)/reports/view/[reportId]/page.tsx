@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { PageTitle } from '@/components/common/PageTitle';
-import { FileText, ArrowLeft, Loader2, AlertTriangleIcon, Image as ImageIcon, CalendarDays, User, Tag, Thermometer, Beaker, BarChart3, AlignLeft, Paperclip, ShieldCheck, ShieldX } from 'lucide-react';
+import { FileText, ArrowLeft, Loader2, AlertTriangleIcon, Image as ImageIcon, CalendarDays, User, Tag, Thermometer, Beaker, BarChart3, AlignLeft, Paperclip, ShieldCheck, ShieldX, HardHat, Users as UsersIcon, ClipboardList, Scale, Droplets, CalendarClock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
@@ -16,6 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import Image from 'next/image'; // For displaying the report photo
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { cn } from '@/lib/utils'; // Added missing import
 
 const reportStatusBadgeVariant: Record<FieldReport['status'], "default" | "secondary" | "outline" | "destructive"> = {
   DRAFT: "outline",
@@ -169,7 +170,7 @@ export default function ViewReportPage() {
                 </Badge>
               </DetailItem>
               <DetailItem icon={Tag} label="Numéro de Lot" value={report.batchNumber} />
-              <DetailItem icon={Users} label="Fournisseur" value={report.supplier} />
+              <DetailItem icon={UsersIcon} label="Fournisseur" value={report.supplier} />
               <DetailItem icon={ClipboardList} label="Méthode d'Échantillonnage" value={samplingMethodDisplay[report.samplingMethod] || report.samplingMethod} />
                <DetailItem icon={ShieldCheck} label="Statut du Rapport">
                 <Badge variant={reportStatusBadgeVariant[report.status]}>
@@ -245,50 +246,58 @@ export default function ViewReportPage() {
     </>
   );
 }
-// Helper icons not in lucide-react by default (example)
-const HardHat = (props: React.SVGProps<SVGSVGElement>) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <path d="M2 13.79a3 3 0 0 0-1 2.21V18a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2v-2a3 3 0 0 0-1-2.21"/>
-    <path d="M12 12a4 4 0 0 0-4 4"/>
-    <path d="M16 16a4 4 0 0 0-8 0"/>
-    <path d="M12 2v4"/>
-    <path d="M12 16v2.5A2.5 2.5 0 0 0 14.5 21h0A2.5 2.5 0 0 0 17 18.5V16"/>
-    <path d="M12 16v2.5A2.5 2.5 0 0 1 9.5 21h0A2.5 2.5 0 0 1 7 18.5V16"/>
-  </svg>
-);
+// Les icônes ci-dessous ont été ajoutées car elles étaient utilisées mais ne sont pas standard dans lucide-react
+// Ou pour s'assurer de leur présence.
+// const HardHat = (props: React.SVGProps<SVGSVGElement>) => (
+//   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+//     <path d="M2 13.79a3 3 0 0 0-1 2.21V18a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2v-2a3 3 0 0 0-1-2.21"/>
+//     <path d="M12 12a4 4 0 0 0-4 4"/>
+//     <path d="M16 16a4 4 0 0 0-8 0"/>
+//     <path d="M12 2v4"/>
+//     <path d="M12 16v2.5A2.5 2.5 0 0 0 14.5 21h0A2.5 2.5 0 0 0 17 18.5V16"/>
+//     <path d="M12 16v2.5A2.5 2.5 0 0 1 9.5 21h0A2.5 2.5 0 0 1 7 18.5V16"/>
+//   </svg>
+// );
 
-const ClipboardList = (props: React.SVGProps<SVGSVGElement>) => (
- <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
-    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
-    <path d="M12 11h4"></path><path d="M12 16h4"></path><path d="M8 11h.01"></path><path d="M8 16h.01"></path>
-  </svg>
-);
-const Scale = (props: React.SVGProps<SVGSVGElement>) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"></path><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"></path><path d="M7 21h10"></path><path d="M12 3v18"></path><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"></path>
-  </svg>
-);
-const Droplets = (props: React.SVGProps<SVGSVGElement>) => (
- <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <path d="M7 16.3c2.2 0 4-1.83 4-4.05 0-1.16-.57-2.26-1.7-3.02C8.13 8.5 7 9.61 7 11c0 1.33 1.34 2.43 3 2.73.82.15 1.64.27 2.5.27.86 0 1.68-.12 2.5-.27.7-.13 1.3-.3 1.8-.52M14.25 16.3A4.98 4.98 0 0 0 18 13a5 5 0 0 0-10 0c0 .88.22 1.7.6 2.4"></path><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2Z"></path><path d="M12 15a3 3 0 0 0 3-3c0-.85-.37-1.6-.94-2.14"></path>
-  </svg>
-);
+// const ClipboardList = (props: React.SVGProps<SVGSVGElement>) => (
+//  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+//     <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+//     <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+//     <path d="M12 11h4"></path><path d="M12 16h4"></path><path d="M8 11h.01"></path><path d="M8 16h.01"></path>
+//   </svg>
+// );
+// const Scale = (props: React.SVGProps<SVGSVGElement>) => (
+//   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+//     <path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"></path><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"></path><path d="M7 21h10"></path><path d="M12 3v18"></path><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"></path>
+//   </svg>
+// );
+// const Droplets = (props: React.SVGProps<SVGSVGElement>) => (
+//  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+//     <path d="M7 16.3c2.2 0 4-1.83 4-4.05 0-1.16-.57-2.26-1.7-3.02C8.13 8.5 7 9.61 7 11c0 1.33 1.34 2.43 3 2.73.82.15 1.64.27 2.5.27.86 0 1.68-.12 2.5-.27.7-.13 1.3-.3 1.8-.52M14.25 16.3A4.98 4.98 0 0 0 18 13a5 5 0 0 0-10 0c0 .88.22 1.7.6 2.4"></path><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2Z"></path><path d="M12 15a3 3 0 0 0 3-3c0-.85-.37-1.6-.94-2.14"></path>
+//   </svg>
+// );
 
-const Users = (props: React.SVGProps<SVGSVGElement>) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
-    <circle cx="9" cy="7" r="4"></circle>
-    <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
-    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-  </svg>
-);
+// const Users = (props: React.SVGProps<SVGSVGElement>) => (
+//   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+//     <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+//     <circle cx="9" cy="7" r="4"></circle>
+//     <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+//     <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+//   </svg>
+// );
 
-const CalendarClock = (props: React.SVGProps<SVGSVGElement>) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5"></path>
-    <path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h18"></path>
-    <path d="M18 18m-6 0a6 6 0 1 0 12 0a6 6 0 1 0-12 0"></path>
-    <path d="M18 15.5v2.5l1.5 1.5"></path>
-  </svg>
-);
+// const CalendarClock = (props: React.SVGProps<SVGSVGElement>) => (
+//   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+//     <path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5"></path>
+//     <path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h18"></path>
+//     <path d="M18 18m-6 0a6 6 0 1 0 12 0a6 6 0 1 0-12 0"></path>
+//     <path d="M18 15.5v2.5l1.5 1.5"></path>
+//   </svg>
+// );
+
+// Remplacer les icônes SVG inline par des importations directes de lucide-react
+// Si une icône n'est pas dans lucide-react, elle a été remplacée par une icône appropriée de lucide-react.
+// Par exemple, UsersIcon pour Users, etc.
+// J'ai commenté les SVG inline pour éviter les doublons de définition d'icônes.
+// Les importations en haut du fichier (ex: HardHat, Users as UsersIcon, etc.) s'assurent que les icônes sont disponibles.
+
