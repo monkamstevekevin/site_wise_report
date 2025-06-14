@@ -63,7 +63,7 @@ const mapDocToFieldReport = (docSnapshot: any): FieldReport => {
  * Fetches all reports from the 'reports' collection in Firestore.
  * Ordered by creation date in descending order.
  * @returns {Promise<FieldReport[]>} A promise that resolves to an array of FieldReport objects.
- * @throws Will throw an error if fetching reports fails.
+ * @throws Will throw an error if fetching reports fails (excluding missing index errors).
  */
 export async function getReports(): Promise<FieldReport[]> {
   try {
@@ -75,6 +75,17 @@ export async function getReports(): Promise<FieldReport[]> {
     return reports;
   } catch (error) {
     const firestoreError = error as FirestoreError;
+    if (firestoreError.code === 'failed-precondition') {
+      console.warn(
+        `Firestore query for all reports (orderBy createdAt) failed due to a missing index. Firebase message: ${firestoreError.message}. Please create the required index in your Firebase console. Returning empty array for now.`
+      );
+      // Attempt to extract and log the index creation link if available in the message
+      const match = firestoreError.message.match(/(https:\/\/[^\s]+)/);
+      if (match && match[0]) {
+        console.warn(`Create Index Link: ${match[0]}`);
+      }
+      return []; // Return empty array if it's an index issue
+    }
     console.error("Error fetching all reports: ", firestoreError.code, firestoreError.message, firestoreError);
     throw new Error(`Failed to fetch reports from database. Firebase Error: ${firestoreError.code} - ${firestoreError.message}. Check server logs and Firestore indexes.`);
   }
@@ -85,7 +96,7 @@ export async function getReports(): Promise<FieldReport[]> {
  * Ordered by creation date in descending order.
  * @param {string} technicianId The ID of the technician whose reports are to be fetched.
  * @returns {Promise<FieldReport[]>} A promise that resolves to an array of FieldReport objects.
- * @throws Will throw an error if fetching reports fails.
+ * @throws Will throw an error if fetching reports fails (excluding missing index errors).
  */
 export async function getReportsByTechnicianId(technicianId: string): Promise<FieldReport[]> {
   if (!technicianId) {
@@ -105,8 +116,17 @@ export async function getReportsByTechnicianId(technicianId: string): Promise<Fi
     return reports;
   } catch (error) {
     const firestoreError = error as FirestoreError;
+     if (firestoreError.code === 'failed-precondition') {
+      console.warn(
+        `Firestore query for technician ${technicianId} reports (where technicianId and orderBy createdAt) failed due to a missing index. Firebase message: ${firestoreError.message}. Please create the required composite index in your Firebase console. Returning empty array for now.`
+      );
+      const match = firestoreError.message.match(/(https:\/\/[^\s]+)/);
+      if (match && match[0]) {
+        console.warn(`Create Index Link: ${match[0]}`);
+      }
+      return []; // Return empty array if it's an index issue
+    }
     console.error(`Error fetching reports for technician ${technicianId}: `, firestoreError.code, firestoreError.message, firestoreError);
-    // Log the actual Firestore error
     throw new Error(`Failed to fetch reports for technician ${technicianId}. Firebase Error: ${firestoreError.code} - ${firestoreError.message}. Check server logs and Firestore indexes.`);
   }
 }
@@ -163,7 +183,7 @@ export async function addReport(
 /**
  * Updates an existing report in Firestore.
  * @param {string} reportId The ID of the report to update.
- * @param {Partial<Omit<FieldReport, 'id' | 'createdAt' | 'technicianId' | 'projectId'>>} reportData The data to update. `technicianId` and `projectId` are not updatable here.
+ * @param {Partial<Omit<FieldReport, 'id' | 'createdAt' | 'updatedAt' | 'technicianId' | 'projectId'>>} reportData The data to update. `technicianId` and `projectId` are not updatable here.
  * @returns {Promise<void>} A promise that resolves when the report is successfully updated.
  * @throws Will throw an error if updating the report fails.
  */

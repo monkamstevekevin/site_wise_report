@@ -17,8 +17,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useEffect, useState, useMemo } from 'react';
 import type { FieldReport } from '@/lib/types';
-// import { mockReportsData } from '@/app/(app)/reports/page'; // Removed as we will fetch reports
-import { getReportsByTechnicianId, getReports as getAllReports } from '@/services/reportService'; // Import report service
+import { getReportsByTechnicianId, getReports as getAllReports } from '@/services/reportService'; 
 import { Badge } from '@/components/ui/badge';
 import { formatDistanceToNow } from 'date-fns';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend } from 'recharts';
@@ -37,9 +36,11 @@ const mapFirebaseUserToAppRoleAndId = (firebaseUser: any): MappedUserRoleAndId =
   if (firebaseUser.email === MOCK_TECHNICIAN_EMAIL) {
     return { role: 'TECHNICIAN', effectiveTechnicianId: MOCK_TECHNICIAN_REPORTS_ID };
   }
+  // Keep these generic ones for broader testing if needed.
   if (firebaseUser.email?.includes('admin@example.com')) return { role: 'ADMIN', effectiveTechnicianId: null };
   if (firebaseUser.email?.includes('supervisor@example.com')) return { role: 'SUPERVISOR', effectiveTechnicianId: null };
   
+  // Default to using Firebase UID as technicianId for other users.
   return { role: 'TECHNICIAN', effectiveTechnicianId: firebaseUser.uid }; 
 };
 
@@ -71,43 +72,56 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const loadDashboardData = async () => {
-      if (authLoading || !user) {
+      if (authLoading) { // Only wait for authLoading, not !user initially
+        setIsLoadingDashboardData(true); // Ensure loading state is true while auth is resolving
+        return;
+      }
+      
+      if (!user) { // If auth is done and there's no user
         setIsLoadingDashboardData(false);
-        if (!authLoading && !user) {
-           setAllReportsData([]);
-           setTechnicianReports([]);
-        }
+        setAllReportsData([]);
+        setTechnicianReports([]);
+        setCurrentUserRole(null); // Clear role
+        setDashboardError(null); // Clear any previous errors
         return;
       }
       
       setIsLoadingDashboardData(true);
-      setDashboardError(null);
+      setDashboardError(null); // Reset error at the start of a new fetch attempt
       const { role, effectiveTechnicianId: mappedTechId } = mapFirebaseUserToAppRoleAndId(user);
       setCurrentUserRole(role);
       setEffectiveTechnicianId(mappedTechId);
 
       try {
+        let reports: FieldReport[] = [];
         if (role === 'ADMIN' || role === 'SUPERVISOR') {
-          const reports = await getAllReports();
+          reports = await getAllReports();
           setAllReportsData(reports);
         } else if (role === 'TECHNICIAN' && mappedTechId) {
-          const reports = await getReportsByTechnicianId(mappedTechId);
+          reports = await getReportsByTechnicianId(mappedTechId);
           setTechnicianReports(reports);
-          setAllReportsData(reports); // For KPIs that might use all reports data for a technician view too.
+          setAllReportsData(reports); 
+        } else if (role === 'TECHNICIAN' && !mappedTechId) {
+          // Technician role but no specific ID to fetch for (e.g. new user not yet in a custom system)
+           setTechnicianReports([]);
+           setAllReportsData([]);
         }
+        // Note: reportService now returns [] for missing indexes, so no error will be thrown for that.
+        // dashboardError will only be set if reportService throws a *different* type of error.
       } catch (err) {
         console.error("Error loading dashboard data:", err);
-        setDashboardError("Failed to load report data for dashboard.");
+        // This error will only be set for actual service failures, not missing indexes.
+        setDashboardError((err as Error).message || "Failed to load report data for dashboard.");
       } finally {
         setIsLoadingDashboardData(false);
       }
     };
 
     loadDashboardData();
-  }, [user, authLoading]);
+  }, [user, authLoading]); // Dependencies
   
   const adminKpiData = useMemo(() => [
-    { title: "Total Reports", value: allReportsData.length, icon: FileText, trend: "+X% from last month" , trendDirection: "up" as const }, // Trend data needs to be dynamic
+    { title: "Total Reports", value: allReportsData.length, icon: FileText, trend: "+X% from last month" , trendDirection: "up" as const }, 
     { title: "Pending Validation", value: allReportsData.filter(r => r.status === 'SUBMITTED').length, icon: AlertTriangle, trend: "-Y since yesterday", trendDirection: "down" as const },
     { title: "Validated Reports", value: allReportsData.filter(r => r.status === 'VALIDATED').length, icon: CheckCircle, trend: "+Z this week", trendDirection: "up" as const },
     { title: "Avg. Compliance", value: "XX%", icon: BarChart3, trend: "Maintained", trendDirection: "neutral" as const }, // Needs actual calculation
@@ -138,7 +152,7 @@ export default function DashboardPage() {
   }, [technicianReports]);
 
 
-  if (authLoading || isLoadingDashboardData || (user && currentUserRole === null) ) { 
+  if (authLoading || isLoadingDashboardData) { 
     return (
       <>
         <PageTitle title="Dashboard Overview" icon={LayoutDashboard} subtitle="Loading your personalized insights..." />
@@ -153,7 +167,7 @@ export default function DashboardPage() {
     );
   }
   
-  if (!user && !authLoading) {
+  if (!user && !authLoading) { // Explicitly check for no user after auth is done loading
      return (
       <>
         <PageTitle title="Dashboard" icon={LayoutDashboard} subtitle="Please log in to view your dashboard." />
@@ -167,6 +181,7 @@ export default function DashboardPage() {
     );
   }
   
+  // This block will now only show for actual fetch errors, not missing indexes.
   if (dashboardError) {
     return (
       <>
@@ -182,6 +197,17 @@ export default function DashboardPage() {
     )
   }
 
+  // If no error, and loading is false, but user is present and role might still be resolving briefly
+  if (user && currentUserRole === null && !isLoadingDashboardData) {
+     return ( // Simplified loading state if role isn't set yet but data fetch might be "done" (e.g. empty)
+      <>
+        <PageTitle title="Dashboard Overview" icon={LayoutDashboard} subtitle="Finalizing dashboard..." />
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
+          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-36 rounded-lg" />)}
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -200,112 +226,142 @@ export default function DashboardPage() {
 
       { (currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') && (
         <>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
-            {adminKpiData.map((kpi) => (
-              <KpiCard
-                key={kpi.title}
-                title={kpi.title}
-                value={kpi.value}
-                icon={kpi.icon}
-                trend={kpi.trend}
-                trendDirection={kpi.trendDirection}
-              />
-            ))}
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2">
-              <MaterialReportsChart />
+          {allReportsData.length === 0 && !isLoadingDashboardData && !dashboardError && (
+            <Card className="mb-8">
+              <CardHeader>
+                <CardTitle>No Reports Found</CardTitle>
+                <CardDescription>There are currently no reports in the system to display on the dashboard.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p>You can start by <Link href="/reports/create" className="text-primary hover:underline">creating a new report</Link>.</p>
+              </CardContent>
+            </Card>
+          )}
+          {allReportsData.length > 0 && (
+            <>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
+                {adminKpiData.map((kpi) => (
+                <KpiCard
+                    key={kpi.title}
+                    title={kpi.title}
+                    value={kpi.value}
+                    icon={kpi.icon}
+                    trend={kpi.trend}
+                    trendDirection={kpi.trendDirection}
+                />
+                ))}
             </div>
-            <div>
-              <SupplierUsageChart />
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2">
+                <MaterialReportsChart />
+                </div>
+                <div>
+                <SupplierUsageChart />
+                </div>
+                <ComplianceTrendChart />
+                <ActivityLog />
             </div>
-            <ComplianceTrendChart />
-            <ActivityLog />
-          </div>
+            </>
+          )}
         </>
       )}
 
       { currentUserRole === 'TECHNICIAN' && (
         <>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
-            {technicianKpiData.map((kpi) => (
-              <KpiCard
-                key={kpi.title}
-                title={kpi.title}
-                value={kpi.value}
-                icon={kpi.icon}
-                description={kpi.description}
-              />
-            ))}
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <Card className="lg:col-span-1 shadow-lg rounded-lg">
+         {technicianReports.length === 0 && !isLoadingDashboardData && !dashboardError && (
+            <Card className="mb-8">
               <CardHeader>
-                <CardTitle>My Recent Reports (Last 5)</CardTitle>
-                 <CardDescription>Quick overview of your latest activity.</CardDescription>
+                <CardTitle>No Reports Found</CardTitle>
+                <CardDescription>You have not submitted any reports yet, or there are no reports matching the current view.</CardDescription>
               </CardHeader>
               <CardContent>
-                {sortedTechnicianReportsForDisplay.length > 0 ? sortedTechnicianReportsForDisplay.slice(0, 5).map(report => (
-                  <div key={report.id} className="mb-3 pb-3 border-b last:border-b-0 last:pb-0 last:mb-0">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium text-foreground truncate max-w-[150px] sm:max-w-xs" title={`Report ${report.id} for ${report.projectId}`}>Report {report.id.substring(0,6)}... ({report.projectId})</span>
-                      <Badge variant={reportStatusBadgeVariant[report.status]}>{report.status}</Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {report.materialType.charAt(0).toUpperCase() + report.materialType.slice(1)} - {formatDistanceToNow(new Date(report.createdAt), { addSuffix: true })}
-                    </p>
-                  </div>
-                )) : <p className="text-sm text-muted-foreground">No reports submitted yet.</p>}
+                 <p>You can start by <Link href="/reports/create" className="text-primary hover:underline">creating a new report</Link>.</p>
               </CardContent>
             </Card>
-             <Card className="lg:col-span-1 shadow-lg rounded-lg">
-              <CardHeader>
-                <CardTitle>My Material Usage</CardTitle>
-                <CardDescription>Breakdown of materials in your reports.</CardDescription>
-              </CardHeader>
-              <CardContent className="h-72 flex items-center justify-center">
-                {technicianMaterialUsage.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie data={technicianMaterialUsage} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} labelLine={false} 
-                       label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                      >
-                        {technicianMaterialUsage.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.fill} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(value, name) => [`${value} reports`, name]}/>
-                       <Legend wrapperStyle={{ fontSize: '12px' }}/>
-                    </PieChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <p className="text-sm text-muted-foreground text-center">No material data to display.</p>
-                )}
-              </CardContent>
-            </Card>
-            <div className="lg:col-span-1">
-               <Card className="shadow-lg rounded-lg h-full">
-                <CardHeader><CardTitle>Reminders & Alerts</CardTitle>
-                <CardDescription>Important action items or system notices.</CardDescription>
+          )}
+          {technicianReports.length > 0 && (
+            <>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
+                {technicianKpiData.map((kpi) => (
+                <KpiCard
+                    key={kpi.title}
+                    title={kpi.title}
+                    value={kpi.value}
+                    icon={kpi.icon}
+                    description={kpi.description}
+                />
+                ))}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <Card className="lg:col-span-1 shadow-lg rounded-lg">
+                <CardHeader>
+                    <CardTitle>My Recent Reports (Last 5)</CardTitle>
+                    <CardDescription>Quick overview of your latest activity.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    {technicianReports.filter(r => r.status === 'REJECTED').length > 0 && (
-                        <div className="mb-3 p-2 bg-destructive/10 border border-destructive/30 rounded-md">
-                            <p className="text-sm text-destructive font-medium">You have {technicianReports.filter(r => r.status === 'REJECTED').length} rejected report(s) needing attention.</p>
+                    {sortedTechnicianReportsForDisplay.length > 0 ? sortedTechnicianReportsForDisplay.slice(0, 5).map(report => (
+                    <div key={report.id} className="mb-3 pb-3 border-b last:border-b-0 last:pb-0 last:mb-0">
+                        <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium text-foreground truncate max-w-[150px] sm:max-w-xs" title={`Report ${report.id} for ${report.projectId}`}>Report {report.id.substring(0,6)}... ({report.projectId})</span>
+                        <Badge variant={reportStatusBadgeVariant[report.status]}>{report.status}</Badge>
                         </div>
-                    )}
-                    {technicianReports.filter(r => r.status === 'DRAFT').length > 0 && (
-                         <div className="mb-3 p-2 bg-amber-500/10 border border-amber-500/30 rounded-md">
-                             <p className="text-sm text-amber-700 font-medium">You have {technicianReports.filter(r => r.status === 'DRAFT').length} report(s) in draft.</p>
-                         </div>
-                    )}
-                    {(technicianReports.filter(r => r.status === 'REJECTED').length === 0 && technicianReports.filter(r => r.status === 'DRAFT').length === 0) && (
-                         <p className="text-muted-foreground text-sm">No urgent reminders currently.</p>
+                        <p className="text-xs text-muted-foreground">
+                        {report.materialType.charAt(0).toUpperCase() + report.materialType.slice(1)} - {formatDistanceToNow(new Date(report.createdAt), { addSuffix: true })}
+                        </p>
+                    </div>
+                    )) : <p className="text-sm text-muted-foreground">No reports submitted yet.</p>}
+                </CardContent>
+                </Card>
+                <Card className="lg:col-span-1 shadow-lg rounded-lg">
+                <CardHeader>
+                    <CardTitle>My Material Usage</CardTitle>
+                    <CardDescription>Breakdown of materials in your reports.</CardDescription>
+                </CardHeader>
+                <CardContent className="h-72 flex items-center justify-center">
+                    {technicianMaterialUsage.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                        <Pie data={technicianMaterialUsage} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} labelLine={false} 
+                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                        >
+                            {technicianMaterialUsage.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.fill} />
+                            ))}
+                        </Pie>
+                        <Tooltip formatter={(value, name) => [`${value} reports`, name]}/>
+                        <Legend wrapperStyle={{ fontSize: '12px' }}/>
+                        </PieChart>
+                    </ResponsiveContainer>
+                    ) : (
+                    <p className="text-sm text-muted-foreground text-center">No material data to display.</p>
                     )}
                 </CardContent>
-               </Card>
+                </Card>
+                <div className="lg:col-span-1">
+                <Card className="shadow-lg rounded-lg h-full">
+                    <CardHeader><CardTitle>Reminders & Alerts</CardTitle>
+                    <CardDescription>Important action items or system notices.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {technicianReports.filter(r => r.status === 'REJECTED').length > 0 && (
+                            <div className="mb-3 p-2 bg-destructive/10 border border-destructive/30 rounded-md">
+                                <p className="text-sm text-destructive font-medium">You have {technicianReports.filter(r => r.status === 'REJECTED').length} rejected report(s) needing attention.</p>
+                            </div>
+                        )}
+                        {technicianReports.filter(r => r.status === 'DRAFT').length > 0 && (
+                            <div className="mb-3 p-2 bg-amber-500/10 border border-amber-500/30 rounded-md">
+                                <p className="text-sm text-amber-700 font-medium">You have {technicianReports.filter(r => r.status === 'DRAFT').length} report(s) in draft.</p>
+                            </div>
+                        )}
+                        {(technicianReports.filter(r => r.status === 'REJECTED').length === 0 && technicianReports.filter(r => r.status === 'DRAFT').length === 0) && (
+                            <p className="text-muted-foreground text-sm">No urgent reminders currently.</p>
+                        )}
+                    </CardContent>
+                </Card>
+                </div>
             </div>
-          </div>
+            </>
+          )}
         </>
       )}
     </>
