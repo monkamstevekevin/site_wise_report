@@ -54,7 +54,7 @@ interface ReportTableProps {
   reports: FieldReport[];
   onViewReport?: (report: FieldReport) => void;
   onEditReport?: (report: FieldReport) => void;
-  onDeleteReport?: (reportId: string) => void;
+  onDeleteReport?: (report: FieldReport) => void; // Changed to pass full report object
   currentUserId?: string; // For technician-specific actions
   currentUserRole?: UserRole | null;
 }
@@ -69,8 +69,8 @@ export function ReportTable({ reports, onViewReport, onEditReport, onDeleteRepor
     onEditReport?.(report);
   };
 
-  const handleDelete = (reportId: string) => {
-    onDeleteReport?.(reportId);
+  const handleDelete = (report: FieldReport) => { // Now expects full report
+    onDeleteReport?.(report);
   };
 
   if (reports.length === 0) {
@@ -105,6 +105,7 @@ export function ReportTable({ reports, onViewReport, onEditReport, onDeleteRepor
         <TableBody>
           {reports.map((report) => {
             const isOwner = report.technicianId === currentUserId;
+            
             let canEdit = false;
             if (currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') {
               canEdit = true;
@@ -112,7 +113,13 @@ export function ReportTable({ reports, onViewReport, onEditReport, onDeleteRepor
               canEdit = true;
             }
 
-            const canDelete = (currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') || (isOwner && report.status === 'DRAFT');
+            let canDelete = false;
+            if (currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') {
+              canDelete = true;
+            } else if (currentUserRole === 'TECHNICIAN' && isOwner && report.status === 'DRAFT') {
+              canDelete = true;
+            }
+
 
             return (
               <TableRow key={report.id}>
@@ -144,7 +151,7 @@ export function ReportTable({ reports, onViewReport, onEditReport, onDeleteRepor
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
-                        onClick={() => handleDelete(report.id)}
+                        onClick={() => handleDelete(report)} // Pass full report object
                         className="text-destructive focus:text-destructive focus:bg-destructive/10"
                         disabled={!canDelete}
                       >

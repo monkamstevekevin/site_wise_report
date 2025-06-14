@@ -4,7 +4,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { PageTitle } from '@/components/common/PageTitle';
 import { Button } from '@/components/ui/button';
-import { FileText, PlusCircle, Filter, Loader2, AlertTriangleIcon } from 'lucide-react';
+import { FileText, PlusCircle, Filter, Loader2, AlertTriangleIcon, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
 import { ReportTable } from './components/ReportTable';
 import type { FieldReport } from '@/lib/types';
@@ -16,8 +16,18 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { UserRole } from '@/lib/constants';
 import { MOCK_TECHNICIAN_EMAIL, MOCK_TECHNICIAN_REPORTS_ID } from '@/lib/constants';
-import { getReports, getReportsByTechnicianId } from '@/services/reportService'; // Import the service
-import { useRouter } from 'next/navigation'; // Import useRouter
+import { getReports, getReportsByTechnicianId, deleteReport as deleteReportService } from '@/services/reportService'; // Import the service
+import { useRouter } from 'next/navigation'; 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 
 const reportStatusFilterOptions: { value: FieldReport['status'] | 'ALL'; label: string }[] = [
@@ -61,7 +71,7 @@ const mapFirebaseUserToAppRoleAndId = (firebaseUser: any): MappedUserRoleAndId =
 export default function ReportsPage() {
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
-  const router = useRouter(); // Initialize useRouter
+  const router = useRouter(); 
 
   const [allFetchedReports, setAllFetchedReports] = useState<FieldReport[]>([]);
   const [isLoadingReports, setIsLoadingReports] = useState(true);
@@ -74,37 +84,41 @@ export default function ReportsPage() {
   const [statusFilter, setStatusFilter] = useState<FieldReport['status'] | 'ALL'>('ALL');
   const [materialFilter, setMaterialFilter] = useState<FieldReport['materialType'] | 'ALL'>('ALL');
 
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [reportToDelete, setReportToDelete] = useState<FieldReport | null>(null);
+
+
+  const fetchReportsForUser = async () => {
+    if (authLoading || !user) {
+      setIsLoadingReports(false);
+      if (!authLoading && !user) setAllFetchedReports([]); 
+      return;
+    }
+
+    setIsLoadingReports(true);
+    setReportsError(null);
+    const { role, effectiveTechnicianId: mappedTechId } = mapFirebaseUserToAppRoleAndId(user);
+    setCurrentUserRole(role);
+    setEffectiveTechnicianId(mappedTechId);
+
+    try {
+      let fetchedReports: FieldReport[] = [];
+      if (role === 'TECHNICIAN' && mappedTechId) {
+        fetchedReports = await getReportsByTechnicianId(mappedTechId);
+      } else if (role === 'ADMIN' || role === 'SUPERVISOR') {
+        fetchedReports = await getReports();
+      }
+      setAllFetchedReports(fetchedReports);
+    } catch (err) {
+      console.error("Error fetching reports:", err);
+      setReportsError((err as Error).message || "Failed to load reports.");
+      setAllFetchedReports([]);
+    } finally {
+      setIsLoadingReports(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchReportsForUser = async () => {
-      if (authLoading || !user) {
-        setIsLoadingReports(false);
-        if (!authLoading && !user) setAllFetchedReports([]); // Clear reports if logged out
-        return;
-      }
-
-      setIsLoadingReports(true);
-      setReportsError(null);
-      const { role, effectiveTechnicianId: mappedTechId } = mapFirebaseUserToAppRoleAndId(user);
-      setCurrentUserRole(role);
-      setEffectiveTechnicianId(mappedTechId);
-
-      try {
-        let fetchedReports: FieldReport[] = [];
-        if (role === 'TECHNICIAN' && mappedTechId) {
-          fetchedReports = await getReportsByTechnicianId(mappedTechId);
-        } else if (role === 'ADMIN' || role === 'SUPERVISOR') {
-          fetchedReports = await getReports();
-        }
-        setAllFetchedReports(fetchedReports);
-      } catch (err) {
-        console.error("Error fetching reports:", err);
-        setReportsError((err as Error).message || "Failed to load reports.");
-        setAllFetchedReports([]);
-      } finally {
-        setIsLoadingReports(false);
-      }
-    };
-
     fetchReportsForUser();
   }, [user, authLoading]);
 
@@ -115,7 +129,6 @@ export default function ReportsPage() {
   };
 
   const handleEditReport = (report: FieldReport) => {
-    // Navigate to the edit page for this report
     const canEdit = (currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') ||
                     (currentUserRole === 'TECHNICIAN' && report.technicianId === effectiveTechnicianId && report.status === 'DRAFT');
     
@@ -130,12 +143,30 @@ export default function ReportsPage() {
     }
   };
 
-  const handleDeleteReport = (reportId: string) => {
-    console.log("Delete report:", reportId);
-    // This will call a service to delete from Firestore and then refetch/filter
-    // For now, just a simulation
-    setAllFetchedReports(prevReports => prevReports.filter(r => r.id !== reportId));
-    toast({ variant: "destructive", title: "Delete Report (Simulated)", description: `Report ${reportId} would be deleted.` });
+  const openDeleteDialog = (report: FieldReport) => {
+    setReportToDelete(report);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteReport = async () => {
+    if (!reportToDelete) return;
+    try {
+      await deleteReportService(reportToDelete.id);
+      toast({
+        title: "Report Deleted",
+        description: `Report ID: ${reportToDelete.id} has been deleted.`,
+      });
+      await fetchReportsForUser(); // Refetch reports
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Failed to Delete Report",
+        description: (err as Error).message || "An unexpected error occurred.",
+      });
+    } finally {
+      setIsDeleteDialogOpen(false);
+      setReportToDelete(null);
+    }
   };
 
   const filteredReports = useMemo(() => {
@@ -254,12 +285,35 @@ export default function ReportsPage() {
             reports={filteredReports}
             onViewReport={handleViewReport}
             onEditReport={handleEditReport}
-            onDeleteReport={handleDeleteReport}
+            onDeleteReport={openDeleteDialog} // Changed to openDeleteDialog
             currentUserId={effectiveTechnicianId || user?.uid}
             currentUserRole={currentUserRole}
           />
         </div>
       )}
+
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <div className="flex items-center">
+              <AlertTriangle className="h-6 w-6 mr-2 text-destructive" />
+              <AlertDialogTitle>Confirm Report Deletion</AlertDialogTitle>
+            </div>
+            <AlertDialogDescription>
+              Are you sure you want to delete the report ID: "{reportToDelete?.id}" for project "{reportToDelete?.projectId}"? This action is irreversible.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setIsDeleteDialogOpen(false)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteReport}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete Report
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

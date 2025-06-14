@@ -3,7 +3,7 @@
 
 import { db } from '@/lib/firebase';
 import type { FieldReport } from '@/lib/types';
-import { collection, getDocs, Timestamp, query, where, orderBy, addDoc, serverTimestamp, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, Timestamp, query, where, orderBy, addDoc, serverTimestamp, doc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 
 /**
  * @fileOverview Report service for interacting with Firestore.
@@ -13,6 +13,7 @@ import { collection, getDocs, Timestamp, query, where, orderBy, addDoc, serverTi
  * - getReportById - Fetches a single report by its ID.
  * - addReport - Adds a new report to Firestore.
  * - updateReport - Updates an existing report in Firestore.
+ * - deleteReport - Deletes a report from Firestore.
  * - formatTimestamp - Utility to format Firestore Timestamps.
  */
 
@@ -167,17 +168,13 @@ export async function updateReport(
 ): Promise<void> {
   try {
     const reportDocRef = doc(db, 'reports', reportId);
-    // Explicitly set photoDataUri to null if it needs to be deleted from the document
+    
     const updatePayload: any = { ...reportData };
     if (reportData.photoDataUri === undefined && reportData.hasOwnProperty('photoDataUri')) {
-        // If photoDataUri is explicitly set to undefined in reportData (meaning it was removed)
-        // we might need to use deleteField() if Firestore supports it or set to null
-        // For simplicity, setting to null or undefined in updateDoc usually removes the field or sets it to null.
-        // Let's assume undefined works to remove it or your schema handles null.
-        // Or, if Firestore requires explicit deletion:
-        // import { deleteField } from "firebase/firestore";
-        // updatePayload.photoDataUri = deleteField();
-        // For now, just passing undefined should work if the field is optional or can be null.
+      // This means the photo was explicitly removed in the form
+      // We can set it to null or use deleteField if necessary, 
+      // but for simplicity, we'll ensure it can be set to undefined or null
+      updatePayload.photoDataUri = null; // Or undefined, depending on how Firestore handles it
     }
 
 
@@ -188,5 +185,21 @@ export async function updateReport(
   } catch (error) {
     console.error(`Error updating report ${reportId}: `, error);
     throw new Error(`Failed to update report ${reportId} in database.`);
+  }
+}
+
+/**
+ * Deletes a report from Firestore.
+ * @param {string} reportId The ID of the report to delete.
+ * @returns {Promise<void>} A promise that resolves when the report is successfully deleted.
+ * @throws Will throw an error if deleting the report fails.
+ */
+export async function deleteReport(reportId: string): Promise<void> {
+  try {
+    const reportDocRef = doc(db, 'reports', reportId);
+    await deleteDoc(reportDocRef);
+  } catch (error) {
+    console.error(`Error deleting report ${reportId}: `, error);
+    throw new Error(`Failed to delete report ${reportId} from database.`);
   }
 }
