@@ -208,8 +208,8 @@ export default function UserManagementPage() {
         .map(id => allProjects.find(p => p.id === id))
         .filter(p => p !== undefined) as Project[];
       
-      if (newlyAssignedProjects.length > 0) {
-        toast({
+      if (newlyAssignedProjects.length > 0 && (process.env.NEXT_PUBLIC_SKIP_EMAIL_EXTENSION !== 'true')) {
+         toast({
             title: "Email Notifications Pending",
             description: `Preparing to queue emails for ${targetUser.name} for ${newlyAssignedProjects.length} newly assigned project(s).`,
             duration: 7000,
@@ -217,8 +217,12 @@ export default function UserManagementPage() {
       }
       
       for (const project of newlyAssignedProjects) {
+        // Skip email generation and sending if NEXT_PUBLIC_SKIP_EMAIL_EXTENSION is true
+        if (process.env.NEXT_PUBLIC_SKIP_EMAIL_EXTENSION === 'true') {
+          console.log(`Skipping email for project ${project.name} due to NEXT_PUBLIC_SKIP_EMAIL_EXTENSION flag.`);
+          continue;
+        }
         try {
-          // 1. Generate structured email data using Genkit
           const emailGenData = await generateAssignmentNotificationData({ 
             userName: targetUser.name,
             projectName: project.name,
@@ -227,7 +231,6 @@ export default function UserManagementPage() {
             appName: "SiteWise Reports", 
           });
 
-          // 2. Render React Email template to HTML string
           const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
           const emailHtml = render(
             <AssignmentNotificationEmail
@@ -244,7 +247,6 @@ export default function UserManagementPage() {
             />
           );
           
-          // 3. Write to Firestore 'mail' collection for the Trigger Email extension
           const mailCollectionRef = collection(db, 'mail');
           await addDoc(mailCollectionRef, {
             to: [targetUser.email],
