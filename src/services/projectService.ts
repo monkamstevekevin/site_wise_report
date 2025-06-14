@@ -14,10 +14,31 @@ import { collection, getDocs, doc, getDoc, Timestamp, query, orderBy, addDoc, se
  * - updateProject - Updates an existing project in Firestore.
  */
 
+const formatTimestamp = (timestampField: any): string => {
+  if (!timestampField) {
+    // console.warn('Timestamp field is missing, returning current date as fallback.');
+    return new Date().toISOString();
+  }
+  if (timestampField instanceof Timestamp) {
+    return timestampField.toDate().toISOString();
+  }
+  // Handle cases where it might be a plain object from Firestore (e.g. from serverTimestamp before full hydration or manual entry)
+  if (timestampField.seconds !== undefined && typeof timestampField.nanoseconds === 'number') {
+    return new Timestamp(timestampField.seconds, timestampField.nanoseconds).toDate().toISOString();
+  }
+  // Handle string or number dates (less ideal, but common in manual entries or migrations)
+  if (typeof timestampField === 'string' || typeof timestampField === 'number') {
+    const date = new Date(timestampField);
+    if (!isNaN(date.getTime())) {
+      return date.toISOString();
+    }
+  }
+  // console.warn('Invalid or unhandled timestamp data format:', timestampField, 'Returning current date as fallback.');
+  return new Date().toISOString(); // Fallback for unrecognized formats
+};
+
 /**
  * Fetches all projects from the 'projects' collection in Firestore.
- * Projects will be fetched in Firestore's default order (usually by document ID).
- * For ordering by name, a Firestore index on the 'name' field is required.
  * @returns {Promise<Project[]>} A promise that resolves to an array of Project objects.
  * @throws Will throw an error if fetching projects fails.
  */
@@ -25,27 +46,27 @@ export async function getProjects(): Promise<Project[]> {
   try {
     const projectsCollectionRef = collection(db, 'projects');
     // To order by name, ensure an index exists for the 'name' field in the 'projects' collection.
-    // const q = query(projectsCollectionRef, orderBy('name'));
+    // const q = query(projectsCollectionRef, orderBy('name')); 
     // Using a simple query without ordering for now:
     const querySnapshot = await getDocs(projectsCollectionRef);
     
     const projects: Project[] = querySnapshot.docs.map(docSnapshot => {
       const data = docSnapshot.data();
+      // Provide default values for fields to prevent errors if data is malformed
       return {
         id: docSnapshot.id,
-        name: data.name,
-        location: data.location,
+        name: data.name || 'Unnamed Project',
+        location: data.location || 'Unknown Location',
         description: data.description || '',
-        status: data.status,
-        // Ensure Timestamps are converted to ISO strings
-        createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : new Date(data.createdAt).toISOString(),
-        updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : new Date(data.updatedAt).toISOString(),
-      } as Project;
+        status: data.status || 'INACTIVE', // Ensure this default is a valid Project['status']
+        createdAt: formatTimestamp(data.createdAt),
+        updatedAt: formatTimestamp(data.updatedAt),
+      } as Project; // Cast as Project, assuming defaults align with type
     });
     return projects;
   } catch (error) {
-    console.error("Error fetching projects: ", error);
-    throw new Error("Failed to fetch projects from database.");
+    console.error("Error fetching projects (see details below): ", error);
+    throw new Error("Failed to fetch projects from database. Check server logs for Firebase error details.");
   }
 }
 
@@ -63,19 +84,19 @@ export async function getProjectById(projectId: string): Promise<Project | null>
       const data = docSnap.data();
       return {
         id: docSnap.id,
-        name: data.name,
-        location: data.location,
+        name: data.name || 'Unnamed Project',
+        location: data.location || 'Unknown Location',
         description: data.description || '',
-        status: data.status,
-        createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : new Date(data.createdAt).toISOString(),
-        updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : new Date(data.updatedAt).toISOString(),
+        status: data.status || 'INACTIVE',
+        createdAt: formatTimestamp(data.createdAt),
+        updatedAt: formatTimestamp(data.updatedAt),
       } as Project;
     } else {
       console.log("No such project document with ID:", projectId);
       return null;
     }
   } catch (error) {
-    console.error("Error fetching project by ID: ", error);
+    console.error(`Error fetching project by ID ${projectId}: `, error);
     throw new Error(`Failed to fetch project ${projectId} from database.`);
   }
 }
@@ -123,4 +144,3 @@ export async function updateProject(projectId: string, projectData: Partial<Omit
 
 
 // Future functions for delete projects will go here.
-
