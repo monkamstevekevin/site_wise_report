@@ -4,12 +4,12 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { PageTitle } from '@/components/common/PageTitle';
-import { FileText, ArrowLeft, Loader2, AlertTriangleIcon, Image as ImageIcon, CalendarDays, User, Tag, Thermometer, Beaker, BarChart3, AlignLeft, Paperclip, ShieldCheck, ShieldX, HardHat, Users as UsersIcon, ClipboardList, Scale, Droplets, CalendarClock, Sparkles, Cpu } from 'lucide-react';
+import { FileText, ArrowLeft, Loader2, AlertTriangleIcon, Image as ImageIcon, CalendarDays, User, Tag, Thermometer, Beaker, BarChart3, AlignLeft, Paperclip, ShieldCheck, ShieldX, HardHat, Users as UsersIcon, ClipboardList, Scale, Droplets, CalendarClock, Sparkles, Cpu, CheckCircle, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
-import { getReportById } from '@/services/reportService';
-import type { FieldReport } from '@/lib/types';
+import { getReportById, updateReport } from '@/services/reportService';
+import type { FieldReport, UserRole } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -17,6 +17,10 @@ import { format } from 'date-fns';
 import Image from 'next/image'; 
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { cn } from '@/lib/utils'; 
+import { RejectionReasonDialog } from '@/app/(app)/reports/components/RejectionReasonDialog';
+import { useToast } from '@/hooks/use-toast';
+import { MOCK_TECHNICIAN_EMAIL, MOCK_TECHNICIAN_REPORTS_ID } from '@/lib/constants';
+
 
 const reportStatusBadgeVariant: Record<FieldReport['status'], "default" | "secondary" | "outline" | "destructive"> = {
   DRAFT: "outline",
@@ -54,6 +58,19 @@ const DetailItem: React.FC<{ icon: React.ElementType, label: string, value?: str
   </div>
 );
 
+// Helper to map Firebase user to app's UserRole type
+// Consider moving this to a shared utility if used in more places
+const mapFirebaseUserToAppRole = (firebaseUser: any): UserRole => {
+  if (!firebaseUser || !firebaseUser.email) return 'TECHNICIAN'; 
+  if (firebaseUser.email === 'janesteve237@gmail.com') return 'ADMIN';
+  if (firebaseUser.email?.includes('admin@example.com')) return 'ADMIN';
+  if (firebaseUser.email?.includes('supervisor@example.com')) return 'SUPERVISOR';
+  // For the MOCK_TECHNICIAN_EMAIL, their specific role is technician.
+  if (firebaseUser.email === MOCK_TECHNICIAN_EMAIL) return 'TECHNICIAN';
+  // Default for other authenticated users if no specific mapping
+  return 'TECHNICIAN'; 
+};
+
 
 export default function ViewReportPage() {
   const params = useParams();
@@ -61,37 +78,123 @@ export default function ViewReportPage() {
   const { reportId } = params as { reportId: string };
   
   const { user, loading: authLoading } = useAuth();
+  const { toast } = useToast();
   const [report, setReport] = useState<FieldReport | null>(null);
   const [isLoadingReport, setIsLoadingReport] = useState(true);
   const [errorLoadingReport, setErrorLoadingReport] = useState<string | null>(null);
+  const [currentUserRole, setCurrentUserRole] = useState<UserRole | null>(null);
+
+  const [isRejectionDialogOpen, setIsRejectionDialogOpen] = useState(false);
+  const [isProcessingAction, setIsProcessingAction] = useState(false);
 
   useEffect(() => {
+    if (user) {
+      setCurrentUserRole(mapFirebaseUserToAppRole(user));
+    }
+  }, [user]);
+
+  const fetchReportData = async () => {
     if (reportId && user) { 
       setIsLoadingReport(true);
       setErrorLoadingReport(null);
-      getReportById(reportId)
-        .then(data => {
-          if (data) {
-            setReport(data);
-          } else {
-            setErrorLoadingReport(`Rapport avec ID ${reportId} non trouvé.`);
-          }
-        })
-        .catch(err => {
-          console.error("Error fetching report for viewing:", err);
-          setErrorLoadingReport("Échec du chargement des détails du rapport.");
-        })
-        .finally(() => setIsLoadingReport(false));
-    } else if (!user && !authLoading) {
+      try {
+        const data = await getReportById(reportId);
+        if (data) {
+          setReport(data);
+        } else {
+          setErrorLoadingReport(`Rapport avec ID ${reportId} non trouvé.`);
+        }
+      } catch (err) {
+        console.error("Error fetching report for viewing:", err);
+        setErrorLoadingReport("Échec du chargement des détails du rapport.");
+      } finally {
         setIsLoadingReport(false);
-        setErrorLoadingReport("Vous devez être connecté pour voir les rapports.");
+      }
+    } else if (!user && !authLoading) {
+      setIsLoadingReport(false);
+      setErrorLoadingReport("Vous devez être connecté pour voir les rapports.");
     }
+  };
+
+  useEffect(() => {
+    fetchReportData();
   }, [reportId, user, authLoading]);
+
+
+  const handleValidateReport = async () => {
+    if (!report || report.status !== 'SUBMITTED' || !(currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR')) return;
+    setIsProcessingAction(true);
+    try {
+      await updateReport(report.id, { status: 'VALIDATED' });
+      toast({ title: 'Rapport Validé', description: `Le rapport ID: ${report.id} a été marqué comme VALIDÉ.` });
+      router.push('/reports'); // Redirect to reports list
+    } catch (err) {
+      toast({ variant: 'destructive', title: 'Erreur de Validation', description: (err as Error).message || "Une erreur s'est produite." });
+      setIsProcessingAction(false);
+    }
+  };
+
+  const handleConfirmRejection = async (id: string, reason: string) => {
+    if (!report || report.status !== 'SUBMITTED' || !(currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR')) return;
+    setIsProcessingAction(true);
+    setIsRejectionDialogOpen(false);
+    try {
+      await updateReport(id, { status: 'REJECTED', rejectionReason: reason });
+      toast({ 
+        title: 'Rapport Rejeté', 
+        description: (
+          <div>
+            <p>Le rapport ID: {id} a été marqué comme REJETÉ.</p>
+            <p className="text-xs mt-1">Raison: {reason}</p>
+          </div>
+        )
+      });
+      router.push('/reports'); // Redirect to reports list
+    } catch (err) {
+      toast({ variant: 'destructive', title: 'Erreur de Rejet', description: (err as Error).message || "Une erreur s'est produite." });
+      setIsProcessingAction(false);
+    }
+  };
+
+  const canPerformActions = report && report.status === 'SUBMITTED' && (currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR');
+
+  const pageActions = (
+    <div className="flex items-center space-x-2">
+      {canPerformActions && (
+        <>
+          <Button 
+            onClick={handleValidateReport} 
+            disabled={isProcessingAction} 
+            variant="default" 
+            className="rounded-lg bg-green-600 hover:bg-green-700 text-white"
+          >
+            {isProcessingAction ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
+            Valider
+          </Button>
+          <Button 
+            onClick={() => setIsRejectionDialogOpen(true)} 
+            disabled={isProcessingAction} 
+            variant="destructive" 
+            className="rounded-lg"
+          >
+             {isProcessingAction ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <XCircle className="mr-2 h-4 w-4" />}
+            Rejeter
+          </Button>
+        </>
+      )}
+      <Button variant="outline" asChild className="rounded-lg">
+        <Link href="/reports">
+            <ArrowLeft className="mr-2 h-4 w-4" /> Retour aux Rapports
+        </Link>
+      </Button>
+    </div>
+  );
+
 
   if (authLoading || isLoadingReport) {
     return (
       <>
-        <PageTitle title="Détails du Rapport" icon={FileText} subtitle="Chargement des données du rapport..." />
+        <PageTitle title="Détails du Rapport" icon={FileText} subtitle="Chargement des données du rapport..." actions={pageActions} />
         <Card className="shadow-lg">
           <CardHeader><Skeleton className="h-8 w-3/4" /></CardHeader>
           <CardContent className="space-y-6">
@@ -108,10 +211,7 @@ export default function ViewReportPage() {
   if (errorLoadingReport) {
     return (
       <>
-        <PageTitle title="Erreur de Chargement" icon={AlertTriangleIcon} subtitle={errorLoadingReport} />
-        <Button variant="outline" asChild className="rounded-lg">
-          <Link href="/reports"><ArrowLeft className="mr-2 h-4 w-4" /> Retour aux Rapports</Link>
-        </Button>
+        <PageTitle title="Erreur de Chargement" icon={AlertTriangleIcon} subtitle={errorLoadingReport} actions={pageActions} />
       </>
     );
   }
@@ -119,10 +219,7 @@ export default function ViewReportPage() {
   if (!report) {
      return (
       <>
-        <PageTitle title="Rapport Non Trouvé" icon={AlertTriangleIcon} subtitle={`Impossible de trouver le rapport avec ID ${reportId}.`} />
-        <Button variant="outline" asChild className="rounded-lg">
-          <Link href="/reports"><ArrowLeft className="mr-2 h-4 w-4" /> Retour aux Rapports</Link>
-        </Button>
+        <PageTitle title="Rapport Non Trouvé" icon={AlertTriangleIcon} subtitle={`Impossible de trouver le rapport avec ID ${reportId}.`} actions={pageActions} />
       </>
     );
   }
@@ -133,13 +230,7 @@ export default function ViewReportPage() {
         title={`Détails du Rapport: ${report.id.substring(0,8)}...`}
         icon={FileText}
         subtitle={`Projet ID: ${report.projectId}`}
-        actions={
-          <Button variant="outline" asChild className="rounded-lg">
-            <Link href="/reports">
-               <ArrowLeft className="mr-2 h-4 w-4" /> Retour aux Rapports
-            </Link>
-          </Button>
-        }
+        actions={pageActions}
       />
 
       {report.status === 'REJECTED' && report.rejectionReason && (
@@ -265,6 +356,12 @@ export default function ViewReportPage() {
             </Card>
         )}
       </div>
+      <RejectionReasonDialog
+        open={isRejectionDialogOpen}
+        onOpenChange={setIsRejectionDialogOpen}
+        report={report} 
+        onConfirmRejection={handleConfirmRejection}
+      />
     </>
   );
 }
