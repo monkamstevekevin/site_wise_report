@@ -103,29 +103,13 @@ export default function ReportsPage() {
     setCurrentUserRole(role);
     setEffectiveTechnicianId(mappedTechId);
 
-    console.log(`[ReportsPage] Logged in user: ${user?.email}, Determined Role: ${role}`);
-    console.log(`[ReportsPage] ID that WILL BE USED for technician's report query (effectiveTechnicianId): ${mappedTechId || 'N/A (Admin/Supervisor or no ID)'}`);
-
     try {
       let fetchedReports: FieldReport[] = [];
       if (role === 'TECHNICIAN' && mappedTechId) {
-        console.log(`[ReportsPage] Querying Firestore for reports where technicianId == "${mappedTechId}"`);
         fetchedReports = await getReportsByTechnicianId(mappedTechId);
-        console.log(`[ReportsPage] Firestore returned ${fetchedReports.length} reports for technicianId "${mappedTechId}".`);
-        if (fetchedReports.length > 0) {
-            console.log('[ReportsPage] Details of fetched reports:', fetchedReports.map(r => ({id: r.id, projectId: r.projectId, materialType: r.materialType, status: r.status, techIdOnReport: r.technicianId }) ));
-        } else {
-            console.log(`[ReportsPage] No reports found in Firestore for technicianId "${mappedTechId}". Ensure a report exists with this exact technicianId in its 'technicianId' field.`);
-        }
       } else if (role === 'ADMIN' || role === 'SUPERVISOR') {
-        console.log(`[ReportsPage] Querying Firestore for all reports (role: ${role})`);
         fetchedReports = await getReports();
-        console.log(`[ReportsPage] Firestore returned ${fetchedReports.length} reports for admin/supervisor.`);
-         if (fetchedReports.length > 0) {
-            console.log('[ReportsPage] Details of fetched reports (admin/supervisor view):', fetchedReports.map(r => ({id: r.id, projectId: r.projectId, materialType: r.materialType, status: r.status, techIdOnReport: r.technicianId })));
-        }
       } else {
-        console.log(`[ReportsPage] No specific query path. Role: ${role}, EffectiveTechnicianId: ${mappedTechId}. Setting reports to empty.`);
         fetchedReports = [];
       }
       setAllFetchedReports(fetchedReports);
@@ -350,3 +334,4 @@ export default function ReportsPage() {
     </>
   );
 }
+

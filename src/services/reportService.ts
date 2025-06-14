@@ -98,7 +98,6 @@ export async function getReports(): Promise<FieldReport[]> {
  * @throws Will throw an error if fetching reports fails (excluding missing index errors).
  */
 export async function getReportsByTechnicianId(technicianId: string): Promise<FieldReport[]> {
-  console.log(`[Service/getReportsByTechnicianId] Received request for technicianId: "${technicianId}"`);
   if (!technicianId) {
     console.warn("[Service/getReportsByTechnicianId] Called without a technicianId. Returning empty array.");
     return [];
@@ -110,14 +109,10 @@ export async function getReportsByTechnicianId(technicianId: string): Promise<Fi
       where('technicianId', '==', technicianId),
       orderBy('createdAt', 'desc')
     );
-    console.log(`[Service/getReportsByTechnicianId] Executing Firestore query for technicianId: "${technicianId}"`);
     const querySnapshot = await getDocs(q);
-    console.log(`[Service/getReportsByTechnicianId] Firestore query returned ${querySnapshot.docs.length} documents for technicianId: "${technicianId}"`);
-
+    
     const reports: FieldReport[] = querySnapshot.docs.map(docSnapshot => {
         const report = mapDocToFieldReport(docSnapshot);
-        // Log the technicianId found on each document returned by the query
-        console.log(`[Service/getReportsByTechnicianId] Mapped report: ID=${report.id}, technicianIdOnDoc=${report.technicianId}, status=${report.status}`);
         return report;
     });
     return reports;
@@ -235,3 +230,4 @@ export async function deleteReport(reportId: string): Promise<void> {
     throw new Error(`Failed to delete report ${reportId} from database. Firebase Error: ${firestoreError.code} - ${firestoreError.message}.`);
   }
 }
+

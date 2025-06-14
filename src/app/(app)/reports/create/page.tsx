@@ -39,8 +39,7 @@ export default function CreateReportPage() {
     }
     
     const reportTechnicianId = user.email === MOCK_TECHNICIAN_EMAIL ? MOCK_TECHNICIAN_REPORTS_ID : user.uid;
-    console.log('[CreateReportPage] User UID (technicianId being saved):', reportTechnicianId);
-
+    
 
     let photoDataUriInSubmit: string | undefined = undefined;
     if (photoFile) {
@@ -62,15 +61,10 @@ export default function CreateReportPage() {
         updatedAt: new Date().toISOString(), 
         status: status
     };
+    
     const assessment = await detectReportAnomaly(tempReportForAI);
 
     if (status === 'SUBMITTED' && assessment.isAnomalous) {
-      toast({ 
-        variant: 'destructive', 
-        title: 'Submission Prevented by AI', 
-        description: assessment.explanation || "AI detected an anomaly. Please review the report.",
-        duration: 10000 
-      });
       return { success: false, anomalyAssessment: assessment };
     }
 
@@ -86,7 +80,6 @@ export default function CreateReportPage() {
       return { success: true, reportId: newReportId, anomalyAssessment: assessment };
     } catch (error) {
       console.error('Error creating report:', error);
-      // The toast for this error will be handled in ReportForm based on success: false
       return { success: false, anomalyAssessment: assessment };
     }
   };
@@ -110,3 +103,4 @@ export default function CreateReportPage() {
     </>
   );
 }
+
