@@ -5,6 +5,8 @@ import type { LucideIcon } from 'lucide-react';
 // Re-exporting or aligning with AIFieldReport to ensure consistency
 export type FieldReport = AIFieldReport & {
   rejectionReason?: string; // Added for rejection feedback
+  aiIsAnomalous?: boolean; // Added for AI assessment result
+  aiAnomalyExplanation?: string; // Added for AI assessment explanation
 };
 
 export type UserRole = 'ADMIN' | 'SUPERVISOR' | 'TECHNICIAN';
@@ -76,4 +78,3 @@ export interface ChatMessage {
   timestamp: string; // ISO string
   isOwnMessage?: boolean; // Helper for UI, set client-side
 }
-

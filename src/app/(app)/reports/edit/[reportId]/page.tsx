@@ -13,8 +13,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { getReportById, updateReport } from '@/services/reportService';
 import { detectReportAnomaly, type FieldReport, type AnomalyAssessment } from '@/ai/flows/report-anomaly-detection';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'; // Added CardDescription
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; // Added Alert components
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'; 
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; 
 import type { UserRole } from '@/lib/constants';
 import { MOCK_TECHNICIAN_EMAIL, MOCK_TECHNICIAN_REPORTS_ID } from '@/lib/constants';
 
@@ -61,7 +61,7 @@ export default function EditReportPage() {
             const isOwner = data.technicianId === effectiveTechnicianId;
 
             let canAccessEditPage = false;
-            if (currentUserRole === 'TECHNICIAN' && isOwner && (data.status === 'DRAFT' || data.status === 'REJECTED')) {
+             if (currentUserRole === 'TECHNICIAN' && isOwner && (data.status === 'DRAFT' || data.status === 'REJECTED')) {
               canAccessEditPage = true;
             } else if ((currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') && (data.status === 'DRAFT' || data.status === 'SUBMITTED')) {
               canAccessEditPage = true;
@@ -118,11 +118,14 @@ export default function EditReportPage() {
         ...data, 
         photoDataUri: finalPhotoDataUri,
         status: status, 
-        updatedAt: new Date().toISOString(), 
+        updatedAt: new Date().toISOString(),
+        // aiIsAnomalous and aiAnomalyExplanation will be populated by detectReportAnomaly
     };
     const assessment = await detectReportAnomaly(tempReportForAI);
 
     if (status === 'SUBMITTED' && assessment.isAnomalous) {
+       // Even if submission is blocked, we might want to save the AI assessment
+      // For now, just return to the form
       return { success: false, anomalyAssessment: assessment };
     }
 
@@ -132,9 +135,10 @@ export default function EditReportPage() {
       ...data,
       status: finalStatus, 
       photoDataUri: finalPhotoDataUri,
+      aiIsAnomalous: assessment.isAnomalous,
+      aiAnomalyExplanation: assessment.explanation,
     };
     
-    // If the report is being submitted (and was previously rejected), clear the rejection reason
     if (finalStatus === 'SUBMITTED' && reportToEdit.status === 'REJECTED') {
         reportDataToUpdate.rejectionReason = null; 
     }

@@ -54,7 +54,9 @@ const mapDocToFieldReport = (docSnapshot: any): FieldReport => {
     status: data.status || 'DRAFT',
     attachments: Array.isArray(data.attachments) ? data.attachments : [],
     photoDataUri: data.photoDataUri || undefined,
-    rejectionReason: data.rejectionReason || undefined, // Added
+    rejectionReason: data.rejectionReason || undefined,
+    aiIsAnomalous: data.aiIsAnomalous === undefined ? undefined : data.aiIsAnomalous, // Handle undefined specifically
+    aiAnomalyExplanation: data.aiAnomalyExplanation || undefined,
     createdAt: formatTimestamp(data.createdAt),
     updatedAt: formatTimestamp(data.updatedAt),
   };
@@ -170,8 +172,8 @@ export async function addReport(
     const reportsCollectionRef = collection(db, 'reports');
     const reportPayload = {
       ...reportData,
-      // Ensure rejectionReason is not accidentally saved on new report creation
       rejectionReason: reportData.rejectionReason || null, 
+      // aiIsAnomalous and aiAnomalyExplanation are passed directly from reportData
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
@@ -204,13 +206,18 @@ export async function updateReport(
       updatePayload.photoDataUri = null; 
     }
     
-    // If status is changed to something other than REJECTED, clear the rejectionReason
     if (reportData.status && reportData.status !== 'REJECTED') {
       updatePayload.rejectionReason = null;
     } else if (Object.prototype.hasOwnProperty.call(reportData, 'rejectionReason')) {
-      // Ensure rejectionReason is explicitly set to null if it's being cleared but status isn't changing
-      // Or it will be the provided reason if status is REJECTED
       updatePayload.rejectionReason = reportData.rejectionReason || null;
+    }
+    
+    // Ensure AI fields are explicitly set to null if they are being cleared
+    if (Object.prototype.hasOwnProperty.call(reportData, 'aiIsAnomalous') && reportData.aiIsAnomalous === undefined) {
+      updatePayload.aiIsAnomalous = null;
+    }
+    if (Object.prototype.hasOwnProperty.call(reportData, 'aiAnomalyExplanation') && reportData.aiAnomalyExplanation === undefined) {
+      updatePayload.aiAnomalyExplanation = null;
     }
 
 

@@ -59,12 +59,16 @@ export default function CreateReportPage() {
         id: 'temp-ai-check', 
         createdAt: new Date().toISOString(), 
         updatedAt: new Date().toISOString(), 
-        status: status
+        status: status,
+        // aiIsAnomalous and aiAnomalyExplanation will be populated by detectReportAnomaly
     };
     
     const assessment = await detectReportAnomaly(tempReportForAI);
 
     if (status === 'SUBMITTED' && assessment.isAnomalous) {
+      // Save the anomaly assessment even if submission is blocked
+      // This is useful if we later want to show admins reports that failed AI check
+      // For now, we just return it to the form to display
       return { success: false, anomalyAssessment: assessment };
     }
 
@@ -73,6 +77,8 @@ export default function CreateReportPage() {
       technicianId: reportTechnicianId,
       photoDataUri: photoDataUriInSubmit, 
       status: status,
+      aiIsAnomalous: assessment.isAnomalous,
+      aiAnomalyExplanation: assessment.explanation,
     };
 
     try {
@@ -80,7 +86,8 @@ export default function CreateReportPage() {
       return { success: true, reportId: newReportId, anomalyAssessment: assessment };
     } catch (error) {
       console.error('Error creating report:', error);
-      return { success: false, anomalyAssessment: assessment };
+      // Pass the assessment along so the form can display it even if save fails
+      return { success: false, anomalyAssessment: assessment }; 
     }
   };
 
@@ -103,4 +110,3 @@ export default function CreateReportPage() {
     </>
   );
 }
-
