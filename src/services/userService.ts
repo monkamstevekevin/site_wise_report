@@ -4,7 +4,7 @@
 import { auth, db } from '@/lib/firebase';
 import type { User, UserRole } from '@/lib/types';
 import { collection, getDocs, doc, getDoc, Timestamp, query, setDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
-import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { createUserWithEmailAndPassword, updateProfile as updateAuthProfile } from 'firebase/auth'; // Renamed to avoid conflict
 
 /**
  * @fileOverview User service for interacting with Firestore 'users' collection and Firebase Auth.
@@ -12,6 +12,7 @@ import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
  * - getUsers - Fetches all users from Firestore.
  * - getUserById - Fetches a single user by their ID from Firestore.
  * - addUser - Creates a new user in Firebase Auth and Firestore.
+ * - updateUser - Updates a user's information (name, role) in Firestore.
  * - updateUserAssignedProjects - Updates the assigned projects for a user in Firestore.
  */
 
@@ -42,7 +43,6 @@ const formatTimestamp = (timestampField: any): string => {
 export async function getUsers(): Promise<User[]> {
   try {
     const usersCollectionRef = collection(db, 'users');
-    // const q = query(usersCollectionRef, orderBy('name')); // Ensure index exists if re-enabled
     const q = query(usersCollectionRef);
     const querySnapshot = await getDocs(q);
 
@@ -113,23 +113,20 @@ export async function addUser(
     throw new Error('Password is required for new user creation.');
   }
   try {
-    // 1. Create user in Firebase Authentication
     const userCredential = await createUserWithEmailAndPassword(auth, userData.email, password);
     const firebaseUser = userCredential.user;
 
-    // 2. Update Firebase Auth user's profile (displayName)
-    await updateProfile(firebaseUser, {
+    await updateAuthProfile(firebaseUser, { // Use renamed import
       displayName: userData.displayName,
     });
 
-    // 3. Create user document in Firestore 'users' collection
     const userDocRef = doc(db, 'users', firebaseUser.uid);
     await setDoc(userDocRef, {
-      name: userData.displayName, 
+      name: userData.displayName,
       email: firebaseUser.email,
       role: userData.role,
       avatarUrl: firebaseUser.photoURL || '',
-      assignedProjectIds: [], 
+      assignedProjectIds: [],
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -147,6 +144,48 @@ export async function addUser(
     throw new Error(errorMessage);
   }
 }
+
+/**
+ * Updates a user's information (name, role) in Firestore.
+ * @param {string} userId The ID of the user to update.
+ * @param {object} data The data to update, can include `displayName` and/or `role`.
+ * @returns {Promise<void>} A promise that resolves when the user is successfully updated.
+ * @throws Will throw an error if updating the user fails.
+ */
+export async function updateUser(userId: string, data: { displayName?: string; role?: UserRole }): Promise<void> {
+  try {
+    const userDocRef = doc(db, 'users', userId);
+    const updateData: any = {};
+
+    if (data.displayName) {
+      updateData.name = data.displayName; // Firestore field is 'name'
+    }
+    if (data.role) {
+      updateData.role = data.role;
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      console.log("No data provided to update user.");
+      return;
+    }
+
+    updateData.updatedAt = serverTimestamp();
+
+    await updateDoc(userDocRef, updateData);
+
+    // Note: Updating Firebase Auth's displayName from an admin panel typically requires admin SDK or a cloud function.
+    // If displayName in Auth needs to be synced, it's best handled when the user themselves updates it,
+    // or via a backend process if strictly necessary for admin changes.
+    // For this client-side service, we'll focus on Firestore updates.
+    // If `data.displayName` was provided and also needs to update Auth, a separate mechanism
+    // (e.g., a callable function that uses the Admin SDK) would be more robust.
+
+  } catch (error) {
+    console.error(`Error updating user ${userId}: `, error);
+    throw new Error(`Failed to update user ${userId} in database.`);
+  }
+}
+
 
 /**
  * Updates the assigned projects for a user in Firestore.
@@ -167,7 +206,3 @@ export async function updateUserAssignedProjects(userId: string, projectIds: str
     throw new Error(`Failed to update assigned projects for user ${userId} in database.`);
   }
 }
-
-// TODO: Implement updateUser (for role, name, etc.) and deleteUser functions
-// updateUser would update both Auth (if needed, e.g. email) and Firestore
-// deleteUser would delete from Auth and Firestore (requires careful implementation, possibly a Firebase Function for atomicity)

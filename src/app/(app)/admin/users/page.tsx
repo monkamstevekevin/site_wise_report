@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { getProjects } from '@/services/projectService';
-import { getUsers, addUser, updateUserAssignedProjects } from '@/services/userService'; 
+import { getUsers, addUser, updateUserAssignedProjects, updateUser } from '@/services/userService'; 
 import { sendAssignmentNotification } from '@/ai/flows/assignment-notification-flow';
 
 const userRoleFilterOptions: { value: UserRole | 'ALL'; label: string }[] = [
@@ -83,10 +83,9 @@ export default function UserManagementPage() {
     setIsUserFormOpen(true);
   };
 
-  const handleEditUser = (user: Partial<UserFormData> & { id?: string }) => {
+  const handleEditUser = (user: Partial<UserFormData> & { id: string }) => {
     setEditingUser(user);
     setIsUserFormOpen(true);
-     toast({ title: "Edit User (Simulated)", description: `Editing for ${user.displayName} will be connected to Firestore soon.` });
   };
 
   const handleDeleteUser = (userId: string) => {
@@ -102,17 +101,18 @@ export default function UserManagementPage() {
 
     if (id) { 
       try {
-        // await updateUser(id, data); // Placeholder for updateUserService function
+        await updateUser(id, { displayName: data.displayName, role: data.role });
         toast({
-          title: "User Update (Simulated)",
-          description: `User "${data.displayName}" update will be implemented soon.`,
+          title: "User Updated Successfully",
+          description: `User "${data.displayName}" has been updated.`,
         });
       } catch (err) {
         toast({
           variant: "destructive",
-          title: "Failed to Update User (Simulated)",
+          title: "Failed to Update User",
           description: (err as Error).message || "An unexpected error occurred.",
         });
+        setIsUserFormOpen(true); // Reopen form if update failed to allow correction
       }
     } else { 
       if (!data.password) {
@@ -169,7 +169,7 @@ export default function UserManagementPage() {
         title: "Projects Assigned Successfully",
         description: `${targetUser.name}'s project assignments have been updated.`,
       });
-      await fetchUsers(); // Refresh user list to show updated count
+      await fetchUsers(); 
 
       for (const project of newlyAssignedProjects) {
         try {
@@ -205,7 +205,7 @@ export default function UserManagementPage() {
       });
     } finally {
       setIsProcessingAssignment(false);
-      setIsAssignProjectsDialogOpen(false); // Close dialog on completion or error
+      setIsAssignProjectsDialogOpen(false); 
     }
   };
 
@@ -316,4 +316,3 @@ export default function UserManagementPage() {
     </>
   );
 }
-

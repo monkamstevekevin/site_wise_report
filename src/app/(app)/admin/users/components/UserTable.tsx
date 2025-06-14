@@ -27,7 +27,7 @@ import type { UserFormData } from './UserFormDialog'; // For typing onEditUser
 
 interface UserTableProps {
   users: User[];
-  onEditUser: (user: Partial<UserFormData> & { id: string }) => void; // Adjusted type
+  onEditUser: (user: Partial<UserFormData> & { id: string }) => void; 
   onDeleteUser: (userId: string) => void;
   onAssignProjects: (user: User) => void; 
 }
@@ -93,7 +93,6 @@ export function UserTable({ users, onEditUser, onDeleteUser, onAssignProjects }:
                 <Badge variant={roleBadgeVariant[user.role] || 'outline'}>{user.role}</Badge>
               </TableCell>
               <TableCell className="text-center">
-                {/* Ensure assignedProjectIds is treated as potentially undefined and default to 0 */}
                 {user.assignedProjectIds ? user.assignedProjectIds.length : 0}
               </TableCell>
               <TableCell>{new Date(user.createdAt).toLocaleDateString()}</TableCell>
@@ -107,7 +106,7 @@ export function UserTable({ users, onEditUser, onDeleteUser, onAssignProjects }:
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={() => handleEdit(user)}>
-                      <Edit className="mr-2 h-4 w-4" /> Edit User (Simulated)
+                      <Edit className="mr-2 h-4 w-4" /> Edit User
                     </DropdownMenuItem>
                      <DropdownMenuItem onClick={() => onAssignProjects(user)}>
                       <Briefcase className="mr-2 h-4 w-4" /> Assign Projects
@@ -126,4 +125,3 @@ export function UserTable({ users, onEditUser, onDeleteUser, onAssignProjects }:
     </div>
   );
 }
-
