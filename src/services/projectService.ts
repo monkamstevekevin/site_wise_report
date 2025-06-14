@@ -3,13 +3,14 @@
 
 import { db } from '@/lib/firebase';
 import type { Project } from '@/lib/types';
-import { collection, getDocs, doc, getDoc, Timestamp, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, Timestamp, query, orderBy, addDoc, serverTimestamp } from 'firebase/firestore';
 
 /**
  * @fileOverview Project service for interacting with Firestore.
  *
  * - getProjects - Fetches all projects from Firestore.
  * - getProjectById - Fetches a single project by its ID from Firestore.
+ * - addProject - Adds a new project to Firestore.
  */
 
 /**
@@ -74,4 +75,26 @@ export async function getProjectById(projectId: string): Promise<Project | null>
   }
 }
 
-// Future functions for add, update, delete projects will go here.
+/**
+ * Adds a new project to the 'projects' collection in Firestore.
+ * @param {Omit<Project, 'id' | 'createdAt' | 'updatedAt'>} projectData The data for the new project.
+ * @returns {Promise<string>} A promise that resolves to the ID of the newly created project.
+ * @throws Will throw an error if adding the project fails.
+ */
+export async function addProject(projectData: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
+  try {
+    const projectsCollectionRef = collection(db, 'projects');
+    const docRef = await addDoc(projectsCollectionRef, {
+      ...projectData,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    return docRef.id;
+  } catch (error) {
+    console.error("Error adding project: ", error);
+    throw new Error("Failed to add project to database.");
+  }
+}
+
+// Future functions for update, delete projects will go here.
+

@@ -21,27 +21,27 @@ import {
   DialogTrigger,
   DialogClose,
 } from '@/components/ui/dialog';
-import { useToast } from '@/hooks/use-toast';
+// import { useToast } from '@/hooks/use-toast'; // No longer used directly here for submit toast
 import type { Project } from '@/lib/types';
 import { Loader2, PlusCircle, Save } from 'lucide-react';
 
 const projectFormSchema = z.object({
   name: z.string().min(1, 'Project name is required').max(100, 'Project name is too long'),
   location: z.string().min(1, 'Location is required').max(100, 'Location is too long'),
-  description: z.string().max(500, 'Description is too long').optional(),
+  description: z.string().max(500, 'Description is too long').optional().default(''),
   status: z.enum(['ACTIVE', 'INACTIVE', 'COMPLETED'], {
     required_error: 'Project status is required.',
   }),
 });
 
-type ProjectFormData = z.infer<typeof projectFormSchema>;
+export type ProjectFormData = z.infer<typeof projectFormSchema>;
 
 interface ProjectFormDialogProps {
   children: React.ReactNode; // Trigger button
   projectToEdit?: Partial<ProjectFormData> & { id?: string }; // For editing existing projects
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
-  onFormSubmit?: (data: ProjectFormData, id?: string) => Promise<void>; // For future db integration
+  onFormSubmit: (data: ProjectFormData, id?: string) => Promise<void>; // Changed: No longer optional
 }
 
 const projectStatusOptions: { value: Project['status']; label: string }[] = [
@@ -51,47 +51,49 @@ const projectStatusOptions: { value: Project['status']; label: string }[] = [
 ];
 
 export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange, onFormSubmit }: ProjectFormDialogProps) {
-  const { toast } = useToast();
+  // const { toast } = useToast(); // Moved to parent page
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const form = useForm<ProjectFormData>({
     resolver: zodResolver(projectFormSchema),
-    defaultValues: projectToEdit || {
-      name: '',
-      location: '',
-      description: '',
-      status: 'ACTIVE',
+    defaultValues: { // Ensure default values are always set
+      name: projectToEdit?.name || '',
+      location: projectToEdit?.location || '',
+      description: projectToEdit?.description || '',
+      status: projectToEdit?.status || 'ACTIVE',
     },
   });
 
   React.useEffect(() => {
-    if (projectToEdit) {
-      form.reset(projectToEdit);
-    } else {
-      form.reset({ name: '', location: '', description: '', status: 'ACTIVE' });
+    if (open) { // Only reset form when dialog opens or projectToEdit changes
+      if (projectToEdit) {
+        form.reset({
+          name: projectToEdit.name || '',
+          location: projectToEdit.location || '',
+          description: projectToEdit.description || '',
+          status: projectToEdit.status || 'ACTIVE',
+        });
+      } else {
+        form.reset({ name: '', location: '', description: '', status: 'ACTIVE' });
+      }
     }
-  }, [projectToEdit, form]);
+  }, [projectToEdit, form, open]);
 
   const onSubmit = async (data: ProjectFormData) => {
     setIsSubmitting(true);
-    console.log('Project form data:', data);
-
-    if (onFormSubmit) {
-        await onFormSubmit(data, projectToEdit?.id);
-    } else {
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        toast({
-          title: projectToEdit ? 'Project Updated (Simulated)' : 'Project Added (Simulated)',
-          description: `${data.name} has been ${projectToEdit ? 'updated' : 'added'}. In a real app, this would interact with a database.`,
-        });
-    }
+    // The actual submission logic (calling Firestore service) is handled by the onFormSubmit prop in the parent component
+    await onFormSubmit(data, projectToEdit?.id);
     setIsSubmitting(false);
-    onOpenChange?.(false); // Close dialog on success
-    form.reset(); // Reset form for next use
+    // onOpenChange?.(false); // Parent component (projects/page.tsx) now handles closing dialog
+    // form.reset(); // Parent component handles resetting or dialog unmounts
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(isOpen) => {
+      onOpenChange?.(isOpen);
+      if (!isOpen) { // If dialog is closing, reset the form for next time
+        form.reset(projectToEdit || { name: '', location: '', description: '', status: 'ACTIVE' });
+      }
+    }}>
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
@@ -135,7 +137,7 @@ export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange,
                 <FormItem>
                   <FormLabel>Description (Optional)</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="Brief overview of the project..." {...field} rows={3} />
+                    <Textarea placeholder="Brief overview of the project..." {...field} value={field.value || ''} rows={3} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -147,7 +149,7 @@ export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange,
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Status</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select onValueChange={field.onChange} value={field.value || 'ACTIVE'} defaultValue={field.value || 'ACTIVE'}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Select project status" />
@@ -180,3 +182,4 @@ export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange,
     </Dialog>
   );
 }
+

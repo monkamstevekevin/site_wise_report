@@ -12,9 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { getProjects } from '@/services/projectService'; // Import the service
-
-// mockProjectsData is removed as we fetch from Firestore now
+import { getProjects, addProject } from '@/services/projectService'; // Import addProject
 
 const projectStatusFilterOptions: { value: Project['status'] | 'ALL'; label: string }[] = [
   { value: 'ALL', label: 'All Statuses' },
@@ -22,6 +20,8 @@ const projectStatusFilterOptions: { value: Project['status'] | 'ALL'; label: str
   { value: 'INACTIVE', label: 'Inactive' },
   { value: 'COMPLETED', label: 'Completed' },
 ];
+
+type ProjectFormData = Omit<Project, 'id' | 'createdAt' | 'updatedAt'>;
 
 export default function ProjectManagementPage() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -35,20 +35,21 @@ export default function ProjectManagementPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<Project['status'] | 'ALL'>('ALL');
 
+  const fetchProjects = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const fetchedProjects = await getProjects();
+      setProjects(fetchedProjects);
+    } catch (err) {
+      setError("Failed to load projects. Please try again later.");
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchProjects = async () => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const fetchedProjects = await getProjects();
-        setProjects(fetchedProjects);
-      } catch (err) {
-        setError("Failed to load projects. Please try again later.");
-        console.error(err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
     fetchProjects();
   }, []);
 
@@ -65,7 +66,7 @@ export default function ProjectManagementPage() {
         description: project.description || '',
         status: project.status
     };
-    setEditingProject(projectFormData as any); // Cast as any for simplicity with Partial in dialog
+    setEditingProject(projectFormData as any); 
     setIsProjectFormOpen(true);
   };
 
@@ -81,27 +82,36 @@ export default function ProjectManagementPage() {
     // setProjects(prev => prev.filter(p => p.id !== projectId));
   };
 
-  const handleProjectFormSubmit = async (data: any, id?: string) => {
-    // Firestore add/update logic will be added in a future step
-    // For now, we will just show a toast and refresh the list to simulate.
-    console.log(id ? "Updating project (Firestore):" : "Adding new project (Firestore):", data, id);
-    
-    toast({
-      title: id ? "Project Update (Simulated)" : "Project Add (Simulated)",
-      description: `${data.name} would be ${id ? 'updated in' : 'added to'} Firestore. Refreshing list...`,
-    });
+  const handleProjectFormSubmit = async (data: ProjectFormData, id?: string) => {
+    setIsProjectFormOpen(false); // Close dialog immediately
 
-    // Simulate re-fetching after add/edit for now
-    // In a real scenario, add/edit would return the new/updated project or we'd re-fetch.
-    setIsLoading(true);
-    try {
-      const fetchedProjects = await getProjects();
-      setProjects(fetchedProjects);
-    } catch (err) {
-      setError("Failed to refresh projects.");
-    } finally {
-      setIsLoading(false);
+    if (id) {
+      // Update logic will be handled in a future step
+      console.log("Updating project (Firestore - Simulated):", data, id);
+      toast({
+        title: "Project Update (Simulated)",
+        description: `${data.name} would be updated in Firestore. Refreshing list...`,
+      });
+    } else {
+      // Add new project
+      console.log("Adding new project to Firestore:", data);
+      try {
+        const newProjectId = await addProject(data);
+        toast({
+          title: "Project Added Successfully",
+          description: `Project "${data.name}" (ID: ${newProjectId}) has been added to Firestore.`,
+        });
+      } catch (err) {
+        toast({
+          variant: "destructive",
+          title: "Failed to Add Project",
+          description: (err as Error).message || "An unexpected error occurred.",
+        });
+      }
     }
+    
+    // Re-fetch projects to update the table
+    await fetchProjects();
   };
 
   const filteredProjects = useMemo(() => {
@@ -190,3 +200,4 @@ export default function ProjectManagementPage() {
     </>
   );
 }
+
