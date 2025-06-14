@@ -3,8 +3,8 @@
 
 import { auth, db } from '@/lib/firebase';
 import type { User, UserRole } from '@/lib/types';
-import { collection, getDocs, doc, getDoc, Timestamp, query, setDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
-import { createUserWithEmailAndPassword, updateProfile as updateAuthProfile } from 'firebase/auth'; // Renamed to avoid conflict
+import { collection, getDocs, doc, getDoc, Timestamp, query, setDoc, serverTimestamp, updateDoc, deleteDoc } from 'firebase/firestore';
+import { createUserWithEmailAndPassword, updateProfile as updateAuthProfile } from 'firebase/auth';
 
 /**
  * @fileOverview User service for interacting with Firestore 'users' collection and Firebase Auth.
@@ -14,6 +14,7 @@ import { createUserWithEmailAndPassword, updateProfile as updateAuthProfile } fr
  * - addUser - Creates a new user in Firebase Auth and Firestore.
  * - updateUser - Updates a user's information (name, role) in Firestore.
  * - updateUserAssignedProjects - Updates the assigned projects for a user in Firestore.
+ * - deleteUserFirestoreRecord - Deletes a user's document from Firestore.
  */
 
 const formatTimestamp = (timestampField: any): string => {
@@ -116,13 +117,13 @@ export async function addUser(
     const userCredential = await createUserWithEmailAndPassword(auth, userData.email, password);
     const firebaseUser = userCredential.user;
 
-    await updateAuthProfile(firebaseUser, { // Use renamed import
+    await updateAuthProfile(firebaseUser, {
       displayName: userData.displayName,
     });
 
     const userDocRef = doc(db, 'users', firebaseUser.uid);
     await setDoc(userDocRef, {
-      name: userData.displayName,
+      name: userData.displayName, // Store as 'name' in Firestore
       email: firebaseUser.email,
       role: userData.role,
       avatarUrl: firebaseUser.photoURL || '',
@@ -148,7 +149,7 @@ export async function addUser(
 /**
  * Updates a user's information (name, role) in Firestore.
  * @param {string} userId The ID of the user to update.
- * @param {object} data The data to update, can include `displayName` and/or `role`.
+ * @param {object} data The data to update, can include `displayName` (maps to `name` in Firestore) and/or `role`.
  * @returns {Promise<void>} A promise that resolves when the user is successfully updated.
  * @throws Will throw an error if updating the user fails.
  */
@@ -158,7 +159,7 @@ export async function updateUser(userId: string, data: { displayName?: string; r
     const updateData: any = {};
 
     if (data.displayName) {
-      updateData.name = data.displayName; // Firestore field is 'name'
+      updateData.name = data.displayName;
     }
     if (data.role) {
       updateData.role = data.role;
@@ -170,15 +171,7 @@ export async function updateUser(userId: string, data: { displayName?: string; r
     }
 
     updateData.updatedAt = serverTimestamp();
-
     await updateDoc(userDocRef, updateData);
-
-    // Note: Updating Firebase Auth's displayName from an admin panel typically requires admin SDK or a cloud function.
-    // If displayName in Auth needs to be synced, it's best handled when the user themselves updates it,
-    // or via a backend process if strictly necessary for admin changes.
-    // For this client-side service, we'll focus on Firestore updates.
-    // If `data.displayName` was provided and also needs to update Auth, a separate mechanism
-    // (e.g., a callable function that uses the Admin SDK) would be more robust.
 
   } catch (error) {
     console.error(`Error updating user ${userId}: `, error);
@@ -206,3 +199,21 @@ export async function updateUserAssignedProjects(userId: string, projectIds: str
     throw new Error(`Failed to update assigned projects for user ${userId} in database.`);
   }
 }
+
+/**
+ * Deletes a user's document from the 'users' collection in Firestore.
+ * Note: This does NOT delete the user from Firebase Authentication.
+ * @param {string} userId The ID of the user document to delete from Firestore.
+ * @returns {Promise<void>} A promise that resolves when the user's Firestore document is successfully deleted.
+ * @throws Will throw an error if deleting the Firestore document fails.
+ */
+export async function deleteUserFirestoreRecord(userId: string): Promise<void> {
+  try {
+    const userDocRef = doc(db, 'users', userId);
+    await deleteDoc(userDocRef);
+  } catch (error) {
+    console.error(`Error deleting user Firestore record ${userId}: `, error);
+    throw new Error(`Failed to delete user record ${userId} from database.`);
+  }
+}
+

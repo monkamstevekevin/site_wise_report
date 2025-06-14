@@ -15,8 +15,18 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { getProjects } from '@/services/projectService';
-import { getUsers, addUser, updateUserAssignedProjects, updateUser } from '@/services/userService'; 
+import { getUsers, addUser, updateUserAssignedProjects, updateUser, deleteUserFirestoreRecord } from '@/services/userService';
 import { sendAssignmentNotification } from '@/ai/flows/assignment-notification-flow';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const userRoleFilterOptions: { value: UserRole | 'ALL'; label: string }[] = [
   { value: 'ALL', label: 'All Roles' },
@@ -35,13 +45,16 @@ export default function UserManagementPage() {
 
   const [isUserFormOpen, setIsUserFormOpen] = useState(false);
   const [editingUser, setEditingUser] = useState< (Partial<UserFormData> & { id?: string }) | undefined >(undefined);
-  
+
   const [isAssignProjectsDialogOpen, setIsAssignProjectsDialogOpen] = useState(false);
   const [userToAssignProjects, setUserToAssignProjects] = useState<User | null>(null);
   const [isProcessingAssignment, setIsProcessingAssignment] = useState(false);
 
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
+
   const { toast } = useToast();
-  const { user: adminAuthUser } = useAuth(); 
+  const { user: adminAuthUser } = useAuth();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<UserRole | 'ALL'>('ALL');
@@ -59,7 +72,7 @@ export default function UserManagementPage() {
       setIsLoadingUsers(false);
     }
   };
-  
+
   useEffect(() => {
     fetchUsers();
 
@@ -88,18 +101,37 @@ export default function UserManagementPage() {
     setIsUserFormOpen(true);
   };
 
-  const handleDeleteUser = (userId: string) => {
-    toast({
-      title: "Delete User (Simulated)",
-      description: `User ${userId} deletion will be connected to Firestore soon.`,
-      variant: "destructive"
-    });
+  const openDeleteDialog = (user: User) => {
+    setUserToDelete(user);
+    setIsDeleteDialogOpen(true);
   };
+
+  const confirmDeleteUser = async () => {
+    if (!userToDelete) return;
+    try {
+      await deleteUserFirestoreRecord(userToDelete.id);
+      toast({
+        title: "User Record Deleted",
+        description: `User "${userToDelete.name}" (ID: ${userToDelete.id}) has been deleted from Firestore. Their authentication record may still exist.`,
+      });
+      await fetchUsers(); // Refresh the list
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Failed to Delete User Record",
+        description: (err as Error).message || "An unexpected error occurred.",
+      });
+    } finally {
+      setIsDeleteDialogOpen(false);
+      setUserToDelete(null);
+    }
+  };
+
 
   const handleUserFormSubmit = async (data: UserFormData & { password?: string }, id?: string) => {
     setIsUserFormOpen(false);
 
-    if (id) { 
+    if (id) {
       try {
         await updateUser(id, { displayName: data.displayName, role: data.role });
         toast({
@@ -112,19 +144,19 @@ export default function UserManagementPage() {
           title: "Failed to Update User",
           description: (err as Error).message || "An unexpected error occurred.",
         });
-        setIsUserFormOpen(true); // Reopen form if update failed to allow correction
+        setIsUserFormOpen(true);
       }
-    } else { 
+    } else {
       if (!data.password) {
         toast({ variant: "destructive", title: "Missing Password", description: "Password is required to create a new user." });
-        setIsUserFormOpen(true); 
+        setIsUserFormOpen(true);
         return;
       }
       try {
-        const newUserId = await addUser({ 
-          displayName: data.displayName, 
-          email: data.email, 
-          role: data.role as UserRole 
+        const newUserId = await addUser({
+          displayName: data.displayName,
+          email: data.email,
+          role: data.role as UserRole
         }, data.password);
         toast({
           title: "User Added Successfully!",
@@ -136,10 +168,10 @@ export default function UserManagementPage() {
           title: "Failed to Add User",
           description: (err as Error).message || "An unexpected error occurred.",
         });
-        setIsUserFormOpen(true); 
+        setIsUserFormOpen(true);
       }
     }
-    await fetchUsers(); 
+    await fetchUsers();
     setEditingUser(undefined);
   };
 
@@ -162,14 +194,14 @@ export default function UserManagementPage() {
       .filter(id => !oldProjectIds.has(id))
       .map(id => allProjects.find(p => p.id === id))
       .filter(p => p !== undefined) as Project[];
-    
+
     try {
       await updateUserAssignedProjects(userId, selectedProjectIds);
       toast({
         title: "Projects Assigned Successfully",
         description: `${targetUser.name}'s project assignments have been updated.`,
       });
-      await fetchUsers(); 
+      await fetchUsers();
 
       for (const project of newlyAssignedProjects) {
         try {
@@ -180,9 +212,9 @@ export default function UserManagementPage() {
             projectLocation: project.location,
             assignerName: adminAuthUser.displayName || adminAuthUser.email || "Admin",
           });
-          
+
           toast({
-            duration: 10000, 
+            duration: 10000,
             title: `Simulated Email for ${project.name}`,
             description: (
               <div className="text-xs">
@@ -205,7 +237,7 @@ export default function UserManagementPage() {
       });
     } finally {
       setIsProcessingAssignment(false);
-      setIsAssignProjectsDialogOpen(false); 
+      setIsAssignProjectsDialogOpen(false);
     }
   };
 
@@ -273,7 +305,7 @@ export default function UserManagementPage() {
           </Button>
         </div>
       </div>
-      
+
       {isLoadingUsers && (
         <div className="flex items-center justify-center py-10 text-muted-foreground">
           <Loader2 className="mr-2 h-6 w-6 animate-spin" /> Loading users...
@@ -288,15 +320,15 @@ export default function UserManagementPage() {
       )}
       {!isLoadingUsers && !usersError && (
         <div className="bg-card p-0 md:p-6 rounded-lg shadow-md">
-          {isProcessingAssignment && 
+          {isProcessingAssignment &&
             <div className="flex items-center justify-center p-4 text-sm text-muted-foreground">
               <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing assignments...
             </div>
           }
-          <UserTable 
-            users={filteredUsers} 
-            onEditUser={handleEditUser} 
-            onDeleteUser={handleDeleteUser}
+          <UserTable
+            users={filteredUsers}
+            onEditUser={handleEditUser}
+            onDeleteUser={openDeleteDialog}
             onAssignProjects={handleOpenAssignProjectsDialog}
           />
         </div>
@@ -313,6 +345,30 @@ export default function UserManagementPage() {
           onAssignProjects={handleAssignProjects}
         />
       )}
+
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <div className="flex items-center">
+              <AlertTriangle className="h-6 w-6 mr-2 text-destructive" />
+              <AlertDialogTitle>Confirm User Record Deletion</AlertDialogTitle>
+            </div>
+            <AlertDialogDescription>
+              Are you sure you want to delete the Firestore record for user "{userToDelete?.name}" (ID: {userToDelete?.id})?
+              This action is irreversible and only deletes the app-specific data. The user's Firebase Authentication account will remain.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setIsDeleteDialogOpen(false)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteUser}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete Record
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

@@ -23,13 +23,13 @@ import {
 import { Badge } from '@/components/ui/badge';
 import type { User, UserRole } from '@/lib/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import type { UserFormData } from './UserFormDialog'; // For typing onEditUser
+import type { UserFormData } from './UserFormDialog';
 
 interface UserTableProps {
   users: User[];
-  onEditUser: (user: Partial<UserFormData> & { id: string }) => void; 
-  onDeleteUser: (userId: string) => void;
-  onAssignProjects: (user: User) => void; 
+  onEditUser: (user: Partial<UserFormData> & { id: string }) => void;
+  onDeleteUser: (user: User) => void; // Changed to pass full user for confirmation dialog
+  onAssignProjects: (user: User) => void;
 }
 
 const roleBadgeVariant: Record<UserRole, "default" | "secondary" | "outline" | "destructive"> = {
@@ -44,15 +44,15 @@ export function UserTable({ users, onEditUser, onDeleteUser, onAssignProjects }:
   const handleEdit = (user: User) => {
     const userToPass = {
       id: user.id,
-      displayName: user.name, 
+      displayName: user.name,
       email: user.email,
       role: user.role,
     };
     onEditUser(userToPass);
   };
 
-  const handleDelete = (userId: string) => {
-    onDeleteUser(userId);
+  const handleDelete = (user: User) => { // Takes full user object
+    onDeleteUser(user);
   };
 
 
@@ -112,8 +112,8 @@ export function UserTable({ users, onEditUser, onDeleteUser, onAssignProjects }:
                       <Briefcase className="mr-2 h-4 w-4" /> Assign Projects
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => handleDelete(user.id)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
-                      <Trash2 className="mr-2 h-4 w-4" /> Delete User (Simulated)
+                    <DropdownMenuItem onClick={() => handleDelete(user)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
+                      <Trash2 className="mr-2 h-4 w-4" /> Delete User
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
