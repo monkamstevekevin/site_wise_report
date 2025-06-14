@@ -105,7 +105,13 @@ export function ReportTable({ reports, onViewReport, onEditReport, onDeleteRepor
         <TableBody>
           {reports.map((report) => {
             const isOwner = report.technicianId === currentUserId;
-            const canEdit = currentUserRole === 'TECHNICIAN' && isOwner && report.status === 'DRAFT';
+            let canEdit = false;
+            if (currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') {
+              canEdit = true;
+            } else if (currentUserRole === 'TECHNICIAN' && isOwner && report.status === 'DRAFT') {
+              canEdit = true;
+            }
+
             const canDelete = (currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') || (isOwner && report.status === 'DRAFT');
 
             return (
@@ -134,7 +140,7 @@ export function ReportTable({ reports, onViewReport, onEditReport, onDeleteRepor
                         <Eye className="mr-2 h-4 w-4" /> View Details
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => handleEdit(report)} disabled={!canEdit}>
-                         <Edit className="mr-2 h-4 w-4" /> {canEdit ? "Edit Draft" : "Edit (Locked)"}
+                         <Edit className="mr-2 h-4 w-4" /> {canEdit ? "Edit Report" : "Edit (Locked)"}
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
