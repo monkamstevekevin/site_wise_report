@@ -106,20 +106,34 @@ export default function ReportsPage() {
     const { role, effectiveTechnicianId: mappedTechId } = mapFirebaseUserToAppRoleAndId(user);
     setCurrentUserRole(role);
     setEffectiveTechnicianId(mappedTechId);
+    console.log(`[ReportsPage] Logged in user: ${user.email}, Determined Role: ${role}`);
+    console.log(`[ReportsPage] ID that WILL BE USED for technician's report query (effectiveTechnicianId): ${mappedTechId}`);
 
 
     try {
       let fetchedReports: FieldReport[] = [];
       if (role === 'TECHNICIAN' && mappedTechId) {
+        console.log(`[ReportsPage] Querying Firestore for reports where technicianId == "${mappedTechId}"`);
         fetchedReports = await getReportsByTechnicianId(mappedTechId);
+        console.log(`[ReportsPage] Firestore returned ${fetchedReports.length} reports for technicianId "${mappedTechId}".`);
+        if (fetchedReports.length === 0) {
+            console.log(`[ReportsPage] No reports found in Firestore for technicianId "${mappedTechId}". Ensure a report exists with this exact technicianId in its 'technicianId' field.`);
+        } else {
+            console.log('[ReportsPage] Fetched reports details:', fetchedReports.map(r => ({id: r.id, projectId: r.projectId, techIdOnReport: r.technicianId, status: r.status})));
+        }
+
       } else if (role === 'ADMIN' || role === 'SUPERVISOR') {
+        console.log("[ReportsPage] Admin/Supervisor fetching all reports.");
         fetchedReports = await getReports();
+        console.log(`[ReportsPage] Firestore returned ${fetchedReports.length} total reports for Admin/Supervisor.`);
       } else {
+        console.log("[ReportsPage] No specific role match or missing technicianId for TECHNICIAN, fetching no reports.");
         fetchedReports = [];
       }
       setAllFetchedReports(fetchedReports);
       
       if (fetchedReports.length === 0 && role === 'TECHNICIAN' && mappedTechId) {
+          // This condition is now handled by the more detailed logging above.
       }
 
     } catch (err) {
@@ -134,14 +148,6 @@ export default function ReportsPage() {
     fetchReportsForUser();
   }, [user, authLoading]);
 
-
-  const handleViewReport = (report: FieldReport) => {
-    toast({ 
-      title: "View Report (Action)", 
-      description: `Viewing details for report ID: ${report.id}. (Full view page TBD)`,
-      duration: 5000 
-    });
-  };
 
   const handleEditReport = (report: FieldReport) => {
     // Permission logic is now more refined within ReportTable and EditPage itself
@@ -335,7 +341,6 @@ export default function ReportsPage() {
         <div className="bg-card p-0 md:p-6 rounded-lg shadow-md">
           <ReportTable
             reports={filteredReports}
-            onViewReport={handleViewReport}
             onEditReport={handleEditReport}
             onDeleteReport={openDeleteDialog} 
             onValidateReport={handleValidateReport}

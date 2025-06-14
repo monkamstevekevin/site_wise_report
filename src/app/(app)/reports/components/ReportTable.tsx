@@ -25,6 +25,7 @@ import { Badge } from '@/components/ui/badge';
 import type { FieldReport } from '@/lib/types';
 import { format } from 'date-fns';
 import type { UserRole } from '@/lib/constants';
+import { useRouter } from 'next/navigation'; // Added useRouter
 
 // Mock user data to map technicianId to name - in a real app, this would come from a data store or context
 const mockTechnicians: Record<string, string> = {
@@ -52,7 +53,6 @@ const materialTypeDisplay: Record<string, string> = { // Allow any string for ma
 
 interface ReportTableProps {
   reports: FieldReport[];
-  onViewReport?: (report: FieldReport) => void;
   onEditReport?: (report: FieldReport) => void;
   onDeleteReport?: (report: FieldReport) => void;
   onValidateReport?: (report: FieldReport) => void; 
@@ -63,7 +63,6 @@ interface ReportTableProps {
 
 export function ReportTable({
   reports,
-  onViewReport,
   onEditReport,
   onDeleteReport,
   onValidateReport,
@@ -71,9 +70,10 @@ export function ReportTable({
   currentUserId,
   currentUserRole
 }: ReportTableProps) {
+  const router = useRouter(); // Initialize router
 
   const handleView = (report: FieldReport) => {
-    onViewReport?.(report);
+    router.push(`/reports/view/${report.id}`); // Navigate to the view page
   };
 
   const handleEdit = (report: FieldReport) => {
