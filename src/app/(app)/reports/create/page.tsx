@@ -11,6 +11,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { addReport } from '@/services/reportService';
 import { detectReportAnomaly, type FieldReport, type AnomalyAssessment } from '@/ai/flows/report-anomaly-detection';
 import { useRouter } from 'next/navigation';
+import { MOCK_TECHNICIAN_EMAIL, MOCK_TECHNICIAN_REPORTS_ID } from '@/lib/constants';
 
 
 const readFileAsDataURL = (file: File): Promise<string> => {
@@ -37,7 +38,8 @@ export default function CreateReportPage() {
       return { success: false };
     }
     
-    console.log('[CreateReportPage] User UID (technicianId being saved):', user.uid);
+    const reportTechnicianId = user.email === MOCK_TECHNICIAN_EMAIL ? MOCK_TECHNICIAN_REPORTS_ID : user.uid;
+    console.log('[CreateReportPage] User UID (technicianId being saved):', reportTechnicianId);
 
 
     let photoDataUriInSubmit: string | undefined = undefined;
@@ -53,7 +55,7 @@ export default function CreateReportPage() {
     
     const tempReportForAI: FieldReport = {
         ...data, 
-        technicianId: user.uid,
+        technicianId: reportTechnicianId,
         photoDataUri: photoDataUriInSubmit,
         id: 'temp-ai-check', 
         createdAt: new Date().toISOString(), 
@@ -63,12 +65,18 @@ export default function CreateReportPage() {
     const assessment = await detectReportAnomaly(tempReportForAI);
 
     if (status === 'SUBMITTED' && assessment.isAnomalous) {
+      toast({ 
+        variant: 'destructive', 
+        title: 'Submission Prevented by AI', 
+        description: assessment.explanation || "AI detected an anomaly. Please review the report.",
+        duration: 10000 
+      });
       return { success: false, anomalyAssessment: assessment };
     }
 
     const reportDataToSave: Omit<FieldReport, 'id' | 'createdAt' | 'updatedAt'> = {
       ...data, 
-      technicianId: user.uid,
+      technicianId: reportTechnicianId,
       photoDataUri: photoDataUriInSubmit, 
       status: status,
     };
@@ -78,6 +86,7 @@ export default function CreateReportPage() {
       return { success: true, reportId: newReportId, anomalyAssessment: assessment };
     } catch (error) {
       console.error('Error creating report:', error);
+      // The toast for this error will be handled in ReportForm based on success: false
       return { success: false, anomalyAssessment: assessment };
     }
   };
@@ -101,4 +110,3 @@ export default function CreateReportPage() {
     </>
   );
 }
-
