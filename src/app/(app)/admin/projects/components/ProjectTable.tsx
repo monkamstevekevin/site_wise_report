@@ -36,7 +36,7 @@ import type { Project } from '@/lib/types';
 
 interface ProjectTableProps {
   projects: Project[];
-  onEditProject?: (project: Project) => void;
+  onEditProject?: (project: Project) => void; // Expects the full project object
   onDeleteProject?: (projectId: string) => void;
 }
 
@@ -122,8 +122,8 @@ export function ProjectTable({ projects, onEditProject, onDeleteProject }: Proje
                         <MapPin className="mr-2 h-4 w-4" /> Naviguer vers le site
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={() => handleEdit(project)} disabled>
-                        <Edit className="mr-2 h-4 w-4" /> Modifier (Bientôt)
+                      <DropdownMenuItem onClick={() => handleEdit(project)}>
+                        <Edit className="mr-2 h-4 w-4" /> Modifier
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => handleDelete(project.id)} className="text-destructive focus:text-destructive focus:bg-destructive/10" disabled>
                         <Trash2 className="mr-2 h-4 w-4" /> Supprimer (Bientôt)

@@ -3,7 +3,7 @@
 
 import { db } from '@/lib/firebase';
 import type { Project } from '@/lib/types';
-import { collection, getDocs, doc, getDoc, Timestamp, query, orderBy, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, Timestamp, query, orderBy, addDoc, serverTimestamp, updateDoc, setDoc } from 'firebase/firestore';
 
 /**
  * @fileOverview Project service for interacting with Firestore.
@@ -11,6 +11,7 @@ import { collection, getDocs, doc, getDoc, Timestamp, query, orderBy, addDoc, se
  * - getProjects - Fetches all projects from Firestore.
  * - getProjectById - Fetches a single project by its ID from Firestore.
  * - addProject - Adds a new project to Firestore.
+ * - updateProject - Updates an existing project in Firestore.
  */
 
 /**
@@ -33,8 +34,9 @@ export async function getProjects(): Promise<Project[]> {
         location: data.location,
         description: data.description || '',
         status: data.status,
-        createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
-        updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
+        // Ensure Timestamps are converted to ISO strings
+        createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : new Date(data.createdAt).toISOString(),
+        updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : new Date(data.updatedAt).toISOString(),
       } as Project;
     });
     return projects;
@@ -62,8 +64,8 @@ export async function getProjectById(projectId: string): Promise<Project | null>
         location: data.location,
         description: data.description || '',
         status: data.status,
-        createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
-        updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
+        createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : new Date(data.createdAt).toISOString(),
+        updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : new Date(data.updatedAt).toISOString(),
       } as Project;
     } else {
       console.log("No such project document with ID:", projectId);
@@ -71,7 +73,7 @@ export async function getProjectById(projectId: string): Promise<Project | null>
     }
   } catch (error) {
     console.error("Error fetching project by ID: ", error);
-    return null;
+    throw new Error(`Failed to fetch project ${projectId} from database.`);
   }
 }
 
@@ -96,5 +98,26 @@ export async function addProject(projectData: Omit<Project, 'id' | 'createdAt' |
   }
 }
 
-// Future functions for update, delete projects will go here.
+/**
+ * Updates an existing project in Firestore.
+ * @param {string} projectId The ID of the project to update.
+ * @param {Partial<Omit<Project, 'id' | 'createdAt' | 'updatedAt'>>} projectData The data to update.
+ * @returns {Promise<void>} A promise that resolves when the project is successfully updated.
+ * @throws Will throw an error if updating the project fails.
+ */
+export async function updateProject(projectId: string, projectData: Partial<Omit<Project, 'id' | 'createdAt' | 'updatedAt'>>): Promise<void> {
+  try {
+    const projectDocRef = doc(db, 'projects', projectId);
+    await updateDoc(projectDocRef, {
+      ...projectData,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error(`Error updating project ${projectId}: `, error);
+    throw new Error(`Failed to update project ${projectId} in database.`);
+  }
+}
+
+
+// Future functions for delete projects will go here.
 

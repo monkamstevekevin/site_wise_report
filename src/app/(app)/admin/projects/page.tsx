@@ -6,13 +6,13 @@ import { PageTitle } from '@/components/common/PageTitle';
 import { HardHat, PlusCircle, Filter, Loader2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ProjectTable } from './components/ProjectTable';
-import { ProjectFormDialog } from './components/ProjectFormDialog';
+import { ProjectFormDialog, type ProjectFormData } from './components/ProjectFormDialog';
 import type { Project } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { getProjects, addProject } from '@/services/projectService'; // Import addProject
+import { getProjects, addProject, updateProject } from '@/services/projectService'; // Import updateProject
 
 const projectStatusFilterOptions: { value: Project['status'] | 'ALL'; label: string }[] = [
   { value: 'ALL', label: 'All Statuses' },
@@ -21,7 +21,7 @@ const projectStatusFilterOptions: { value: Project['status'] | 'ALL'; label: str
   { value: 'COMPLETED', label: 'Completed' },
 ];
 
-type ProjectFormData = Omit<Project, 'id' | 'createdAt' | 'updatedAt'>;
+// type ProjectFormData is now imported from ProjectFormDialog
 
 export default function ProjectManagementPage() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -42,7 +42,7 @@ export default function ProjectManagementPage() {
       const fetchedProjects = await getProjects();
       setProjects(fetchedProjects);
     } catch (err) {
-      setError("Failed to load projects. Please try again later.");
+      setError((err as Error).message || "Failed to load projects. Please try again later.");
       console.error(err);
     } finally {
       setIsLoading(false);
@@ -54,19 +54,12 @@ export default function ProjectManagementPage() {
   }, []);
 
   const handleAddNewProject = () => {
-    setEditingProject(undefined);
+    setEditingProject(undefined); // Clear any project being edited
     setIsProjectFormOpen(true);
   };
 
   const handleEditProject = (project: Project) => {
-    const projectFormData = {
-        id: project.id,
-        name: project.name,
-        location: project.location,
-        description: project.description || '',
-        status: project.status
-    };
-    setEditingProject(projectFormData as any); 
+    setEditingProject(project); // Set the full project object
     setIsProjectFormOpen(true);
   };
 
@@ -75,31 +68,37 @@ export default function ProjectManagementPage() {
     // Firestore delete logic will be added in a future step
     toast({
       title: "Delete Action (Simulated)",
-      description: `If implemented with Firestore, project ${projectId} would be deleted.`,
+      description: `If implemented with Firestore, project ${projectId} would be deleted. Refreshing list...`,
       variant: "destructive"
     });
-    // For now, we can filter out locally to simulate deletion
-    // setProjects(prev => prev.filter(p => p.id !== projectId));
+    fetchProjects(); // Re-fetch to simulate for now or remove if local delete simulation preferred
   };
 
   const handleProjectFormSubmit = async (data: ProjectFormData, id?: string) => {
     setIsProjectFormOpen(false); // Close dialog immediately
 
     if (id) {
-      // Update logic will be handled in a future step
-      console.log("Updating project (Firestore - Simulated):", data, id);
-      toast({
-        title: "Project Update (Simulated)",
-        description: `${data.name} would be updated in Firestore. Refreshing list...`,
-      });
+      // Update existing project
+      try {
+        await updateProject(id, data);
+        toast({
+          title: "Project Updated Successfully",
+          description: `Project "${data.name}" has been updated.`,
+        });
+      } catch (err) {
+        toast({
+          variant: "destructive",
+          title: "Failed to Update Project",
+          description: (err as Error).message || "An unexpected error occurred.",
+        });
+      }
     } else {
       // Add new project
-      console.log("Adding new project to Firestore:", data);
       try {
         const newProjectId = await addProject(data);
         toast({
           title: "Project Added Successfully",
-          description: `Project "${data.name}" (ID: ${newProjectId}) has been added to Firestore.`,
+          description: `Project "${data.name}" (ID: ${newProjectId}) has been added.`,
         });
       } catch (err) {
         toast({
@@ -112,6 +111,7 @@ export default function ProjectManagementPage() {
     
     // Re-fetch projects to update the table
     await fetchProjects();
+    setEditingProject(undefined); // Clear editing state
   };
 
   const filteredProjects = useMemo(() => {
@@ -133,8 +133,11 @@ export default function ProjectManagementPage() {
         actions={
           <ProjectFormDialog
             open={isProjectFormOpen}
-            onOpenChange={setIsProjectFormOpen}
-            projectToEdit={editingProject}
+            onOpenChange={(isOpen) => {
+              setIsProjectFormOpen(isOpen);
+              if (!isOpen) setEditingProject(undefined); // Clear editing project if dialog is closed
+            }}
+            projectToEdit={editingProject} // Pass the full project object
             onFormSubmit={handleProjectFormSubmit}
           >
             <Button className="rounded-lg" onClick={handleAddNewProject}>
@@ -192,7 +195,7 @@ export default function ProjectManagementPage() {
         <div className="bg-card p-0 md:p-6 rounded-lg shadow-md">
           <ProjectTable
             projects={filteredProjects}
-            onEditProject={handleEditProject}
+            onEditProject={handleEditProject} // This will now set the full project object
             onDeleteProject={handleDeleteProject}
           />
         </div>
@@ -200,4 +203,3 @@ export default function ProjectManagementPage() {
     </>
   );
 }
-

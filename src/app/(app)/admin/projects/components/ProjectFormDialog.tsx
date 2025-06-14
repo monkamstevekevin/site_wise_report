@@ -7,7 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+// import { Label } from '@/components/ui/label'; // No longer directly used here for form fields
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -21,7 +21,6 @@ import {
   DialogTrigger,
   DialogClose,
 } from '@/components/ui/dialog';
-// import { useToast } from '@/hooks/use-toast'; // No longer used directly here for submit toast
 import type { Project } from '@/lib/types';
 import { Loader2, PlusCircle, Save } from 'lucide-react';
 
@@ -38,10 +37,10 @@ export type ProjectFormData = z.infer<typeof projectFormSchema>;
 
 interface ProjectFormDialogProps {
   children: React.ReactNode; // Trigger button
-  projectToEdit?: Partial<ProjectFormData> & { id?: string }; // For editing existing projects
+  projectToEdit?: Project; // Changed to full Project type for editing
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
-  onFormSubmit: (data: ProjectFormData, id?: string) => Promise<void>; // Changed: No longer optional
+  onFormSubmit: (data: ProjectFormData, id?: string) => Promise<void>; 
 }
 
 const projectStatusOptions: { value: Project['status']; label: string }[] = [
@@ -51,20 +50,14 @@ const projectStatusOptions: { value: Project['status']; label: string }[] = [
 ];
 
 export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange, onFormSubmit }: ProjectFormDialogProps) {
-  // const { toast } = useToast(); // Moved to parent page
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const form = useForm<ProjectFormData>({
     resolver: zodResolver(projectFormSchema),
-    defaultValues: { // Ensure default values are always set
-      name: projectToEdit?.name || '',
-      location: projectToEdit?.location || '',
-      description: projectToEdit?.description || '',
-      status: projectToEdit?.status || 'ACTIVE',
-    },
+    // Default values will be set by useEffect based on projectToEdit or cleared
   });
 
   React.useEffect(() => {
-    if (open) { // Only reset form when dialog opens or projectToEdit changes
+    if (open) { 
       if (projectToEdit) {
         form.reset({
           name: projectToEdit.name || '',
@@ -80,18 +73,22 @@ export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange,
 
   const onSubmit = async (data: ProjectFormData) => {
     setIsSubmitting(true);
-    // The actual submission logic (calling Firestore service) is handled by the onFormSubmit prop in the parent component
     await onFormSubmit(data, projectToEdit?.id);
     setIsSubmitting(false);
-    // onOpenChange?.(false); // Parent component (projects/page.tsx) now handles closing dialog
-    // form.reset(); // Parent component handles resetting or dialog unmounts
+    // Dialog closing and form reset for next time is handled by onOpenChange in parent or useEffect
   };
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => {
       onOpenChange?.(isOpen);
-      if (!isOpen) { // If dialog is closing, reset the form for next time
-        form.reset(projectToEdit || { name: '', location: '', description: '', status: 'ACTIVE' });
+      if (!isOpen) {
+        // When dialog closes, reset the form to initial state or default if no projectToEdit was set
+        form.reset(projectToEdit ? {
+            name: projectToEdit.name,
+            location: projectToEdit.location,
+            description: projectToEdit.description,
+            status: projectToEdit.status,
+        } : { name: '', location: '', description: '', status: 'ACTIVE' });
       }
     }}>
       <DialogTrigger asChild>{children}</DialogTrigger>
@@ -182,4 +179,3 @@ export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange,
     </Dialog>
   );
 }
-
