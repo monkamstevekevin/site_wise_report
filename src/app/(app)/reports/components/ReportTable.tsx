@@ -12,7 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Eye, Edit, Trash2, MoreVertical, FileText } from 'lucide-react';
+import { Eye, Edit, Trash2, MoreVertical, FileText, CheckCircle, XCircle } from 'lucide-react'; // Added CheckCircle, XCircle
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -54,12 +54,23 @@ interface ReportTableProps {
   reports: FieldReport[];
   onViewReport?: (report: FieldReport) => void;
   onEditReport?: (report: FieldReport) => void;
-  onDeleteReport?: (report: FieldReport) => void; // Changed to pass full report object
-  currentUserId?: string; // For technician-specific actions
+  onDeleteReport?: (report: FieldReport) => void;
+  onValidateReport?: (report: FieldReport) => void; // New prop
+  onRejectReport?: (report: FieldReport) => void;   // New prop
+  currentUserId?: string;
   currentUserRole?: UserRole | null;
 }
 
-export function ReportTable({ reports, onViewReport, onEditReport, onDeleteReport, currentUserId, currentUserRole }: ReportTableProps) {
+export function ReportTable({
+  reports,
+  onViewReport,
+  onEditReport,
+  onDeleteReport,
+  onValidateReport,
+  onRejectReport,
+  currentUserId,
+  currentUserRole
+}: ReportTableProps) {
 
   const handleView = (report: FieldReport) => {
     onViewReport?.(report);
@@ -69,8 +80,16 @@ export function ReportTable({ reports, onViewReport, onEditReport, onDeleteRepor
     onEditReport?.(report);
   };
 
-  const handleDelete = (report: FieldReport) => { // Now expects full report
+  const handleDelete = (report: FieldReport) => {
     onDeleteReport?.(report);
+  };
+
+  const handleValidate = (report: FieldReport) => {
+    onValidateReport?.(report);
+  };
+
+  const handleReject = (report: FieldReport) => {
+    onRejectReport?.(report);
   };
 
   if (reports.length === 0) {
@@ -117,12 +136,14 @@ export function ReportTable({ reports, onViewReport, onEditReport, onDeleteRepor
 
             let canDelete = false;
             if (currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') {
-              // Admins/Supervisors can delete any report for now. Could be restricted by status too.
               canDelete = true; 
             } else if (currentUserRole === 'TECHNICIAN' && isOwner && report.status === 'DRAFT') {
               canDelete = true;
             }
 
+            const canValidateOrReject = 
+              (currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') &&
+              report.status === 'SUBMITTED';
 
             return (
               <TableRow key={report.id}>
@@ -152,9 +173,22 @@ export function ReportTable({ reports, onViewReport, onEditReport, onDeleteRepor
                       <DropdownMenuItem onClick={() => handleEdit(report)} disabled={!canEdit}>
                          <Edit className="mr-2 h-4 w-4" /> {canEdit ? "Modifier Rapport" : "Modifier (Verrouillé)"}
                       </DropdownMenuItem>
+                      
+                      {canValidateOrReject && (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => handleValidate(report)} className="text-green-600 focus:text-green-700 focus:bg-green-50">
+                            <CheckCircle className="mr-2 h-4 w-4" /> Valider le Rapport
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleReject(report)} className="text-red-600 focus:text-red-700 focus:bg-red-50">
+                            <XCircle className="mr-2 h-4 w-4" /> Rejeter le Rapport
+                          </DropdownMenuItem>
+                        </>
+                      )}
+                      
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
-                        onClick={() => handleDelete(report)} // Pass full report object
+                        onClick={() => handleDelete(report)}
                         className="text-destructive focus:text-destructive focus:bg-destructive/10"
                         disabled={!canDelete}
                       >

@@ -16,7 +16,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { UserRole } from '@/lib/constants';
 import { MOCK_TECHNICIAN_EMAIL, MOCK_TECHNICIAN_REPORTS_ID } from '@/lib/constants';
-import { getReports, getReportsByTechnicianId, deleteReport as deleteReportService } from '@/services/reportService'; 
+import { getReports, getReportsByTechnicianId, deleteReport as deleteReportService, updateReport } from '@/services/reportService'; 
 import { useRouter } from 'next/navigation'; 
 import {
   AlertDialog,
@@ -102,19 +102,29 @@ export default function ReportsPage() {
     const { role, effectiveTechnicianId: mappedTechId } = mapFirebaseUserToAppRoleAndId(user);
     setCurrentUserRole(role);
     setEffectiveTechnicianId(mappedTechId);
+    console.log(`[ReportsPage] User: ${user.email}, Role: ${role}, EffectiveTechnicianId for query: ${mappedTechId}`);
+
 
     try {
       let fetchedReports: FieldReport[] = [];
       if (role === 'TECHNICIAN' && mappedTechId) {
+        console.log(`[ReportsPage] Querying for technician ID: ${mappedTechId}`);
         fetchedReports = await getReportsByTechnicianId(mappedTechId);
       } else if (role === 'ADMIN' || role === 'SUPERVISOR') {
+        console.log(`[ReportsPage] Querying for all reports (Admin/Supervisor)`);
         fetchedReports = await getReports();
       } else {
+        console.log(`[ReportsPage] No specific query executed, role: ${role}, mappedTechId: ${mappedTechId}`);
         fetchedReports = [];
       }
       setAllFetchedReports(fetchedReports);
+      console.log(`[ReportsPage] Firestore returned ${fetchedReports.length} reports for technicianId "${mappedTechId}".`);
+      if (fetchedReports.length === 0 && mappedTechId) {
+        console.log(`[ReportsPage] No reports found in Firestore for technicianId "${mappedTechId}". Ensure a report exists with this exact technicianId in its 'technicianId' field.`);
+      }
+
     } catch (err) {
-      console.error("Error fetching reports:", err);
+      console.error("[ReportsPage] Error fetching reports:", err);
       setReportsError((err as Error).message || "Failed to load reports.");
       setAllFetchedReports([]);
     } finally {
@@ -136,7 +146,7 @@ export default function ReportsPage() {
   };
 
   const handleEditReport = (report: FieldReport) => {
-    const canEdit = (currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') ||
+    const canEdit = (currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR' && (report.status === 'DRAFT' || report.status === 'SUBMITTED')) ||
                     (currentUserRole === 'TECHNICIAN' && report.technicianId === effectiveTechnicianId && report.status === 'DRAFT');
     
     if (canEdit) {
@@ -185,6 +195,36 @@ export default function ReportsPage() {
       setReportToDelete(null);
     }
   };
+
+  const handleValidateReport = async (report: FieldReport) => {
+    if (report.status !== 'SUBMITTED') {
+      toast({ variant: 'destructive', title: 'Action non autorisée', description: 'Seuls les rapports soumis peuvent être validés.' });
+      return;
+    }
+    try {
+      await updateReport(report.id, { status: 'VALIDATED' });
+      toast({ title: 'Rapport Validé', description: `Le rapport ID: ${report.id} a été marqué comme VALIDÉ.` });
+      await fetchReportsForUser();
+    } catch (err) {
+      toast({ variant: 'destructive', title: 'Erreur de Validation', description: (err as Error).message || "Une erreur s'est produite." });
+    }
+  };
+
+  const handleRejectReport = async (report: FieldReport) => {
+     if (report.status !== 'SUBMITTED') {
+      toast({ variant: 'destructive', title: 'Action non autorisée', description: 'Seuls les rapports soumis peuvent être rejetés.' });
+      return;
+    }
+    // TODO: Add a dialog for rejection reason in the future
+    try {
+      await updateReport(report.id, { status: 'REJECTED' });
+      toast({ title: 'Rapport Rejeté', description: `Le rapport ID: ${report.id} a été marqué comme REJETÉ.` });
+      await fetchReportsForUser();
+    } catch (err) {
+      toast({ variant: 'destructive', title: 'Erreur de Rejet', description: (err as Error).message || "Une erreur s'est produite." });
+    }
+  };
+
 
   const filteredReports = useMemo(() => {
     return allFetchedReports.filter(report => {
@@ -303,6 +343,8 @@ export default function ReportsPage() {
             onViewReport={handleViewReport}
             onEditReport={handleEditReport}
             onDeleteReport={openDeleteDialog} 
+            onValidateReport={handleValidateReport}
+            onRejectReport={handleRejectReport}
             currentUserId={effectiveTechnicianId || user?.uid} 
             currentUserRole={currentUserRole}
           />
