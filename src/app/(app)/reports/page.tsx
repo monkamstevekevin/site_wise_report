@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { FileText, PlusCircle, Filter, Loader2, AlertTriangleIcon, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
 import { ReportTable } from './components/ReportTable';
+import { RejectionReasonDialog } from './components/RejectionReasonDialog'; // Added
 import type { FieldReport } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
@@ -89,6 +90,9 @@ export default function ReportsPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [reportToDelete, setReportToDelete] = useState<FieldReport | null>(null);
 
+  const [isRejectionDialogOpen, setIsRejectionDialogOpen] = useState(false);
+  const [reportToReject, setReportToReject] = useState<FieldReport | null>(null);
+
 
   const fetchReportsForUser = async () => {
     if (authLoading || !user) {
@@ -102,29 +106,23 @@ export default function ReportsPage() {
     const { role, effectiveTechnicianId: mappedTechId } = mapFirebaseUserToAppRoleAndId(user);
     setCurrentUserRole(role);
     setEffectiveTechnicianId(mappedTechId);
-    console.log(`[ReportsPage] User: ${user.email}, Role: ${role}, EffectiveTechnicianId for query: ${mappedTechId}`);
 
 
     try {
       let fetchedReports: FieldReport[] = [];
       if (role === 'TECHNICIAN' && mappedTechId) {
-        console.log(`[ReportsPage] Querying for technician ID: ${mappedTechId}`);
         fetchedReports = await getReportsByTechnicianId(mappedTechId);
       } else if (role === 'ADMIN' || role === 'SUPERVISOR') {
-        console.log(`[ReportsPage] Querying for all reports (Admin/Supervisor)`);
         fetchedReports = await getReports();
       } else {
-        console.log(`[ReportsPage] No specific query executed, role: ${role}, mappedTechId: ${mappedTechId}`);
         fetchedReports = [];
       }
       setAllFetchedReports(fetchedReports);
-      console.log(`[ReportsPage] Firestore returned ${fetchedReports.length} reports for technicianId "${mappedTechId}".`);
-      if (fetchedReports.length === 0 && mappedTechId) {
-        console.log(`[ReportsPage] No reports found in Firestore for technicianId "${mappedTechId}". Ensure a report exists with this exact technicianId in its 'technicianId' field.`);
+      
+      if (fetchedReports.length === 0 && role === 'TECHNICIAN' && mappedTechId) {
       }
 
     } catch (err) {
-      console.error("[ReportsPage] Error fetching reports:", err);
       setReportsError((err as Error).message || "Failed to load reports.");
       setAllFetchedReports([]);
     } finally {
@@ -146,33 +144,14 @@ export default function ReportsPage() {
   };
 
   const handleEditReport = (report: FieldReport) => {
-    const canEdit = (currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR' && (report.status === 'DRAFT' || report.status === 'SUBMITTED')) ||
-                    (currentUserRole === 'TECHNICIAN' && report.technicianId === effectiveTechnicianId && report.status === 'DRAFT');
-    
-    if (canEdit) {
-      router.push(`/reports/edit/${report.id}`);
-    } else {
-      toast({
-        variant: "destructive",
-        title: "Cannot Edit Report",
-        description: "This report cannot be edited, either due to its status or your permissions.",
-      });
-    }
+    // Permission logic is now more refined within ReportTable and EditPage itself
+    router.push(`/reports/edit/${report.id}`);
   };
 
   const openDeleteDialog = (report: FieldReport) => {
-    const canDelete = (currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') ||
-                      (currentUserRole === 'TECHNICIAN' && report.technicianId === effectiveTechnicianId && report.status === 'DRAFT');
-    if (canDelete) {
-      setReportToDelete(report);
-      setIsDeleteDialogOpen(true);
-    } else {
-       toast({
-        variant: "destructive",
-        title: "Cannot Delete Report",
-        description: "This report cannot be deleted, either due to its status or your permissions.",
-      });
-    }
+    // Permission logic is now more refined within ReportTable
+    setReportToDelete(report);
+    setIsDeleteDialogOpen(true);
   };
 
   const confirmDeleteReport = async () => {
@@ -210,18 +189,34 @@ export default function ReportsPage() {
     }
   };
 
-  const handleRejectReport = async (report: FieldReport) => {
-     if (report.status !== 'SUBMITTED') {
+  const handleOpenRejectionDialog = (report: FieldReport) => {
+    if (report.status !== 'SUBMITTED') {
       toast({ variant: 'destructive', title: 'Action non autorisée', description: 'Seuls les rapports soumis peuvent être rejetés.' });
       return;
     }
-    // TODO: Add a dialog for rejection reason in the future
+    setReportToReject(report);
+    setIsRejectionDialogOpen(true);
+  };
+
+  const handleConfirmRejection = async (reportId: string, reason: string) => {
+    setIsRejectionDialogOpen(false); // Close dialog immediately
     try {
-      await updateReport(report.id, { status: 'REJECTED' });
-      toast({ title: 'Rapport Rejeté', description: `Le rapport ID: ${report.id} a été marqué comme REJETÉ.` });
+      await updateReport(reportId, { status: 'REJECTED', rejectionReason: reason });
+      toast({ 
+        title: 'Rapport Rejeté', 
+        description: (
+          <div>
+            <p>Le rapport ID: {reportId} a été marqué comme REJETÉ.</p>
+            <p className="text-xs mt-1">Raison: {reason}</p>
+          </div>
+        )
+      });
       await fetchReportsForUser();
     } catch (err) {
       toast({ variant: 'destructive', title: 'Erreur de Rejet', description: (err as Error).message || "Une erreur s'est produite." });
+      setIsRejectionDialogOpen(true); // Re-open dialog on error if needed, or handle differently
+    } finally {
+       setReportToReject(null); // Clear the report to reject
     }
   };
 
@@ -344,7 +339,7 @@ export default function ReportsPage() {
             onEditReport={handleEditReport}
             onDeleteReport={openDeleteDialog} 
             onValidateReport={handleValidateReport}
-            onRejectReport={handleRejectReport}
+            onRejectReport={handleOpenRejectionDialog} // Updated prop
             currentUserId={effectiveTechnicianId || user?.uid} 
             currentUserRole={currentUserRole}
           />
@@ -373,7 +368,16 @@ export default function ReportsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <RejectionReasonDialog
+        open={isRejectionDialogOpen}
+        onOpenChange={(open) => {
+          setIsRejectionDialogOpen(open);
+          if (!open) setReportToReject(null); // Clear report when dialog closes
+        }}
+        report={reportToReject}
+        onConfirmRejection={handleConfirmRejection}
+      />
     </>
   );
 }
-

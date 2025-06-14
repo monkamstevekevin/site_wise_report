@@ -3,7 +3,9 @@ import type { FieldReport as AIFieldReport } from '@/ai/flows/report-anomaly-det
 import type { LucideIcon } from 'lucide-react';
 
 // Re-exporting or aligning with AIFieldReport to ensure consistency
-export type FieldReport = AIFieldReport;
+export type FieldReport = AIFieldReport & {
+  rejectionReason?: string; // Added for rejection feedback
+};
 
 export type UserRole = 'ADMIN' | 'SUPERVISOR' | 'TECHNICIAN';
 
@@ -74,3 +76,4 @@ export interface ChatMessage {
   timestamp: string; // ISO string
   isOwnMessage?: boolean; // Helper for UI, set client-side
 }
+

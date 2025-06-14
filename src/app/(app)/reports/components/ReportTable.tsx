@@ -1,7 +1,7 @@
 
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react'; // Added useState
 import {
   Table,
   TableBody,
@@ -12,7 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Eye, Edit, Trash2, MoreVertical, FileText, CheckCircle, XCircle } from 'lucide-react'; // Added CheckCircle, XCircle
+import { Eye, Edit, Trash2, MoreVertical, FileText, CheckCircle, XCircle } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -56,7 +56,7 @@ interface ReportTableProps {
   onEditReport?: (report: FieldReport) => void;
   onDeleteReport?: (report: FieldReport) => void;
   onValidateReport?: (report: FieldReport) => void; 
-  onRejectReport?: (report: FieldReport) => void;   
+  onRejectReport?: (report: FieldReport) => void; // Changed to trigger dialog
   currentUserId?: string;
   currentUserRole?: UserRole | null;
 }
@@ -88,9 +88,10 @@ export function ReportTable({
     onValidateReport?.(report);
   };
 
-  const handleReject = (report: FieldReport) => {
-    onRejectReport?.(report);
+  const handleOpenRejectionDialog = (report: FieldReport) => {
+    onRejectReport?.(report); // This prop will now trigger the dialog opening in parent
   };
+
 
   if (reports.length === 0) {
     return (
@@ -178,7 +179,7 @@ export function ReportTable({
                           <DropdownMenuItem onClick={() => handleValidate(report)} className="text-green-600 focus:text-green-700 focus:bg-green-50">
                             <CheckCircle className="mr-2 h-4 w-4" /> Valider le Rapport
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleReject(report)} className="text-red-600 focus:text-red-700 focus:bg-red-50">
+                          <DropdownMenuItem onClick={() => handleOpenRejectionDialog(report)} className="text-red-600 focus:text-red-700 focus:bg-red-50">
                             <XCircle className="mr-2 h-4 w-4" /> Rejeter le Rapport
                           </DropdownMenuItem>
                         </>
@@ -203,4 +204,3 @@ export function ReportTable({
     </div>
   );
 }
-

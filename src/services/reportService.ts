@@ -41,7 +41,7 @@ const mapDocToFieldReport = (docSnapshot: any): FieldReport => {
   return {
     id: docSnapshot.id,
     projectId: data.projectId || 'N/A',
-    technicianId: data.technicianId || 'N/A', // This is the crucial field
+    technicianId: data.technicianId || 'N/A', 
     materialType: data.materialType || 'other',
     temperature: typeof data.temperature === 'number' ? data.temperature : 0,
     volume: typeof data.volume === 'number' ? data.volume : 0,
@@ -54,6 +54,7 @@ const mapDocToFieldReport = (docSnapshot: any): FieldReport => {
     status: data.status || 'DRAFT',
     attachments: Array.isArray(data.attachments) ? data.attachments : [],
     photoDataUri: data.photoDataUri || undefined,
+    rejectionReason: data.rejectionReason || undefined, // Added
     createdAt: formatTimestamp(data.createdAt),
     updatedAt: formatTimestamp(data.updatedAt),
   };
@@ -146,7 +147,6 @@ export async function getReportById(reportId: string): Promise<FieldReport | nul
     if (docSnap.exists()) {
       return mapDocToFieldReport(docSnap);
     } else {
-      console.log("[Service/getReportById] No such report document with ID:", reportId);
       return null;
     }
   } catch (error) {
@@ -170,6 +170,8 @@ export async function addReport(
     const reportsCollectionRef = collection(db, 'reports');
     const reportPayload = {
       ...reportData,
+      // Ensure rejectionReason is not accidentally saved on new report creation
+      rejectionReason: reportData.rejectionReason || null, 
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
@@ -197,11 +199,20 @@ export async function updateReport(
     const reportDocRef = doc(db, 'reports', reportId);
     
     const updatePayload: any = { ...reportData };
-    // Ensure photoDataUri is explicitly set to null if undefined is passed and it's a key in reportData
-    // This is to handle cases where the photo is removed.
+
     if (reportData.photoDataUri === undefined && Object.prototype.hasOwnProperty.call(reportData, 'photoDataUri')) {
       updatePayload.photoDataUri = null; 
     }
+    
+    // If status is changed to something other than REJECTED, clear the rejectionReason
+    if (reportData.status && reportData.status !== 'REJECTED') {
+      updatePayload.rejectionReason = null;
+    } else if (Object.prototype.hasOwnProperty.call(reportData, 'rejectionReason')) {
+      // Ensure rejectionReason is explicitly set to null if it's being cleared but status isn't changing
+      // Or it will be the provided reason if status is REJECTED
+      updatePayload.rejectionReason = reportData.rejectionReason || null;
+    }
+
 
     await updateDoc(reportDocRef, {
       ...updatePayload,
@@ -230,4 +241,3 @@ export async function deleteReport(reportId: string): Promise<void> {
     throw new Error(`Failed to delete report ${reportId} from database. Firebase Error: ${firestoreError.code} - ${firestoreError.message}.`);
   }
 }
-

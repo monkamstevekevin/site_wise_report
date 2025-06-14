@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { PageTitle } from '@/components/common/PageTitle';
-import { FileText, ArrowLeft, Loader2, AlertTriangleIcon } from 'lucide-react';
+import { FileText, ArrowLeft, Loader2, AlertTriangleIcon, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { ReportForm, type ReportSubmitPayload } from '@/app/(app)/reports/create/components/ReportForm'; // Reusing the form
@@ -13,7 +13,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { getReportById, updateReport } from '@/services/reportService';
 import { detectReportAnomaly, type FieldReport, type AnomalyAssessment } from '@/ai/flows/report-anomaly-detection';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'; // Added CardDescription
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; // Added Alert components
 import type { UserRole } from '@/lib/constants';
 import { MOCK_TECHNICIAN_EMAIL, MOCK_TECHNICIAN_REPORTS_ID } from '@/lib/constants';
 
@@ -27,10 +28,8 @@ const readFileAsDataURL = (file: File): Promise<string> => {
   });
 };
 
-// Helper to determine user role based on email for permission checks
-// This should ideally come from a more robust role management system or user profile in DB
 const mapFirebaseUserToAppRole = (firebaseUser: any): UserRole => {
-  if (!firebaseUser || !firebaseUser.email) return 'TECHNICIAN'; // Default if no email
+  if (!firebaseUser || !firebaseUser.email) return 'TECHNICIAN'; 
   if (firebaseUser.email === 'janesteve237@gmail.com') return 'ADMIN';
   if (firebaseUser.email.includes('admin@example.com')) return 'ADMIN';
   if (firebaseUser.email.includes('supervisor@example.com')) return 'SUPERVISOR';
@@ -127,14 +126,19 @@ export default function EditReportPage() {
       return { success: false, anomalyAssessment: assessment };
     }
 
-    // For rejected reports being resubmitted, their status becomes 'SUBMITTED'
     const finalStatus = reportToEdit.status === 'REJECTED' && status === 'SUBMITTED' ? 'SUBMITTED' : status;
-
-    const reportDataToUpdate: Partial<Omit<FieldReport, 'id' | 'createdAt' | 'updatedAt' | 'technicianId' | 'projectId'>> = {
+    
+    const reportDataToUpdate: Partial<Omit<FieldReport, 'id' | 'createdAt' | 'updatedAt' | 'technicianId' | 'projectId'>> & { rejectionReason?: string | null } = {
       ...data,
       status: finalStatus, 
       photoDataUri: finalPhotoDataUri,
     };
+    
+    // If the report is being submitted (and was previously rejected), clear the rejection reason
+    if (finalStatus === 'SUBMITTED' && reportToEdit.status === 'REJECTED') {
+        reportDataToUpdate.rejectionReason = null; 
+    }
+
 
     try {
       await updateReport(reportToEdit.id, reportDataToUpdate);
@@ -198,6 +202,17 @@ export default function EditReportPage() {
           </Button>
         }
       />
+      {reportToEdit.status === 'REJECTED' && reportToEdit.rejectionReason && (
+        <Alert variant="destructive" className="mb-6">
+          <AlertTriangleIcon className="h-4 w-4" />
+          <AlertTitle>Rapport Rejeté</AlertTitle>
+          <AlertDescription>
+            <p className="font-semibold">Raison du rejet :</p>
+            <p className="whitespace-pre-wrap">{reportToEdit.rejectionReason}</p>
+            <p className="mt-2">Veuillez corriger les informations ci-dessous et resoumettre le rapport.</p>
+          </AlertDescription>
+        </Alert>
+      )}
       <ReportForm
         reportToEdit={reportToEdit}
         onSubmitReport={handleUpdateReportSubmit}
@@ -206,4 +221,3 @@ export default function EditReportPage() {
     </>
   );
 }
-
