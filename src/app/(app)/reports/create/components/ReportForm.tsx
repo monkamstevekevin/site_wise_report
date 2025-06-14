@@ -27,7 +27,6 @@ const MAX_FILE_SIZE_MB = 5;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 
-// This schema is used by react-hook-form
 const reportFormSchema = z.object({
   projectId: z.string().min(1, 'Project ID is required'),
   materialType: z.enum(['cement', 'asphalt', 'gravel', 'sand', 'other'], {
@@ -43,7 +42,7 @@ const reportFormSchema = z.object({
     required_error: 'Sampling method is required.',
   }),
   notes: z.string().optional(),
-  photo: z // FileList or undefined
+  photo: z
     .custom<FileList>()
     .optional()
     .refine(
@@ -59,32 +58,14 @@ const reportFormSchema = z.object({
 
 export type ReportFormData = z.infer<typeof reportFormSchema>;
 
-// Data structure passed to the onSubmitReport prop by the form
 export type ReportSubmitPayload = Omit<FieldReport, 'id' | 'createdAt' | 'updatedAt' | 'technicianId' | 'photoDataUri'> & {
-  // technicianId will be added by the parent page from useAuth()
   // photoDataUri is derived from photoFile by the parent
 };
-
-
-const materialTypeOptions: { value: ReportFormData['materialType']; label: string }[] = [
-  { value: 'cement', label: 'Cement' },
-  { value: 'asphalt', label: 'Asphalt' },
-  { value: 'gravel', label: 'Gravel' },
-  { value: 'sand', label: 'Sand' },
-  { value: 'other', label: 'Other' },
-];
-
-const samplingMethodOptions: { value: ReportFormData['samplingMethod']; label: string }[] = [
-  { value: 'grab', label: 'Grab Sample' },
-  { value: 'composite', label: 'Composite Sample' },
-  { value: 'core', label: 'Core Sample' },
-  { value: 'other', label: 'Other Method' },
-];
 
 const initialReportFormValues: ReportFormData = {
   projectId: '',
   materialType: undefined as unknown as ReportFormData['materialType'],
-  temperature: '' as unknown as number, // Zod coerce will handle empty string to number
+  temperature: '' as unknown as number,
   volume: '' as unknown as number,
   density: '' as unknown as number,
   humidity: '' as unknown as number,
@@ -98,11 +79,11 @@ const initialReportFormValues: ReportFormData = {
 
 interface ReportFormProps {
   reportToEdit?: FieldReport;
-  isLoadingExternally?: boolean; // Used when parent is fetching reportToEdit
+  isLoadingExternally?: boolean;
   onSubmitReport: (
     data: ReportSubmitPayload,
     status: 'DRAFT' | 'SUBMITTED',
-    photoFile?: File | null // File for new/changed, null for removed, undefined for untouched
+    photoFile?: File | null 
   ) => Promise<{ success: boolean; reportId?: string; anomalyAssessment?: AnomalyAssessment }>;
 }
 
@@ -127,27 +108,25 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
 
   useEffect(() => {
     const fetchProjectDataForForm = async () => {
-      if (authLoading || !user) { // Wait for auth and user
+      if (authLoading || !user) {
           setIsLoadingProjectsData(false);
           setAssignedProjectsList([]);
-          form.setValue('projectId', ''); // Clear project ID if no user
+          form.setValue('projectId', ''); 
           return;
       }
       setIsLoadingProjectsData(true);
       try {
         const allFetchedProjects = await getProjects();
-        const userProfile = await getUserById(user.uid);
+        const userProfile = await getUserById(user.uid); // Fetch current user's profile
         const currentUserAssignedIds = userProfile?.assignedProjectIds || [];
         
         const userProjects = allFetchedProjects.filter(p => currentUserAssignedIds.includes(p.id));
         setAssignedProjectsList(userProjects);
         
-        if (!isEditMode) { // Only set default project for new reports
-            if (userProjects.length > 0) {
-                form.setValue('projectId', userProjects[0].id); 
-            } else {
-                form.setValue('projectId', ''); 
-            }
+        if (!isEditMode && userProjects.length > 0 && !form.getValues('projectId')) {
+            form.setValue('projectId', userProjects[0].id); 
+        } else if (!isEditMode && userProjects.length === 0) {
+             form.setValue('projectId', '');
         }
 
       } catch (error) {
@@ -160,7 +139,7 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
       }
     };
     fetchProjectDataForForm();
-  }, [user, authLoading, form, toast, isEditMode]); // Added isEditMode dependency
+  }, [user, authLoading, form, toast, isEditMode]);
 
 
   useEffect(() => {
@@ -176,7 +155,7 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
         supplier: reportToEdit.supplier,
         samplingMethod: reportToEdit.samplingMethod as ReportFormData['samplingMethod'],
         notes: reportToEdit.notes || '',
-        photo: undefined, // photo FileList is for new uploads
+        photo: undefined, 
         attachmentUrls: reportToEdit.attachments.join(', ') || '',
       });
       if (reportToEdit.photoDataUri) {
@@ -184,13 +163,13 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
       } else {
         setPhotoPreviewUrl(null);
       }
-    } else {
-        // If creating, and projects have loaded, set default project if not already set
-        if (assignedProjectsList.length > 0 && !form.getValues('projectId')) {
-            form.setValue('projectId', assignedProjectsList[0].id);
-        }
+    } else if (!isEditMode) {
+        form.reset(initialReportFormValues); // Ensure reset for create mode
+        setPhotoPreviewUrl(null);
+        if(photoInputRef.current) photoInputRef.current.value = '';
+        // Default project setting is now handled in fetchProjectDataForForm
     }
-  }, [reportToEdit, isEditMode, form, assignedProjectsList]); // assignedProjectsList added
+  }, [reportToEdit, isEditMode, form]);
 
   const handlePhotoInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -201,20 +180,16 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
         setPhotoPreviewUrl(reader.result as string);
       };
       reader.readAsDataURL(file);
-    } else { // No file selected or selection cancelled
+    } else { 
       form.setValue('photo', undefined, { shouldValidate: true });
-      // If in edit mode and there was an existing photo, removing it here should clear the preview
-      // but the decision to remove the photo from DB is handled on submit
       setPhotoPreviewUrl(reportToEdit?.photoDataUri && !form.getValues('photo')?.[0] ? reportToEdit.photoDataUri : null);
     }
   };
 
   const removePhotoPreview = () => {
     setPhotoPreviewUrl(null);
-    form.setValue('photo', undefined, { shouldValidate: true }); // Clear RHF state for photo
-    if(photoInputRef.current) photoInputRef.current.value = ''; // Clear file input
-    // This visually removes the preview. On submit, if 'photo' is undefined (and was previously set),
-    // the parent will handle it as photo removal from DB.
+    form.setValue('photo', undefined, { shouldValidate: true }); 
+    if(photoInputRef.current) photoInputRef.current.value = ''; 
   };
 
   const handleSubmitClick = async (data: ReportFormData, status: 'DRAFT' | 'SUBMITTED') => {
@@ -224,11 +199,10 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
     }
     setIsSubmittingForm(true);
     setSubmitActionType(status);
-    setCurrentAnomalyResult(null);
+    setCurrentAnomalyResult(null); // Clear previous anomaly result
 
     const reportPayload: ReportSubmitPayload = {
       projectId: data.projectId,
-      // technicianId is added by the parent based on logged-in user
       materialType: data.materialType,
       temperature: data.temperature,
       volume: data.volume,
@@ -238,19 +212,16 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
       supplier: data.supplier,
       samplingMethod: data.samplingMethod,
       notes: data.notes || '',
-      status: status, // status will be set here
+      status: status, 
       attachments: data.attachmentUrls ? data.attachmentUrls.split(',').map(url => url.trim()).filter(url => url) : [],
-      // photoDataUri is handled by parent based on photoFile
     };
     
-    // Determine photoFile status: File, null (removed), or undefined (untouched)
     let photoFileArg: File | null | undefined = undefined;
     if (data.photo && data.photo.length > 0) {
-        photoFileArg = data.photo[0]; // New or changed photo
+        photoFileArg = data.photo[0]; 
     } else if (isEditMode && reportToEdit?.photoDataUri && !photoPreviewUrl) {
-        photoFileArg = null; // Photo was present and explicitly removed
-    } // Else, photoFileArg remains undefined (no change or no photo initially)
-
+        photoFileArg = null; 
+    }
 
     toast({ title: 'Processing Report...', description: 'AI checking for anomalies...' });
     
@@ -259,16 +230,17 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
 
     if (success) {
       const actionVerb = isEditMode ? "updated" : "created";
-      const anomalyMessage = anomalyAssessment?.isAnomalous ? `Report ${actionVerb} but flagged by AI.` : `Report ${actionVerb}. No anomalies detected.`;
+      const anomalyMessage = anomalyAssessment?.isAnomalous ? `Report ${actionVerb} and AI analysis complete.` : `Report ${actionVerb}. No anomalies detected.`;
       
       toast({
-        variant: anomalyAssessment?.isAnomalous ? 'destructive' : 'default',
+        variant: anomalyAssessment?.isAnomalous && status === 'SUBMITTED' ? 'default' : (anomalyAssessment?.isAnomalous ? 'destructive' : 'default'), // default for info on draft, destructive for anomaly on submit attempt
         title: isEditMode ? 'Report Updated' : 'Report Created',
-        description: `${reportId ? `ID: ${reportId}. ` : ''}${anomalyMessage}`,
+        description: `${reportId ? `ID: ${reportId}. ` : ''}${anomalyMessage} ${status === 'DRAFT' && anomalyAssessment?.isAnomalous ? 'Anomaly detected in draft.' : ''}`,
         duration: 7000,
       });
 
-      if (!isEditMode) { // Only reset form completely in create mode
+      // Reset form only in create mode OR if it was a DRAFT submission (even in edit mode)
+      if (!isEditMode || status === 'DRAFT') {
         form.reset(initialReportFormValues);
         setPhotoPreviewUrl(null);
         if(photoInputRef.current) photoInputRef.current.value = '';
@@ -281,9 +253,19 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
         form.setValue('materialType', undefined as unknown as ReportFormData['materialType']);
         form.setValue('samplingMethod', undefined as unknown as ReportFormData['samplingMethod']);
       }
-      // Navigation for edit mode is handled by the parent page
+      // Navigation for successful "SUBMITTED" in edit mode is handled by the parent EditReportPage
     } else {
-      toast({ variant: 'destructive', title: 'Error', description: `Failed to ${isEditMode ? 'update' : 'create'} report.` });
+      // This case is now specifically for when success is false,
+      // which primarily happens if AI blocks a "SUBMITTED" action.
+      toast({ 
+        variant: 'destructive', 
+        title: status === 'SUBMITTED' && anomalyAssessment?.isAnomalous ? 'Submission Prevented by AI' : 'Error', 
+        description: anomalyAssessment?.isAnomalous 
+          ? anomalyAssessment.explanation 
+          : `Failed to ${isEditMode ? 'update' : 'create'} report.`,
+        duration: 10000 // Longer duration for errors user needs to read
+      });
+      // DO NOT RESET THE FORM, so user can make corrections
     }
 
     setIsSubmittingForm(false);
@@ -488,7 +470,7 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
                         type="file"
                         accept="image/*"
                         onChange={handlePhotoInputChange}
-                        name={field.name} // RHF needs name
+                        name={field.name} 
                         ref={photoInputRef}
                         disabled={isSubmittingForm}
                         className="pt-2"

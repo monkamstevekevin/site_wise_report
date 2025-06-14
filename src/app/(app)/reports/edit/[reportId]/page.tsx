@@ -39,19 +39,16 @@ export default function EditReportPage() {
   const [errorLoadingReport, setErrorLoadingReport] = useState<string | null>(null);
 
   useEffect(() => {
-    if (reportId && user) { // Ensure user is available to check permissions if needed later
+    if (reportId && user) { 
       setIsLoadingReport(true);
       setErrorLoadingReport(null);
       getReportById(reportId)
         .then(data => {
           if (data) {
-            // Basic permission check: only report owner (technician) or admin/supervisor can edit.
-            // This is a client-side check; server-side rules in Firestore are crucial.
             const isOwner = data.technicianId === user.uid;
-            // A more robust role check would involve fetching user's role from your user service/context
             const isAdminOrSupervisor = user.email?.includes('admin@') || user.email?.includes('supervisor@'); 
             
-            if (isOwner || isAdminOrSupervisor || data.status === 'DRAFT') { // Allow edit if draft, or owner, or admin/supervisor
+            if (isOwner || isAdminOrSupervisor || data.status === 'DRAFT') { 
                  setReportToEdit(data);
             } else {
                 setErrorLoadingReport("You do not have permission to edit this report, or it's not in a state that allows editing by you.");
@@ -85,9 +82,9 @@ export default function EditReportPage() {
 
     let finalPhotoDataUri: string | undefined = reportToEdit.photoDataUri;
 
-    if (photoFile === null) { // Explicit removal
+    if (photoFile === null) { 
       finalPhotoDataUri = undefined;
-    } else if (photoFile) { // New file uploaded
+    } else if (photoFile) { 
       try {
         finalPhotoDataUri = await readFileAsDataURL(photoFile);
       } catch (error) {
@@ -96,40 +93,37 @@ export default function EditReportPage() {
         return { success: false };
       }
     }
-    // If photoFile is undefined, finalPhotoDataUri remains as reportToEdit.photoDataUri (no change)
+    
+    const tempReportForAI: FieldReport = {
+        ...reportToEdit, // Start with existing data
+        ...data, // Overlay with form data
+        photoDataUri: finalPhotoDataUri,
+        status: status, // Use the new status for AI check
+        updatedAt: new Date().toISOString(), // Approximate for AI check
+    };
+    const assessment = await detectReportAnomaly(tempReportForAI);
+
+    if (status === 'SUBMITTED' && assessment.isAnomalous) {
+      return { success: false, anomalyAssessment: assessment };
+    }
 
     const reportDataToUpdate: Partial<Omit<FieldReport, 'id' | 'createdAt' | 'updatedAt' | 'technicianId' | 'projectId'>> = {
-      ...data, // Contains all form fields
-      status: status, // Status from the button clicked
+      ...data,
+      status: status, 
       photoDataUri: finalPhotoDataUri,
     };
 
-    // projectId and technicianId should not be changed via this form.
-    // They are part of ReportSubmitPayload but we ensure they are not passed to updateReport if they shouldn't change.
-    // The updateReport service function signature already omits them.
-
     try {
       await updateReport(reportToEdit.id, reportDataToUpdate);
-      
-      const fullReportForAI: FieldReport = {
-        ...reportToEdit, // Start with existing data
-        ...reportDataToUpdate, // Overlay with updated data
-        // Ensure all necessary fields for FieldReport are present
-        id: reportToEdit.id,
-        technicianId: reportToEdit.technicianId, 
-        projectId: reportToEdit.projectId,
-        createdAt: reportToEdit.createdAt, // Keep original createdAt
-        updatedAt: new Date().toISOString(), // Approximate for AI
-      };
-      const assessment = await detectReportAnomaly(fullReportForAI);
-      
-      toast({ title: 'Report Updated', description: `Report ID ${reportToEdit.id} has been updated.`});
-      router.push('/reports'); // Navigate back to reports list after successful update
+      // If it was a draft and had an anomaly, the assessment is still returned for informational purposes.
+      // If it was submitted without anomaly, that's also returned.
+      if (status === 'SUBMITTED') { // Only navigate away if it was a successful submission
+          router.push('/reports'); 
+      }
       return { success: true, reportId: reportToEdit.id, anomalyAssessment: assessment };
-
     } catch (error) {
       console.error('Error updating report:', error);
-      return { success: false };
+      return { success: false, anomalyAssessment: assessment };
     }
   };
 

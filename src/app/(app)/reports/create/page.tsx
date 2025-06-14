@@ -48,30 +48,39 @@ export default function CreateReportPage() {
       }
     }
     
+    // For AI analysis, create a temporary full FieldReport object. ID and timestamps will be approximate for AI check.
+    const tempReportForAI: FieldReport = {
+        ...data, // from ReportSubmitPayload
+        technicianId: user.uid,
+        photoDataUri: photoDataUriInSubmit,
+        id: 'temp-ai-check', 
+        createdAt: new Date().toISOString(), 
+        updatedAt: new Date().toISOString(), 
+        status: status
+    };
+    const assessment = await detectReportAnomaly(tempReportForAI);
+
+    if (status === 'SUBMITTED' && assessment.isAnomalous) {
+      // Do not save if submitting and anomaly detected
+      return { success: false, anomalyAssessment: assessment };
+    }
+
+    // Proceed to save for DRAFT or if SUBMITTED and no anomaly
     const reportDataToSave: Omit<FieldReport, 'id' | 'createdAt' | 'updatedAt'> = {
-      ...data,
+      ...data, // from ReportSubmitPayload
       technicianId: user.uid,
-      photoDataUri: photoDataUriInSubmit, // Can be undefined
-      status: status, // status is already in 'data' from ReportSubmitPayload, but re-affirm
+      photoDataUri: photoDataUriInSubmit, 
+      status: status,
     };
 
     try {
       const newReportId = await addReport(reportDataToSave);
-      
-      // For AI analysis, create a temporary full FieldReport object
-      const fullReportForAI: FieldReport = {
-          ...reportDataToSave,
-          id: newReportId, // Use the new ID
-          createdAt: new Date().toISOString(), // Approximate for AI
-          updatedAt: new Date().toISOString(), // Approximate for AI
-      };
-      const assessment = await detectReportAnomaly(fullReportForAI);
-      
+      // If it was a draft and had an anomaly, the assessment is still returned for informational purposes.
       return { success: true, reportId: newReportId, anomalyAssessment: assessment };
-
     } catch (error) {
       console.error('Error creating report:', error);
-      return { success: false };
+      // If addReport fails, return the assessment if available, otherwise undefined
+      return { success: false, anomalyAssessment: assessment };
     }
   };
 
