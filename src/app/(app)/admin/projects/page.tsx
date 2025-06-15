@@ -6,13 +6,15 @@ import { PageTitle } from '@/components/common/PageTitle';
 import { HardHat, PlusCircle, Filter, Loader2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ProjectTable } from './components/ProjectTable';
-import { ProjectFormDialog, type ProjectSubmitData } from './components/ProjectFormDialog';
-import type { Project } from '@/lib/types';
+import { ProjectFormDialog, type ProjectFormData } from './components/ProjectFormDialog'; // Import ProjectFormData
+import type { Project, Material } from '@/lib/types'; // Import Material
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { getProjects, addProject, updateProject, deleteProject } from '@/services/projectService';
+import { getMaterials } from '@/services/materialService'; // Import getMaterials
+import type { ProjectSubmitData } from '@/services/projectService'; // Import correct ProjectSubmitData
 
 const projectStatusFilterOptions: { value: Project['status'] | 'ALL'; label: string }[] = [
   { value: 'ALL', label: 'All Statuses' },
@@ -23,6 +25,7 @@ const projectStatusFilterOptions: { value: Project['status'] | 'ALL'; label: str
 
 export default function ProjectManagementPage() {
   const [projects, setProjects] = useState<Project[]>([]);
+  const [allMaterials, setAllMaterials] = useState<Material[]>([]); // State for all materials
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,14 +36,18 @@ export default function ProjectManagementPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<Project['status'] | 'ALL'>('ALL');
 
-  const fetchProjects = async () => {
+  const fetchData = async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const fetchedProjects = await getProjects();
+      const [fetchedProjects, fetchedMaterials] = await Promise.all([
+        getProjects(),
+        getMaterials() // Fetch all materials
+      ]);
       setProjects(fetchedProjects);
+      setAllMaterials(fetchedMaterials);
     } catch (err) {
-      setError((err as Error).message || "Failed to load projects. Please try again later.");
+      setError((err as Error).message || "Failed to load project data or materials. Please try again later.");
       console.error(err);
     } finally {
       setIsLoading(false);
@@ -48,7 +55,7 @@ export default function ProjectManagementPage() {
   };
 
   useEffect(() => {
-    fetchProjects();
+    fetchData();
   }, []);
 
   const handleAddNewProject = () => {
@@ -68,7 +75,7 @@ export default function ProjectManagementPage() {
         title: "Project Deleted",
         description: `Project (ID: ${projectId}) has been successfully deleted.`,
       });
-      await fetchProjects(); // Refresh the list
+      await fetchData(); // Refresh the list
     } catch (err) {
       toast({
         variant: "destructive",
@@ -78,15 +85,27 @@ export default function ProjectManagementPage() {
     }
   };
 
-  const handleProjectFormSubmit = async (data: ProjectSubmitData, id?: string) => {
+  const handleProjectFormSubmit = async (formData: ProjectFormData, id?: string) => {
     setIsProjectFormOpen(false); 
+
+    // Convert ProjectFormData to ProjectSubmitData expected by the service
+    const submitData: ProjectSubmitData = {
+      name: formData.name,
+      location: formData.location,
+      description: formData.description,
+      status: formData.status,
+      startDate: formData.startDate ? formData.startDate.toISOString() : undefined,
+      endDate: formData.endDate ? formData.endDate.toISOString() : undefined,
+      assignedMaterialIds: formData.assignedMaterialIds || [],
+    };
+
 
     if (id) {
       try {
-        await updateProject(id, data);
+        await updateProject(id, submitData);
         toast({
           title: "Project Updated Successfully",
-          description: `Project "${data.name}" has been updated.`,
+          description: `Project "${submitData.name}" has been updated.`,
         });
       } catch (err) {
         toast({
@@ -94,13 +113,14 @@ export default function ProjectManagementPage() {
           title: "Failed to Update Project",
           description: (err as Error).message || "An unexpected error occurred.",
         });
+        setIsProjectFormOpen(true); // Re-open on error
       }
     } else {
       try {
-        const newProjectId = await addProject(data);
+        const newProjectId = await addProject(submitData);
         toast({
           title: "Project Added Successfully",
-          description: `Project "${data.name}" (ID: ${newProjectId}) has been added.`,
+          description: `Project "${submitData.name}" (ID: ${newProjectId}) has been added.`,
         });
       } catch (err) {
         toast({
@@ -108,10 +128,11 @@ export default function ProjectManagementPage() {
           title: "Failed to Add Project",
           description: (err as Error).message || "An unexpected error occurred.",
         });
+        setIsProjectFormOpen(true); // Re-open on error
       }
     }
     
-    await fetchProjects();
+    await fetchData(); // Refresh projects and materials
     setEditingProject(undefined); 
   };
 
@@ -140,6 +161,7 @@ export default function ProjectManagementPage() {
             }}
             projectToEdit={editingProject}
             onFormSubmit={handleProjectFormSubmit}
+            allMaterials={allMaterials} // Pass all materials to the dialog
           >
             <Button className="rounded-lg" onClick={handleAddNewProject}>
               <PlusCircle className="mr-2 h-4 w-4" /> Add New Project
@@ -182,7 +204,7 @@ export default function ProjectManagementPage() {
 
       {isLoading && (
         <div className="flex items-center justify-center py-10 text-muted-foreground">
-          <Loader2 className="mr-2 h-6 w-6 animate-spin" /> Loading projects...
+          <Loader2 className="mr-2 h-6 w-6 animate-spin" /> Loading projects and materials...
         </div>
       )}
       {error && (
@@ -196,6 +218,7 @@ export default function ProjectManagementPage() {
         <div className="bg-card p-0 md:p-6 rounded-lg shadow-md">
           <ProjectTable
             projects={filteredProjects}
+            allMaterials={allMaterials} // Pass all materials to the table
             onEditProject={handleEditProject} 
             onDeleteProject={handleDeleteProject}
           />

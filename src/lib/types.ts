@@ -32,7 +32,7 @@ export interface Project {
   status: 'ACTIVE' | 'INACTIVE' | 'COMPLETED';
   startDate?: string; // ISO string date
   endDate?: string;   // ISO string date
-  assignedMaterialTypes?: MaterialType[]; // New field: Material types to be tested for this project
+  assignedMaterialIds?: string[]; // Changed from assignedMaterialTypes
   createdAt: string;
   updatedAt: string;
 }

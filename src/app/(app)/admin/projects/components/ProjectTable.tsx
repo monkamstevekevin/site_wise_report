@@ -32,11 +32,12 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from '@/components/ui/badge';
-import type { Project, MaterialType } from '@/lib/types';
+import type { Project, Material, MaterialType } from '@/lib/types'; // Import Material
 import { format } from 'date-fns';
 
 interface ProjectTableProps {
   projects: Project[];
+  allMaterials: Material[]; // Add prop for all materials
   onEditProject?: (project: Project) => void;
   onDeleteProject?: (projectId: string) => void;
 }
@@ -47,13 +48,12 @@ const projectStatusBadgeVariant: Record<Project['status'], "default" | "secondar
   INACTIVE: "outline",
 };
 
-// Badge variants for material types (can be customized)
 const materialTypeBadgeVariant: Record<MaterialType, "default" | "secondary" | "outline" | "destructive" | "default"> = {
   cement: "default",
   asphalt: "secondary",
   gravel: "outline",
   sand: "destructive",
-  other: "default", // A general variant for "other"
+  other: "default", 
 };
 
 
@@ -66,7 +66,7 @@ const formatDate = (dateString?: string) => {
   }
 };
 
-export function ProjectTable({ projects, onEditProject, onDeleteProject }: ProjectTableProps) {
+export function ProjectTable({ projects, allMaterials, onEditProject, onDeleteProject }: ProjectTableProps) {
   const [isNavigateDialogOpen, setIsNavigateDialogOpen] = useState(false);
   const [navigationTarget, setNavigationTarget] = useState<string | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -103,6 +103,17 @@ export function ProjectTable({ projects, onEditProject, onDeleteProject }: Proje
     setNavigationTarget(null);
   };
 
+  const getMaterialNameById = (materialId: string): string => {
+    const material = allMaterials.find(m => m.id === materialId);
+    return material ? material.name : 'Unknown Material';
+  };
+  
+  const getMaterialTypeById = (materialId: string): MaterialType | undefined => {
+    const material = allMaterials.find(m => m.id === materialId);
+    return material ? material.type : undefined;
+  };
+
+
   if (projects.length === 0) {
     return <p className="text-muted-foreground text-center py-8">Aucun projet ne correspond aux filtres actuels.</p>;
   }
@@ -119,7 +130,7 @@ export function ProjectTable({ projects, onEditProject, onDeleteProject }: Proje
               <TableHead>Localisation</TableHead>
               <TableHead><CalendarDays className="inline-block mr-1 h-4 w-4" /> Date Début</TableHead>
               <TableHead><CalendarDays className="inline-block mr-1 h-4 w-4" /> Date Fin</TableHead>
-              <TableHead><TestTube2 className="inline-block mr-1 h-4 w-4" /> Matériaux</TableHead>
+              <TableHead><TestTube2 className="inline-block mr-1 h-4 w-4" /> Matériaux Assignés</TableHead>
               <TableHead>Statut</TableHead>
               <TableHead className="text-right w-[100px]">Actions</TableHead>
             </TableRow>
@@ -136,13 +147,22 @@ export function ProjectTable({ projects, onEditProject, onDeleteProject }: Proje
                 <TableCell className="text-xs">{formatDate(project.startDate)}</TableCell>
                 <TableCell className="text-xs">{formatDate(project.endDate)}</TableCell>
                 <TableCell>
-                  {project.assignedMaterialTypes && project.assignedMaterialTypes.length > 0 ? (
+                  {project.assignedMaterialIds && project.assignedMaterialIds.length > 0 ? (
                     <div className="flex flex-wrap gap-1">
-                      {project.assignedMaterialTypes.map((type) => (
-                        <Badge key={type} variant={materialTypeBadgeVariant[type] || 'outline'} className="text-xs">
-                          {type.charAt(0).toUpperCase() + type.slice(1)}
-                        </Badge>
-                      ))}
+                      {project.assignedMaterialIds.map((materialId) => {
+                        const materialName = getMaterialNameById(materialId);
+                        const materialType = getMaterialTypeById(materialId);
+                        return (
+                          <Badge 
+                            key={materialId} 
+                            variant={materialType ? materialTypeBadgeVariant[materialType] : 'outline'} 
+                            className="text-xs"
+                            title={materialName}
+                          >
+                            {materialName.length > 20 ? `${materialName.substring(0,18)}...` : materialName}
+                          </Badge>
+                        );
+                      })}
                     </div>
                   ) : (
                     <span className="text-xs text-muted-foreground">N/A</span>

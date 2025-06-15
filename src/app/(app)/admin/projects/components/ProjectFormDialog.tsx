@@ -21,14 +21,13 @@ import {
   DialogTrigger,
   DialogClose,
 } from '@/components/ui/dialog';
-import type { Project, MaterialType } from '@/lib/types';
+import type { Project, Material } from '@/lib/types'; // Import Material
 import { Loader2, PlusCircle, Save, CalendarIcon, TestTube2 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
-
-const materialTypeEnum = z.enum(['cement', 'asphalt', 'gravel', 'sand', 'other']);
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 const projectFormSchema = z.object({
   name: z.string().min(1, 'Project name is required').max(100, 'Project name is too long'),
@@ -39,7 +38,7 @@ const projectFormSchema = z.object({
   }),
   startDate: z.date().optional(),
   endDate: z.date().optional(),
-  assignedMaterialTypes: z.array(materialTypeEnum).optional().default([]),
+  assignedMaterialIds: z.array(z.string()).optional().default([]), // Changed from assignedMaterialTypes
 }).superRefine(({ startDate, endDate }, ctx) => {
   if (startDate && endDate && endDate < startDate) {
     ctx.addIssue({
@@ -52,19 +51,22 @@ const projectFormSchema = z.object({
 
 export type ProjectFormData = z.infer<typeof projectFormSchema>;
 
-export type ProjectSubmitData = Omit<ProjectFormData, 'startDate' | 'endDate'> & {
-  startDate?: string;
-  endDate?: string;
-  assignedMaterialTypes?: MaterialType[];
-};
-
+// This type is used by the service, ensure it matches what the service expects
+// The service itself now defines a compatible ProjectSubmitData based on this.
+// export type ProjectSubmitData = Omit<ProjectFormData, 'startDate' | 'endDate'> & {
+//   startDate?: string;
+//   endDate?: string;
+//   assignedMaterialIds?: string[]; // Changed
+// };
+// For now, we will rely on the service's definition of ProjectSubmitData.
 
 interface ProjectFormDialogProps {
   children: React.ReactNode; // Trigger button
   projectToEdit?: Project;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
-  onFormSubmit: (data: ProjectSubmitData, id?: string) => Promise<void>; 
+  onFormSubmit: (data: ProjectFormData, id?: string) => Promise<void>; // Changed to ProjectFormData
+  allMaterials: Material[]; // Add prop for all available materials
 }
 
 const projectStatusOptions: { value: Project['status']; label: string }[] = [
@@ -73,26 +75,19 @@ const projectStatusOptions: { value: Project['status']; label: string }[] = [
   { value: 'COMPLETED', label: 'Completed' },
 ];
 
-const allMaterialTypeOptions: { value: MaterialType; label: string }[] = [
-  { value: 'cement', label: 'Cement' },
-  { value: 'asphalt', label: 'Asphalt' },
-  { value: 'gravel', label: 'Gravel' },
-  { value: 'sand', label: 'Sand' },
-  { value: 'other', label: 'Other (General Purpose)' },
-];
 
-export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange, onFormSubmit }: ProjectFormDialogProps) {
+export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange, onFormSubmit, allMaterials }: ProjectFormDialogProps) {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const form = useForm<ProjectFormData>({
     resolver: zodResolver(projectFormSchema),
-    defaultValues: { // Ensure all fields, including new ones, have default values
+    defaultValues: { 
       name: '',
       location: '',
       description: '',
       status: 'ACTIVE',
       startDate: undefined,
       endDate: undefined,
-      assignedMaterialTypes: [],
+      assignedMaterialIds: [], // Changed
     }
   });
 
@@ -106,23 +101,24 @@ export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange,
           status: projectToEdit.status || 'ACTIVE',
           startDate: projectToEdit.startDate ? parseISO(projectToEdit.startDate) : undefined,
           endDate: projectToEdit.endDate ? parseISO(projectToEdit.endDate) : undefined,
-          assignedMaterialTypes: projectToEdit.assignedMaterialTypes || [],
+          assignedMaterialIds: projectToEdit.assignedMaterialIds || [], // Changed
         });
       } else {
-        form.reset({ name: '', location: '', description: '', status: 'ACTIVE', startDate: undefined, endDate: undefined, assignedMaterialTypes: [] });
+        form.reset({ name: '', location: '', description: '', status: 'ACTIVE', startDate: undefined, endDate: undefined, assignedMaterialIds: [] }); // Changed
       }
     }
   }, [projectToEdit, form, open]);
 
   const onSubmit = async (data: ProjectFormData) => {
     setIsSubmitting(true);
-    const submitData: ProjectSubmitData = {
-      ...data,
-      startDate: data.startDate ? data.startDate.toISOString() : undefined,
-      endDate: data.endDate ? data.endDate.toISOString() : undefined,
-      assignedMaterialTypes: data.assignedMaterialTypes || [],
-    };
-    await onFormSubmit(submitData, projectToEdit?.id);
+    // The data passed to onFormSubmit is now directly ProjectFormData
+    // The service will handle converting dates to ISO strings if necessary.
+    // The service now also expects ProjectSubmitData as defined in projectService.ts
+    // We need to ensure the onFormSubmit prop in the parent page expects ProjectFormData and transforms it if needed
+    // For simplicity, let's assume the parent page `ProjectManagementPage` will now handle the transformation of dates.
+    // Or, the `onFormSubmit` prop could be typed to accept `ProjectFormData` and the parent handles the conversion.
+    // For now, the onFormSubmit in ProjectManagementPage will do the conversion from ProjectFormData.
+    await onFormSubmit(data, projectToEdit?.id);
     setIsSubmitting(false);
   };
 
@@ -130,7 +126,6 @@ export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange,
     <Dialog open={open} onOpenChange={(isOpen) => {
       onOpenChange?.(isOpen);
       if (!isOpen) {
-        // Reset form to initial state or specific state based on projectToEdit
         form.reset(projectToEdit ? {
             name: projectToEdit.name,
             location: projectToEdit.location,
@@ -138,8 +133,8 @@ export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange,
             status: projectToEdit.status,
             startDate: projectToEdit.startDate ? parseISO(projectToEdit.startDate) : undefined,
             endDate: projectToEdit.endDate ? parseISO(projectToEdit.endDate) : undefined,
-            assignedMaterialTypes: projectToEdit.assignedMaterialTypes || [],
-        } : { name: '', location: '', description: '', status: 'ACTIVE', startDate: undefined, endDate: undefined, assignedMaterialTypes: [] });
+            assignedMaterialIds: projectToEdit.assignedMaterialIds || [], // Changed
+        } : { name: '', location: '', description: '', status: 'ACTIVE', startDate: undefined, endDate: undefined, assignedMaterialIds: [] }); // Changed
       }
     }}>
       <DialogTrigger asChild>{children}</DialogTrigger>
@@ -281,54 +276,60 @@ export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange,
             />
             <FormField
               control={form.control}
-              name="assignedMaterialTypes"
+              name="assignedMaterialIds" // Changed
               render={() => (
                 <FormItem>
                   <div className="mb-4">
                     <FormLabel className="text-base flex items-center">
                         <TestTube2 className="mr-2 h-4 w-4 text-muted-foreground" />
-                        Assigned Material Types (Optional)
+                        Assign Materials to Project (Optional)
                     </FormLabel>
                     <FormDescription>
-                      Select which types of materials are expected to be tested for this project.
+                      Select which specific materials (from Material Management) are expected to be tested for this project.
                     </FormDescription>
                   </div>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                  {allMaterialTypeOptions.map((option) => (
-                    <FormField
-                      key={option.value}
-                      control={form.control}
-                      name="assignedMaterialTypes"
-                      render={({ field }) => {
-                        return (
-                          <FormItem
-                            key={option.value}
-                            className="flex flex-row items-center space-x-2 space-y-0"
-                          >
-                            <FormControl>
-                              <Checkbox
-                                checked={field.value?.includes(option.value)}
-                                onCheckedChange={(checked) => {
-                                  const currentValue = field.value || [];
-                                  return checked
-                                    ? field.onChange([...currentValue, option.value])
-                                    : field.onChange(
-                                        currentValue.filter(
-                                          (value) => value !== option.value
-                                        )
-                                      );
-                                }}
-                              />
-                            </FormControl>
-                            <FormLabel className="text-sm font-normal cursor-pointer">
-                              {option.label}
-                            </FormLabel>
-                          </FormItem>
-                        );
-                      }}
-                    />
-                  ))}
-                  </div>
+                  {allMaterials.length > 0 ? (
+                    <ScrollArea className="h-40 border rounded-md p-2">
+                      <div className="grid grid-cols-1 gap-x-4 gap-y-2">
+                      {allMaterials.map((material) => (
+                        <FormField
+                          key={material.id}
+                          control={form.control}
+                          name="assignedMaterialIds" // Changed
+                          render={({ field }) => {
+                            return (
+                              <FormItem
+                                key={material.id}
+                                className="flex flex-row items-center space-x-2 space-y-0 p-1 hover:bg-muted/50 rounded"
+                              >
+                                <FormControl>
+                                  <Checkbox
+                                    checked={field.value?.includes(material.id)}
+                                    onCheckedChange={(checked) => {
+                                      const currentValue = field.value || [];
+                                      return checked
+                                        ? field.onChange([...currentValue, material.id])
+                                        : field.onChange(
+                                            currentValue.filter(
+                                              (value) => value !== material.id
+                                            )
+                                          );
+                                    }}
+                                  />
+                                </FormControl>
+                                <FormLabel className="text-sm font-normal cursor-pointer w-full">
+                                  {material.name} <span className="text-xs text-muted-foreground">({material.type})</span>
+                                </FormLabel>
+                              </FormItem>
+                            );
+                          }}
+                        />
+                      ))}
+                      </div>
+                    </ScrollArea>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No materials defined in Material Management. Add materials first to assign them here.</p>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}
@@ -361,7 +362,7 @@ export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange,
                   Cancel
                 </Button>
               </DialogClose>
-              <Button type="submit" disabled={isSubmitting} className="rounded-lg">
+              <Button type="submit" disabled={isSubmitting || allMaterials.length === 0 && !projectToEdit} className="rounded-lg"> {/* Disable submit if no materials and creating new project */}
                 {isSubmitting ? <Loader2 className="animate-spin" /> : (projectToEdit ? <Save className="mr-2 h-4 w-4"/> : <PlusCircle className="mr-2 h-4 w-4" />)}
                 {projectToEdit ? 'Save Changes' : 'Add Project'}
               </Button>

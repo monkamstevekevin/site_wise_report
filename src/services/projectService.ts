@@ -2,9 +2,14 @@
 'use server';
 
 import { db } from '@/lib/firebase';
-import type { Project, MaterialType } from '@/lib/types';
+import type { Project, MaterialType } from '@/lib/types'; // MaterialType still used for general type system
 import { collection, getDocs, doc, getDoc, Timestamp, query, orderBy, addDoc, serverTimestamp, updateDoc, setDoc, deleteDoc } from 'firebase/firestore';
-import type { ProjectSubmitData } from '@/app/(app)/admin/projects/components/ProjectFormDialog';
+import type { ProjectSubmitData as OriginalProjectSubmitData } from '@/app/(app)/admin/projects/components/ProjectFormDialog';
+
+// Adjust ProjectSubmitData to reflect assignedMaterialIds
+export type ProjectSubmitData = Omit<OriginalProjectSubmitData, 'assignedMaterialTypes'> & {
+  assignedMaterialIds?: string[];
+};
 
 
 /**
@@ -57,7 +62,7 @@ export async function getProjects(): Promise<Project[]> {
         status: data.status || 'INACTIVE',
         startDate: data.startDate, 
         endDate: data.endDate,     
-        assignedMaterialTypes: data.assignedMaterialTypes || [], // Ensure it's an array
+        assignedMaterialIds: data.assignedMaterialIds || [], // Ensure it's an array
         createdAt: formatTimestamp(data.createdAt),
         updatedAt: formatTimestamp(data.updatedAt),
       } as Project; 
@@ -97,7 +102,7 @@ export async function getProjectById(projectId: string): Promise<Project | null>
         status: data.status || 'INACTIVE',
         startDate: data.startDate,
         endDate: data.endDate,
-        assignedMaterialTypes: data.assignedMaterialTypes || [], // Ensure it's an array
+        assignedMaterialIds: data.assignedMaterialIds || [], // Ensure it's an array
         createdAt: formatTimestamp(data.createdAt),
         updatedAt: formatTimestamp(data.updatedAt),
       } as Project;
@@ -121,10 +126,13 @@ export async function addProject(projectData: ProjectSubmitData): Promise<string
   try {
     const projectsCollectionRef = collection(db, 'projects');
     const dataToSave: any = {
-      ...projectData,
+      name: projectData.name,
+      location: projectData.location,
+      description: projectData.description || '',
+      status: projectData.status,
       startDate: projectData.startDate || null,
       endDate: projectData.endDate || null,    
-      assignedMaterialTypes: projectData.assignedMaterialTypes || [], // Ensure array, even if empty
+      assignedMaterialIds: projectData.assignedMaterialIds || [], // Ensure array, even if empty
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
@@ -147,7 +155,7 @@ export async function updateProject(projectId: string, projectData: Partial<Proj
   try {
     const projectDocRef = doc(db, 'projects', projectId);
     const dataToUpdate: any = {
-      ...projectData,
+      ...projectData, // Spread first to include name, location, description, status
       updatedAt: serverTimestamp(),
     };
     
@@ -157,10 +165,15 @@ export async function updateProject(projectId: string, projectData: Partial<Proj
     if (Object.prototype.hasOwnProperty.call(projectData, 'endDate')) {
       dataToUpdate.endDate = projectData.endDate || null;
     }
-    if (Object.prototype.hasOwnProperty.call(projectData, 'assignedMaterialTypes')) {
-      dataToUpdate.assignedMaterialTypes = projectData.assignedMaterialTypes || [];
+    if (Object.prototype.hasOwnProperty.call(projectData, 'assignedMaterialIds')) {
+      dataToUpdate.assignedMaterialIds = projectData.assignedMaterialIds || [];
     }
 
+    // Remove undefined fields that were part of OriginalProjectSubmitData but not in current projectData
+    // This ensures we don't accidentally write 'undefined' to Firestore for fields not being updated.
+    // For example, if projectData only contains { name: "New Name" }, we don't want to set other fields to undefined.
+    // The spread `...projectData` handles this correctly by only including provided fields.
+    // Keys like `startDate`, `endDate`, `assignedMaterialIds` are handled explicitly above with defaults or nulls.
 
     await updateDoc(projectDocRef, dataToUpdate);
   } catch (error) {
