@@ -104,7 +104,7 @@ export default function DashboardPage() {
 
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: startOfDay(new Date()),
-    to: endOfDay(new Date()),
+    to: startOfDay(new Date()), // Changed from endOfDay to startOfDay for consistency
   });
 
 
@@ -282,10 +282,8 @@ export default function DashboardPage() {
   }, [allReportsData, technicianReports, currentUserRole]);
 
   const filteredProjectsForAssignments = useMemo(() => {
-    // Ensure dateRange.from is always a valid Date, defaulting to today if not set
-    const effectiveFromDate = dateRange?.from || new Date();
-    // If dateRange.to is not set, use dateRange.from for a single-day range
-    const effectiveToDate = dateRange?.to || effectiveFromDate;
+    const effectiveFromDate = dateRange?.from || new Date(); // Default to today if undefined
+    const effectiveToDate = dateRange?.to || effectiveFromDate; // If 'to' is undefined, use 'from' (single day range)
 
     const rangeStart = startOfDay(effectiveFromDate);
     const rangeEnd = endOfDay(effectiveToDate);
@@ -295,14 +293,20 @@ export default function DashboardPage() {
         if (p.status === 'COMPLETED' || p.status === 'INACTIVE') return false;
         if (!p.startDate) return false; 
   
-        const projectStart = startOfDay(parseISO(p.startDate));
+        const projectStartDate = parseISO(p.startDate);
+        if (isNaN(projectStartDate.getTime())) return false; // Skip if project start date is invalid
+        const projectStart = startOfDay(projectStartDate);
         
         if (p.endDate) {
-          const projectEnd = endOfDay(parseISO(p.endDate));
-          // Check for overlap: !(project ends before range starts OR project starts after range ends)
+          const projectEndDate = parseISO(p.endDate);
+          if (isNaN(projectEndDate.getTime())) return false; // Skip if project end date is invalid
+          const projectEnd = endOfDay(projectEndDate);
+          // Check for overlap:
+          // Project starts before or on range_end AND project ends after or on range_start
           return !isAfter(projectStart, rangeEnd) && !isBefore(projectEnd, rangeStart);
         } else {
-          // Ongoing project: overlaps if its start is before or on range_end
+          // Ongoing project (no end date):
+          // overlaps if its start is before or on range_end
           return !isAfter(projectStart, rangeEnd);
         }
       })
@@ -448,7 +452,7 @@ export default function DashboardPage() {
                         <CalendarIconLucide className="mr-2 h-4 w-4" />
                         {dateRange?.from ? (
                         dateRange.to ? (
-                            isSameDay(dateRange.from, new Date()) && isSameDay(dateRange.to, new Date()) ? "Aujourd'hui" :
+                            isSameDay(dateRange.from, new Date()) && isSameDay(dateRange.to, new Date()) && isSameDay(dateRange.from, dateRange.to) ? "Aujourd'hui" : // Check if from and to are the same for "Aujourd'hui"
                             `${format(dateRange.from, "LLL dd, y")} - ${format(dateRange.to, "LLL dd, y")}`
                         ) : (
                             isSameDay(dateRange.from, new Date()) ? "Aujourd'hui" : format(dateRange.from, "LLL dd, y")
@@ -471,9 +475,9 @@ export default function DashboardPage() {
                 </Popover>
                 <Button 
                     variant="ghost" 
-                    onClick={() => setDateRange({ from: startOfDay(new Date()), to: endOfDay(new Date()) })}
+                    onClick={() => setDateRange({ from: startOfDay(new Date()), to: startOfDay(new Date()) })} // Set 'to' to startOfDay as well for today
                     className="w-full sm:w-auto"
-                    disabled={dateRange?.from && isSameDay(dateRange.from, new Date()) && dateRange.to && isSameDay(dateRange.to, new Date())}
+                    disabled={dateRange?.from && isSameDay(dateRange.from, new Date()) && dateRange.to && isSameDay(dateRange.to, new Date()) && isSameDay(dateRange.from, dateRange.to) }
                 >
                     Aujourd'hui
                 </Button>
@@ -497,9 +501,9 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6"> {/* Changed to lg:grid-cols-3 */}
-              <AlertsCard projects={allProjectsData} users={allUsersData} /> {/* Occupies 1 column */}
-              <ProjectAssignmentsCard projects={filteredProjectsForAssignments} users={allUsersData} /> {/* Occupies 2 columns (defined in its own class) */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6"> 
+              <AlertsCard projects={allProjectsData} users={allUsersData} /> 
+              <ProjectAssignmentsCard projects={filteredProjectsForAssignments} users={allUsersData} /> 
             </div>
           )}
           
@@ -632,3 +636,4 @@ export default function DashboardPage() {
   );
 }
 
+    
