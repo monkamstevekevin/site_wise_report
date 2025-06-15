@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -10,7 +11,7 @@
  */
 
 import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import { z } from 'zod'; // Corrected import
 import { getMaterials } from '@/services/materialService'; // Import service to get materials
 import type { Material } from '@/lib/types';
 
@@ -159,4 +160,3 @@ const detectReportAnomalyFlow = ai.defineFlow(
     return output!;
   }
 );
-

@@ -10,7 +10,7 @@
  */
 
 import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import { z } from 'zod'; // Corrected import
 
 const AssignmentNotificationInputSchema = z.object({
   userName: z.string().describe("The name of the user being assigned the project."),
