@@ -282,27 +282,28 @@ export default function DashboardPage() {
   }, [allReportsData, technicianReports, currentUserRole]);
 
   const filteredProjectsForAssignments = useMemo(() => {
-    const selectedRangeFrom = dateRange?.from ? startOfDay(dateRange.from) : null;
-    const selectedRangeTo = dateRange?.to ? endOfDay(dateRange.to) : selectedRangeFrom ? endOfDay(selectedRangeFrom) : null;
-  
-    // If range is not properly set (e.g. cleared, or initial state issue), default to today
-    const effectiveRangeFrom = selectedRangeFrom || startOfDay(new Date());
-    const effectiveRangeTo = selectedRangeTo || endOfDay(new Date());
+    // Ensure dateRange.from is always a valid Date, defaulting to today if not set
+    const effectiveFromDate = dateRange?.from || new Date();
+    // If dateRange.to is not set, use dateRange.from for a single-day range
+    const effectiveToDate = dateRange?.to || effectiveFromDate;
+
+    const rangeStart = startOfDay(effectiveFromDate);
+    const rangeEnd = endOfDay(effectiveToDate);
 
     return allProjectsData
       .filter(p => {
         if (p.status === 'COMPLETED' || p.status === 'INACTIVE') return false;
-        if (!p.startDate) return false; // Must have a start date
+        if (!p.startDate) return false; 
   
         const projectStart = startOfDay(parseISO(p.startDate));
-        const projectEnd = p.endDate ? endOfDay(parseISO(p.endDate)) : null;
-  
-        if (projectEnd) { // Project has a defined start and end date
-          // Check for overlap: projectStart <= effectiveRangeTo AND projectEnd >= effectiveRangeFrom
-          return !(isAfter(projectStart, effectiveRangeTo) || isBefore(projectEnd, effectiveRangeFrom));
-        } else { // Project is ongoing (no end date)
-          // Overlap if it starts before or during the range's end: projectStart <= effectiveRangeTo
-          return !isAfter(projectStart, effectiveRangeTo);
+        
+        if (p.endDate) {
+          const projectEnd = endOfDay(parseISO(p.endDate));
+          // Check for overlap: !(project ends before range starts OR project starts after range ends)
+          return !isAfter(projectStart, rangeEnd) && !isBefore(projectEnd, rangeStart);
+        } else {
+          // Ongoing project: overlaps if its start is before or on range_end
+          return !isAfter(projectStart, rangeEnd);
         }
       })
       .sort((a, b) => (a.startDate && b.startDate ? parseISO(a.startDate).getTime() - parseISO(b.startDate).getTime() : 0));
