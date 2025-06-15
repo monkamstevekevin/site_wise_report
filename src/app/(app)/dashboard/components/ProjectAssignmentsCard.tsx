@@ -2,7 +2,21 @@
 'use client';
 
 import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import type { Project, User } from '@/lib/types';
@@ -10,6 +24,7 @@ import { HardHat, Users, CalendarDays, AlertTriangle } from 'lucide-react';
 import { differenceInDays, format, isFuture, isPast, parseISO } from 'date-fns';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 interface ProjectAssignmentsCardProps {
   projects: Project[];
@@ -23,9 +38,12 @@ const getAssignedTechniciansCount = (projectId: string, users: User[]): number =
 const projectStatusVariant = (project: Project): "default" | "secondary" | "outline" | "destructive" => {
   if (project.status === 'COMPLETED') return 'secondary';
   if (project.status === 'INACTIVE') return 'outline';
-  if (project.startDate && isFuture(parseISO(project.startDate))) return 'default'; // Upcoming
-  if (project.startDate && isPast(parseISO(project.startDate)) && (!project.endDate || isFuture(parseISO(project.endDate)))) return 'default'; // Active
-  return 'outline';
+  
+  const startDate = project.startDate ? parseISO(project.startDate) : null;
+  if (startDate && isFuture(startDate)) return 'default'; // Upcoming - Blue
+  if (startDate && isPast(startDate) && project.status === 'ACTIVE') return 'default'; // Active and past start - Green (default is primary for active)
+  
+  return 'outline'; // Default for other cases like ACTIVE but future start (or if dates are missing)
 };
 
 const formatDatePretty = (dateString?: string) => {
@@ -62,60 +80,69 @@ export function ProjectAssignmentsCard({ projects, users }: ProjectAssignmentsCa
   }
 
   return (
-    <Card className="shadow-lg rounded-lg">
+    <Card className="shadow-lg rounded-lg lg:col-span-2"> {/* Added lg:col-span-2 to make it wider */}
       <CardHeader>
         <CardTitle className="flex items-center">
           <HardHat className="mr-2 h-5 w-5 text-primary" />
           Project Assignments Overview
         </CardTitle>
-        <CardDescription>Overview of active and upcoming projects and their technician assignments.</CardDescription>
+        <CardDescription>Status of active and upcoming projects (next 30 days) and their technician assignments.</CardDescription>
       </CardHeader>
-      <CardContent>
-        <ScrollArea className="h-72 pr-3">
-          <div className="space-y-4">
-            {relevantProjects.map(project => {
-              const assignedTechniciansCount = getAssignedTechniciansCount(project.id, users);
-              const daysUntilStart = project.startDate ? differenceInDays(parseISO(project.startDate), now) : null;
-              
-              let dateInfo = `Start: ${formatDatePretty(project.startDate)}`;
-              if (project.endDate) dateInfo += ` - End: ${formatDatePretty(project.endDate)}`;
-              else if (daysUntilStart !== null && daysUntilStart >= 0) dateInfo = `Starts in ${daysUntilStart} day(s)`;
-              else if (project.status === 'ACTIVE') dateInfo = `Started: ${formatDatePretty(project.startDate)}`;
+      <CardContent className="px-0 pt-0"> {/* Remove padding for full-width table */}
+        <ScrollArea className="h-96"> {/* Increased height for better table view */}
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-[200px]">Project Name</TableHead>
+                <TableHead>Start Date</TableHead>
+                <TableHead>End Date</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-center">Technicians</TableHead>
+                <TableHead className="text-center">Alert</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {relevantProjects.map(project => {
+                const assignedTechniciansCount = getAssignedTechniciansCount(project.id, users);
+                const daysUntilStart = project.startDate ? differenceInDays(parseISO(project.startDate), now) : null;
+                
+                let alertNeeded = false;
+                if (project.status === 'ACTIVE' && assignedTechniciansCount === 0) {
+                  alertNeeded = true;
+                } else if (daysUntilStart !== null && daysUntilStart >= 0 && daysUntilStart <= 7 && assignedTechniciansCount === 0) {
+                  alertNeeded = true;
+                }
 
-
-              return (
-                <div key={project.id} className="p-3 rounded-md border bg-card hover:bg-muted/50 transition-colors">
-                  <div className="flex justify-between items-start mb-1">
-                    <Link href={`/admin/projects`} passHref>
-                       <Button variant="link" className="p-0 h-auto text-base font-semibold text-primary hover:underline truncate">
-                        {project.name}
-                       </Button>
-                    </Link>
-                    <Badge variant={projectStatusVariant(project)}>{project.status}</Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground mb-1 flex items-center">
-                    <CalendarDays className="mr-1.5 h-3.5 w-3.5" /> {dateInfo}
-                  </p>
-                  <div className="flex justify-between items-center text-sm">
-                    <div className="flex items-center">
-                      <Users className="mr-1.5 h-4 w-4 text-muted-foreground" />
-                       <span>Technicians: {assignedTechniciansCount}</span>
-                    </div>
-                    {assignedTechniciansCount === 0 && project.status === 'ACTIVE' && (
-                       <Badge variant="destructive" className="text-xs">
-                         <AlertTriangle className="mr-1 h-3 w-3" /> Needs Assignment
-                       </Badge>
-                    )}
-                     {assignedTechniciansCount === 0 && daysUntilStart !== null && daysUntilStart >=0 && daysUntilStart <= 7 && (
-                       <Badge variant="destructive" className="text-xs">
-                         <AlertTriangle className="mr-1 h-3 w-3" /> Needs Assignment Soon
-                       </Badge>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                return (
+                  <TableRow key={project.id} className={cn(alertNeeded && "bg-amber-50 dark:bg-amber-900/30")}>
+                    <TableCell className="font-medium">
+                      <Link href={`/admin/projects`} passHref>
+                        <Button variant="link" className="p-0 h-auto text-primary hover:underline text-left justify-start">
+                          {project.name}
+                        </Button>
+                      </Link>
+                      <p className="text-xs text-muted-foreground truncate max-w-[180px]">{project.description}</p>
+                    </TableCell>
+                    <TableCell className="text-xs">{formatDatePretty(project.startDate)}</TableCell>
+                    <TableCell className="text-xs">{formatDatePretty(project.endDate)}</TableCell>
+                    <TableCell>
+                      <Badge variant={projectStatusVariant(project)} className="text-xs whitespace-nowrap">
+                        {project.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-center">{assignedTechniciansCount}</TableCell>
+                    <TableCell className="text-center">
+                      {alertNeeded && (
+                        <Badge variant="destructive" className="text-xs">
+                          <AlertTriangle className="mr-1 h-3 w-3" /> Needs Assignment
+                        </Badge>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
         </ScrollArea>
       </CardContent>
     </Card>
