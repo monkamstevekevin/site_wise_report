@@ -21,14 +21,14 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from '@/components/ui/badge';
-import type { User, UserRole } from '@/lib/types';
+import type { User, UserRole, UserAssignment } from '@/lib/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { UserFormData } from './UserFormDialog';
 
 interface UserTableProps {
   users: User[];
   onEditUser: (user: Partial<UserFormData> & { id: string }) => void;
-  onDeleteUser: (user: User) => void; // Changed to pass full user for confirmation dialog
+  onDeleteUser: (user: User) => void; 
   onAssignProjects: (user: User) => void;
 }
 
@@ -36,6 +36,22 @@ const roleBadgeVariant: Record<UserRole, "default" | "secondary" | "outline" | "
   ADMIN: "destructive",
   SUPERVISOR: "default",
   TECHNICIAN: "secondary",
+};
+
+const getAssignmentsSummary = (assignments: UserAssignment[] | undefined): string => {
+  if (!assignments || assignments.length === 0) return '0';
+  const fullTimeCount = assignments.filter(a => a.assignmentType === 'FULL_TIME').length;
+  const partTimeCount = assignments.filter(a => a.assignmentType === 'PART_TIME').length;
+  
+  let summary = `${assignments.length} projet(s)`;
+  const details: string[] = [];
+  if (fullTimeCount > 0) details.push(`${fullTimeCount} TPl`); // TPl for Temps Plein
+  if (partTimeCount > 0) details.push(`${partTimeCount} TPa`); // TPa for Temps Partiel
+  
+  if (details.length > 0) {
+    summary += ` (${details.join(', ')})`;
+  }
+  return summary;
 };
 
 
@@ -51,7 +67,7 @@ export function UserTable({ users, onEditUser, onDeleteUser, onAssignProjects }:
     onEditUser(userToPass);
   };
 
-  const handleDelete = (user: User) => { // Takes full user object
+  const handleDelete = (user: User) => { 
     onDeleteUser(user);
   };
 
@@ -70,7 +86,7 @@ export function UserTable({ users, onEditUser, onDeleteUser, onAssignProjects }:
             <TableHead>Name</TableHead>
             <TableHead>Email</TableHead>
             <TableHead>Role</TableHead>
-            <TableHead>Assigned Projects (Count)</TableHead>
+            <TableHead>Assigned Projects</TableHead>
             <TableHead>Created At</TableHead>
             <TableHead className="text-right w-[100px]">Actions</TableHead>
           </TableRow>
@@ -92,8 +108,8 @@ export function UserTable({ users, onEditUser, onDeleteUser, onAssignProjects }:
               <TableCell>
                 <Badge variant={roleBadgeVariant[user.role] || 'outline'}>{user.role}</Badge>
               </TableCell>
-              <TableCell className="text-center">
-                {user.assignedProjectIds ? user.assignedProjectIds.length : 0}
+              <TableCell className="text-xs">
+                {getAssignmentsSummary(user.assignments)}
               </TableCell>
               <TableCell>{new Date(user.createdAt).toLocaleDateString()}</TableCell>
               <TableCell className="text-right">

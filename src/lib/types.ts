@@ -11,13 +11,19 @@ export type FieldReport = AIFieldReport & {
 
 export type UserRole = 'ADMIN' | 'SUPERVISOR' | 'TECHNICIAN';
 
+export interface UserAssignment {
+  projectId: string;
+  assignmentType: 'FULL_TIME' | 'PART_TIME';
+}
+
 export interface User {
   id: string;
   name: string;
   email: string;
   role: UserRole;
   avatarUrl?: string;
-  assignedProjectIds: string[]; // Ensure this is not optional for easier handling
+  // assignedProjectIds: string[]; // Deprecated in favor of assignments
+  assignments: UserAssignment[]; // New structure for assignments
   createdAt: string;
   updatedAt: string;
 }
@@ -32,7 +38,7 @@ export interface Project {
   status: 'ACTIVE' | 'INACTIVE' | 'COMPLETED';
   startDate?: string; // ISO string date
   endDate?: string;   // ISO string date
-  assignedMaterialIds?: string[]; // Changed from assignedMaterialTypes
+  assignedMaterialIds?: string[]; 
   createdAt: string;
   updatedAt: string;
 }

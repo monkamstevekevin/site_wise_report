@@ -4,14 +4,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { PageTitle } from '@/components/common/PageTitle';
 import { Briefcase, Loader2, AlertTriangle, Search } from 'lucide-react';
-import type { Project, User } from '@/lib/types';
+import type { Project, User, UserAssignment } from '@/lib/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { getProjects } from '@/services/projectService';
 import { getUserById } from '@/services/userService';
 import { MyProjectCard } from './components/MyProjectCard';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'; // Added CardFooter
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'; 
 
 export default function MyProjectsPage() {
   const { user, loading: authLoading } = useAuth();
@@ -50,8 +50,9 @@ export default function MyProjectsPage() {
   }, [user, authLoading]);
 
   const assignedProjects = useMemo(() => {
-    if (!currentUserData || !currentUserData.assignedProjectIds) return [];
-    return allProjects.filter(p => currentUserData.assignedProjectIds.includes(p.id));
+    if (!currentUserData || !currentUserData.assignments) return [];
+    const userProjectIds = new Set(currentUserData.assignments.map(a => a.projectId));
+    return allProjects.filter(p => userProjectIds.has(p.id));
   }, [allProjects, currentUserData]);
 
   const filteredAssignedProjects = useMemo(() => {
@@ -63,7 +64,7 @@ export default function MyProjectsPage() {
     );
   }, [assignedProjects, searchTerm]);
 
-  if (authLoading || (isLoading && !error) ) { // Show skeleton if auth is loading OR if data is loading without an error yet
+  if (authLoading || (isLoading && !error) ) { 
     return (
       <>
         <PageTitle title="My Assigned Projects" icon={Briefcase} subtitle="Loading your projects..." />

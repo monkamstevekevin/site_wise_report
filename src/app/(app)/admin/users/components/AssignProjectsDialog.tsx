@@ -12,19 +12,32 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import type { User, Project } from '@/lib/types';
-import { Loader2, Save } from 'lucide-react';
+import type { User, Project, UserAssignment } from '@/lib/types';
+import { Loader2, Save, CalendarDays } from 'lucide-react';
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { format } from 'date-fns';
 
 interface AssignProjectsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   user: User | null;
   allProjects: Project[];
-  onAssignProjects: (userId: string, selectedProjectIds: string[]) => Promise<void>;
+  onAssignProjects: (userId: string, newAssignments: UserAssignment[]) => Promise<void>;
 }
+
+type AssignmentType = UserAssignment['assignmentType'];
+type TempAssignment = { projectId: string; assignmentType: AssignmentType | 'NOT_ASSIGNED' };
+
+const formatDate = (dateString?: string) => {
+  if (!dateString) return 'N/A';
+  try {
+    return format(new Date(dateString), 'PP');
+  } catch (e) {
+    return 'Invalid Date';
+  }
+};
 
 export function AssignProjectsDialog({
   open,
@@ -33,22 +46,30 @@ export function AssignProjectsDialog({
   allProjects,
   onAssignProjects,
 }: AssignProjectsDialogProps) {
-  const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
+  const [tempAssignments, setTempAssignments] = useState<TempAssignment[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (user && open) {
-      setSelectedProjectIds(user.assignedProjectIds || []);
-    } else if (!open) { // Reset when dialog is closed externally
-      setSelectedProjectIds([]);
+      // Initialize tempAssignments:
+      // For each project, find if the user has an assignment for it.
+      // If yes, use that assignmentType. Otherwise, set to 'NOT_ASSIGNED'.
+      const initialAssignments = allProjects.map(project => {
+        const existingAssignment = user.assignments?.find(a => a.projectId === project.id);
+        return {
+          projectId: project.id,
+          assignmentType: existingAssignment ? existingAssignment.assignmentType : 'NOT_ASSIGNED',
+        };
+      });
+      setTempAssignments(initialAssignments);
+    } else if (!open) {
+      setTempAssignments([]); // Reset when dialog closes
     }
-  }, [user, open]);
+  }, [user, allProjects, open]);
 
-  const handleProjectToggle = (projectId: string) => {
-    setSelectedProjectIds(prev =>
-      prev.includes(projectId)
-        ? prev.filter(id => id !== projectId)
-        : [...prev, projectId]
+  const handleAssignmentTypeChange = (projectId: string, newType: TempAssignment['assignmentType']) => {
+    setTempAssignments(prev =>
+      prev.map(a => (a.projectId === projectId ? { ...a, assignmentType: newType } : a))
     );
   };
 
@@ -56,15 +77,18 @@ export function AssignProjectsDialog({
     if (!user) return;
     setIsSubmitting(true);
     try {
-      await onAssignProjects(user.id, selectedProjectIds);
-      // Parent component will handle closing the dialog via onOpenChange
-      // after successful submission or error handling.
+      // Filter out 'NOT_ASSIGNED' and map to UserAssignment[]
+      const finalAssignments: UserAssignment[] = tempAssignments
+        .filter(a => a.assignmentType !== 'NOT_ASSIGNED')
+        .map(a => ({
+          projectId: a.projectId,
+          assignmentType: a.assignmentType as AssignmentType, // Cast because we filtered 'NOT_ASSIGNED'
+        }));
+      await onAssignProjects(user.id, finalAssignments);
     } catch (error) {
-      // Error is typically handled by parent's onAssignProjects toast
       console.error("AssignProjectsDialog submission error:", error);
     } finally {
       setIsSubmitting(false);
-      // Don't call onOpenChange(false) here; parent controls this.
     }
   };
 
@@ -72,30 +96,49 @@ export function AssignProjectsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Assign Projects to {user.name}</DialogTitle>
+          <DialogTitle>Assign Projects & Type to {user.name}</DialogTitle>
           <DialogDescription>
-            Select the projects you want to assign to this user.
+            Select projects and specify the assignment type (Part-time or Full-time).
           </DialogDescription>
         </DialogHeader>
-        <ScrollArea className="h-72 pr-6">
-          <div className="space-y-3 py-4">
-            {allProjects.length === 0 && <p className="text-muted-foreground">No projects available.</p>}
-            {allProjects.map(project => (
-              <div key={project.id} className="flex items-center space-x-3 rounded-md p-2 hover:bg-muted/50">
-                <Checkbox
-                  id={`project-${project.id}`}
-                  checked={selectedProjectIds.includes(project.id)}
-                  onCheckedChange={() => handleProjectToggle(project.id)}
-                  disabled={isSubmitting}
-                />
-                <Label htmlFor={`project-${project.id}`} className="flex-1 cursor-pointer">
-                  <div className="font-medium">{project.name}</div>
-                  <div className="text-xs text-muted-foreground">{project.location} (ID: {project.id})</div>
-                </Label>
-              </div>
-            ))}
+        <ScrollArea className="h-80 pr-2">
+          <div className="space-y-4 py-4">
+            {allProjects.length === 0 && <p className="text-muted-foreground text-center">No projects available to assign.</p>}
+            {allProjects.map(project => {
+              const currentAssignment = tempAssignments.find(a => a.projectId === project.id);
+              return (
+                <div key={project.id} className="p-3 border rounded-lg shadow-sm hover:bg-muted/50">
+                  <div className="mb-2">
+                    <p className="font-semibold text-foreground">{project.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      <CalendarDays className="inline-block mr-1 h-3 w-3" />
+                       {formatDate(project.startDate)} - {formatDate(project.endDate)} (Status: {project.status})
+                    </p>
+                  </div>
+                  <RadioGroup
+                    value={currentAssignment?.assignmentType || 'NOT_ASSIGNED'}
+                    onValueChange={(value) => handleAssignmentTypeChange(project.id, value as TempAssignment['assignmentType'])}
+                    className="flex space-x-2 md:space-x-4"
+                    disabled={isSubmitting}
+                  >
+                    <div className="flex items-center space-x-1.5">
+                      <RadioGroupItem value="NOT_ASSIGNED" id={`none-${project.id}`} />
+                      <Label htmlFor={`none-${project.id}`} className="text-xs font-normal">Not Assigned</Label>
+                    </div>
+                    <div className="flex items-center space-x-1.5">
+                      <RadioGroupItem value="PART_TIME" id={`part-${project.id}`} />
+                      <Label htmlFor={`part-${project.id}`} className="text-xs font-normal">Part-time</Label>
+                    </div>
+                    <div className="flex items-center space-x-1.5">
+                      <RadioGroupItem value="FULL_TIME" id={`full-${project.id}`} />
+                      <Label htmlFor={`full-${project.id}`} className="text-xs font-normal">Full-time</Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+              );
+            })}
           </div>
         </ScrollArea>
         <DialogFooter>
@@ -104,7 +147,7 @@ export function AssignProjectsDialog({
               Cancel
             </Button>
           </DialogClose>
-          <Button onClick={handleSubmit} disabled={isSubmitting} className="rounded-lg">
+          <Button onClick={handleSubmit} disabled={isSubmitting || allProjects.length === 0} className="rounded-lg">
             {isSubmitting ? <Loader2 className="animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
             Save Assignments
           </Button>

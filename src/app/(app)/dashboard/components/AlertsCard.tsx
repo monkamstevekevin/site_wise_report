@@ -4,7 +4,7 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { AlertCircle, HardHat, CalendarDays, ChevronDown, ChevronUp } from 'lucide-react';
-import type { Project, User } from '@/lib/types';
+import type { Project, User, UserAssignment } from '@/lib/types';
 import { differenceInDays, format, isFuture, isPast, parseISO } from 'date-fns';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -18,7 +18,10 @@ interface AlertsCardProps {
 const INITIAL_ALERTS_DISPLAY_COUNT = 3;
 
 const getAssignedTechniciansCount = (projectId: string, users: User[]): number => {
-  return users.filter(user => user.role === 'TECHNICIAN' && user.assignedProjectIds.includes(projectId)).length;
+  return users.filter(user => 
+    user.role === 'TECHNICIAN' && 
+    user.assignments?.some(a => a.projectId === projectId)
+  ).length;
 };
 
 const formatDatePretty = (dateString?: string) => {

@@ -2,11 +2,11 @@
 'use server';
 
 import { auth, db } from '@/lib/firebase';
-import type { User, UserRole, Project } from '@/lib/types'; // Added Project type
+import type { User, UserRole, Project, UserAssignment } from '@/lib/types'; // Added Project type
 import { collection, getDocs, doc, getDoc, Timestamp, query, setDoc, serverTimestamp, updateDoc, deleteDoc } from 'firebase/firestore';
 import { createUserWithEmailAndPassword, updateProfile as updateAuthProfile } from 'firebase/auth';
-import { addNotification } from './notificationService'; // Added import
-import { getProjectById } from './projectService'; // Added import
+import { addNotification } from './notificationService'; 
+import { getProjectById } from './projectService'; // For fetching project details
 
 /**
  * @fileOverview User service for interacting with Firestore 'users' collection and Firebase Auth.
@@ -15,7 +15,7 @@ import { getProjectById } from './projectService'; // Added import
  * - getUserById - Fetches a single user by their ID from Firestore.
  * - addUser - Creates a new user in Firebase Auth and Firestore.
  * - updateUser - Updates a user's information (name, role) in Firestore.
- * - updateUserAssignedProjects - Updates the assigned projects for a user in Firestore and sends notifications.
+ * - updateUserAssignments - Updates the assigned projects for a user in Firestore and sends notifications.
  * - deleteUserFirestoreRecord - Deletes a user's document from Firestore.
  */
 
@@ -57,7 +57,7 @@ export async function getUsers(): Promise<User[]> {
         email: data.email || 'no-email@example.com',
         role: data.role || 'TECHNICIAN',
         avatarUrl: data.avatarUrl || undefined,
-        assignedProjectIds: Array.isArray(data.assignedProjectIds) ? data.assignedProjectIds : [],
+        assignments: Array.isArray(data.assignments) ? data.assignments : [], // Updated field
         createdAt: formatTimestamp(data.createdAt),
         updatedAt: formatTimestamp(data.updatedAt),
       } as User;
@@ -87,7 +87,7 @@ export async function getUserById(userId: string): Promise<User | null> {
         email: data.email || 'no-email@example.com',
         role: data.role || 'TECHNICIAN',
         avatarUrl: data.avatarUrl || undefined,
-        assignedProjectIds: Array.isArray(data.assignedProjectIds) ? data.assignedProjectIds : [],
+        assignments: Array.isArray(data.assignments) ? data.assignments : [], // Updated field
         createdAt: formatTimestamp(data.createdAt),
         updatedAt: formatTimestamp(data.updatedAt),
       } as User;
@@ -125,11 +125,11 @@ export async function addUser(
 
     const userDocRef = doc(db, 'users', firebaseUser.uid);
     await setDoc(userDocRef, {
-      name: userData.displayName, // Store as 'name' in Firestore
+      name: userData.displayName, 
       email: firebaseUser.email,
       role: userData.role,
       avatarUrl: firebaseUser.photoURL || '',
-      assignedProjectIds: [],
+      assignments: [], // Initialize new field
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -181,54 +181,105 @@ export async function updateUser(userId: string, data: { displayName?: string; r
   }
 }
 
+function isProjectActive(project: Project): boolean {
+  if (project.status !== 'ACTIVE') return false;
+  if (!project.endDate) return true; // No end date means it's ongoing
+  return new Date(project.endDate) >= new Date(); // Active if end date is today or in the future
+}
 
 /**
- * Updates the assigned projects for a user in Firestore and sends notifications for new assignments.
+ * Updates the assigned projects for a user in Firestore and sends notifications.
+ * Includes logic to prevent over-assignment for FULL_TIME technicians.
  * @param {string} userId The ID of the user to update.
- * @param {string[]} newProjectIds An array of project IDs to assign to the user.
+ * @param {UserAssignment[]} newAssignments An array of project assignments.
  * @returns {Promise<void>} A promise that resolves when the user's projects are successfully updated.
- * @throws Will throw an error if updating the user's projects fails or if project details cannot be fetched for notifications.
+ * @throws Will throw an error if updating fails or if there's an assignment conflict.
  */
-export async function updateUserAssignedProjects(userId: string, newProjectIds: string[]): Promise<void> {
+export async function updateUserAssignments(userId: string, newAssignments: UserAssignment[]): Promise<void> {
   const userDocRef = doc(db, 'users', userId);
-  try {
-    const userDocSnap = await getDoc(userDocRef);
-    if (!userDocSnap.exists()) {
-      throw new Error(`User with ID ${userId} not found.`);
-    }
-    const currentUserData = userDocSnap.data() as User;
-    const oldProjectIds = new Set(currentUserData.assignedProjectIds || []);
+  const userDocSnap = await getDoc(userDocRef);
+  if (!userDocSnap.exists()) {
+    throw new Error(`User with ID ${userId} not found.`);
+  }
+  const currentUserData = userDocSnap.data() as User;
+  const oldAssignments = currentUserData.assignments || [];
 
+  // Check for FULL_TIME conflicts
+  const fullTimeNewAssignments = newAssignments.filter(a => a.assignmentType === 'FULL_TIME');
+  if (fullTimeNewAssignments.length > 0) {
+    const existingFullTimeAssignments = oldAssignments.filter(
+      a => a.assignmentType === 'FULL_TIME' && !fullTimeNewAssignments.find(na => na.projectId === a.projectId)
+    );
+    
+    let activeFullTimeProjectIds: string[] = [];
+
+    // Check new full-time assignments against each other for active status
+    for (const assignment of fullTimeNewAssignments) {
+        const project = await getProjectById(assignment.projectId);
+        if (project && isProjectActive(project)) {
+            activeFullTimeProjectIds.push(project.id);
+        }
+    }
+     if (activeFullTimeProjectIds.length > 1) {
+        throw new Error(`Technician cannot be assigned FULL_TIME to multiple active projects simultaneously. Conflict with new assignments for projects: ${activeFullTimeProjectIds.join(', ')}.`);
+    }
+
+
+    // Check new full-time assignments against existing active full-time assignments
+    for (const newFtAssignment of fullTimeNewAssignments) {
+      const newProject = await getProjectById(newFtAssignment.projectId);
+      if (newProject && isProjectActive(newProject)) {
+        for (const existingFtAssignment of existingFullTimeAssignments) {
+          const existingProject = await getProjectById(existingFtAssignment.projectId);
+          if (existingProject && isProjectActive(existingProject)) {
+            throw new Error(
+              `Technician is already assigned FULL_TIME to active project "${existingProject.name}" (ends ${existingProject.endDate || 'N/A'}). Cannot also assign FULL_TIME to active project "${newProject.name}" (ends ${newProject.endDate || 'N/A'}).`
+            );
+          }
+        }
+      }
+    }
+  }
+
+
+  try {
     await updateDoc(userDocRef, {
-      assignedProjectIds: newProjectIds,
+      assignments: newAssignments,
       updatedAt: serverTimestamp(),
     });
 
-    // Determine newly assigned projects and send notifications
-    const newlyAssignedProjectIds = newProjectIds.filter(id => !oldProjectIds.has(id));
+    // Determine newly assigned projects (any type) and send notifications
+    const oldProjectIdsSet = new Set(oldAssignments.map(a => a.projectId));
+    const newlyAssignedProjectDetails: { project: Project; assignmentType: UserAssignment['assignmentType'] }[] = [];
 
-    for (const projectId of newlyAssignedProjectIds) {
-      try {
-        const project = await getProjectById(projectId); // Fetch project details
+    for (const newAssignment of newAssignments) {
+      if (!oldProjectIdsSet.has(newAssignment.projectId)) {
+        const project = await getProjectById(newAssignment.projectId);
         if (project) {
-          await addNotification(userId, {
-            type: 'project_assignment',
-            message: `You have been assigned to a new project: ${project.name} (Location: ${project.location}).`,
-            targetId: projectId,
-            link: `/my-projects`, // Or `/project/${projectId}/chat`
-          });
-          // The Genkit email simulation is handled in the page component for now
-        } else {
-          console.warn(`Project details for ID ${projectId} not found. Skipping notification for this assignment.`);
+          newlyAssignedProjectDetails.push({ project, assignmentType: newAssignment.assignmentType });
         }
+      }
+    }
+    
+    for (const { project, assignmentType } of newlyAssignedProjectDetails) {
+      try {
+        const assignmentTypeDisplay = assignmentType === 'FULL_TIME' ? 'à temps plein' : 'à temps partiel';
+        await addNotification(userId, {
+          type: 'project_assignment',
+          message: `Vous avez été assigné(e) ${assignmentTypeDisplay} au projet : ${project.name} (Lieu: ${project.location}).`,
+          targetId: project.id,
+          link: `/my-projects`, 
+        });
       } catch (projectError) {
-        console.error(`Error fetching project ${projectId} or sending notification for user ${userId}:`, projectError);
-        // Continue assigning other projects even if one notification fails
+        console.error(`Error fetching project ${project.id} or sending notification for user ${userId}:`, projectError);
       }
     }
 
   } catch (error) {
     console.error(`Error updating assigned projects for user ${userId}: `, error);
+    if (error instanceof Error) { // Propagate custom error messages
+        throw error;
+    }
     throw new Error(`Failed to update assigned projects for user ${userId} in database.`);
   }
 }

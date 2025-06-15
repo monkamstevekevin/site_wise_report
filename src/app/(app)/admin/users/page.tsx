@@ -8,15 +8,15 @@ import { Button } from '@/components/ui/button';
 import { UserFormDialog, type UserFormData } from './components/UserFormDialog';
 import { UserTable } from './components/UserTable';
 import { AssignProjectsDialog } from './components/AssignProjectsDialog';
-import type { User, UserRole, Project } from '@/lib/types';
+import type { User, UserRole, Project, UserAssignment } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { getProjects } from '@/services/projectService';
-import { getUsers, addUser, updateUserAssignedProjects, updateUser, deleteUserFirestoreRecord } from '@/services/userService';
-import { generateAssignmentNotificationEmail } from '@/ai/flows/assignment-notification-flow.ts'; // Ensure correct path and .ts extension
+import { getUsers, addUser, updateUserAssignments, updateUser, deleteUserFirestoreRecord } from '@/services/userService';
+import { generateAssignmentNotificationEmail } from '@/ai/flows/assignment-notification-flow.ts'; 
 import {
   AlertDialog,
   AlertDialogAction,
@@ -62,37 +62,29 @@ export default function UserManagementPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<UserRole | 'ALL'>('ALL');
 
-  const fetchUsers = async () => {
+  const fetchUsersAndProjects = async () => {
     setIsLoadingUsers(true);
+    setIsLoadingProjects(true);
     setUsersError(null);
     try {
-      const fetchedUsers = await getUsers();
+      const [fetchedUsers, fetchedProjects] = await Promise.all([
+        getUsers(),
+        getProjects()
+      ]);
       setUsersData(fetchedUsers);
+      setAllProjects(fetchedProjects);
     } catch (err) {
-      setUsersError((err as Error).message || "Failed to load users. Please try again later.");
-      console.error("Error fetching users:", err);
+      setUsersError((err as Error).message || "Failed to load data. Please try again later.");
+      console.error("Error fetching users or projects:", err);
     } finally {
       setIsLoadingUsers(false);
+      setIsLoadingProjects(false);
     }
   };
 
   useEffect(() => {
-    fetchUsers();
-
-    const fetchAllProjects = async () => {
-      setIsLoadingProjects(true);
-      try {
-        const fetchedProjects = await getProjects();
-        setAllProjects(fetchedProjects);
-      } catch (error) {
-        console.error("Failed to fetch projects for assignment dialog:", error);
-        toast({ variant: "destructive", title: "Error", description: "Could not load projects for assignment." });
-      } finally {
-        setIsLoadingProjects(false);
-      }
-    };
-    fetchAllProjects();
-  }, [toast]);
+    fetchUsersAndProjects();
+  }, []);
 
   const handleAddNewUser = () => {
     setEditingUser(undefined);
@@ -117,7 +109,7 @@ export default function UserManagementPage() {
         title: "User Record Deleted",
         description: `User "${userToDelete.name}" (ID: ${userToDelete.id}) has been deleted from Firestore. Their authentication record may still exist.`,
       });
-      await fetchUsers(); 
+      await fetchUsersAndProjects(); 
     } catch (err) {
       toast({
         variant: "destructive",
@@ -134,7 +126,7 @@ export default function UserManagementPage() {
   const handleUserFormSubmit = async (data: UserFormData & { password?: string }, id?: string) => {
     setIsUserFormOpen(false);
 
-    if (id) { // Editing user
+    if (id) { 
       try {
         await updateUser(id, { displayName: data.displayName, role: data.role });
         toast({
@@ -149,7 +141,7 @@ export default function UserManagementPage() {
         });
         setIsUserFormOpen(true); 
       }
-    } else { // Adding new user
+    } else { 
       if (!data.password) {
         toast({ variant: "destructive", title: "Missing Password", description: "Password is required to create a new user." });
         setIsUserFormOpen(true);
@@ -174,7 +166,7 @@ export default function UserManagementPage() {
         setIsUserFormOpen(true); 
       }
     }
-    await fetchUsers(); 
+    await fetchUsersAndProjects(); 
     setEditingUser(undefined);
   };
 
@@ -183,7 +175,7 @@ export default function UserManagementPage() {
     setIsAssignProjectsDialogOpen(true);
   };
 
-  const handleAssignProjects = async (userId: string, selectedProjectIds: string[]) => {
+  const handleAssignProjects = async (userId: string, newAssignments: UserAssignment[]) => {
     setIsProcessingAssignment(true);
     const targetUser = usersData.find(u => u.id === userId);
     if (!targetUser || !adminAuthUser) {
@@ -192,17 +184,24 @@ export default function UserManagementPage() {
       return;
     }
 
-    const oldProjectIds = new Set(targetUser.assignedProjectIds || []);
+    const oldAssignments = targetUser.assignments || [];
     
     try {
-      await updateUserAssignedProjects(userId, selectedProjectIds); 
+      await updateUserAssignments(userId, newAssignments); 
       
-      await fetchUsers(); 
+      await fetchUsersAndProjects(); 
 
-      const newlyAssignedProjects = selectedProjectIds
-        .filter(id => !oldProjectIds.has(id))
-        .map(id => allProjects.find(p => p.id === id))
-        .filter(p => p !== undefined) as Project[];
+      const oldProjectIdsSet = new Set(oldAssignments.map(a => a.projectId));
+      const newlyAssignedProjectDetails: { project: Project; assignmentType: UserAssignment['assignmentType'] }[] = [];
+
+       for (const newAssignment of newAssignments) {
+         if (!oldProjectIdsSet.has(newAssignment.projectId)) {
+           const project = allProjects.find(p => p.id === newAssignment.projectId);
+           if (project) {
+             newlyAssignedProjectDetails.push({ project, assignmentType: newAssignment.assignmentType });
+           }
+         }
+       }
       
        toast({
           title: "Project Assignments Updated",
@@ -210,16 +209,17 @@ export default function UserManagementPage() {
           duration: 7000,
       });
       
-      for (const project of newlyAssignedProjects) {
+      for (const { project, assignmentType } of newlyAssignedProjectDetails) {
         if (process.env.NEXT_PUBLIC_SKIP_EMAIL_EXTENSION === 'true') {
           console.log(`Skipping email for project ${project.name} due to NEXT_PUBLIC_SKIP_EMAIL_EXTENSION flag.`);
           continue;
         }
         try {
           const appBaseUrl = typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000");
+          const assignmentTypeDisplay = assignmentType === 'FULL_TIME' ? 'à temps plein' : 'à temps partiel';
           const notificationContent = await generateAssignmentNotificationEmail({ 
             userName: targetUser.name,
-            projectName: project.name,
+            projectName: `${project.name} (Assignation ${assignmentTypeDisplay})`,
             projectLocation: project.location,
             assignerName: adminAuthUser.displayName || adminAuthUser.email || "Admin",
             appName: "SiteWise Reports",
@@ -236,8 +236,8 @@ export default function UserManagementPage() {
           });
           console.log(`Email document for project ${project.name} written to 'mail' collection for ${targetUser.email}.`);
           toast({
-            title: `Email Queued via Extension for ${project.name}`,
-            description: `An assignment email for ${targetUser.name} regarding ${project.name} has been queued for sending via Firestore extension. Subject: ${notificationContent.emailSubject}`,
+            title: `Email Queued for ${project.name}`,
+            description: `Assignment email for ${targetUser.name} regarding ${project.name} (${assignmentTypeDisplay}) has been queued. Subject: ${notificationContent.emailSubject}`,
             duration: 8000,
           });
 
@@ -245,7 +245,7 @@ export default function UserManagementPage() {
           console.error(`Error generating content or queueing assignment email for project ${project.name}:`, aiErrorOrMailError);
           toast({ 
             variant: "destructive", 
-            title: `Email Generation/Queue Error for ${project.name}`, 
+            title: `Email Error for ${project.name}`, 
             description: (aiErrorOrMailError as Error).message || "Could not generate or queue email notification."
           });
         }
@@ -327,19 +327,19 @@ export default function UserManagementPage() {
         </div>
       </div>
 
-      {isLoadingUsers && (
+      {(isLoadingUsers || isLoadingProjects) && (
         <div className="flex items-center justify-center py-10 text-muted-foreground">
-          <Loader2 className="mr-2 h-6 w-6 animate-spin" /> Loading users...
+          <Loader2 className="mr-2 h-6 w-6 animate-spin" /> Loading data...
         </div>
       )}
-      {usersError && (
+      {usersError && !isLoadingUsers && (
          <div className="text-center py-10 text-destructive bg-destructive/10 p-4 rounded-md">
             <AlertTriangle className="mx-auto h-8 w-8 mb-2" />
-           <p className="font-semibold">Error Loading Users</p>
+           <p className="font-semibold">Error Loading Data</p>
            <p>{usersError}</p>
          </div>
       )}
-      {!isLoadingUsers && !usersError && (
+      {!isLoadingUsers && !isLoadingProjects && !usersError && (
         <div className="bg-card p-0 md:p-6 rounded-lg shadow-md">
           {isProcessingAssignment &&
             <div className="flex items-center justify-center p-4 text-sm text-muted-foreground">

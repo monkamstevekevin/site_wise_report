@@ -12,10 +12,10 @@ import {
 } from "@/components/ui/table";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import type { Project, User } from '@/lib/types';
+import type { Project, User, UserAssignment } from '@/lib/types';
 import { HardHat, AlertTriangle } from 'lucide-react';
 import { differenceInDays, format, isFuture, isPast, parseISO } from 'date-fns';
-import { useRouter } from 'next/navigation'; // Import useRouter
+import { useRouter } from 'next/navigation'; 
 import { cn } from '@/lib/utils';
 
 interface ProjectAssignmentsCardProps {
@@ -24,7 +24,10 @@ interface ProjectAssignmentsCardProps {
 }
 
 const getAssignedTechniciansCount = (projectId: string, users: User[]): number => {
-  return users.filter(user => user.role === 'TECHNICIAN' && user.assignedProjectIds.includes(projectId)).length;
+  return users.filter(user => 
+    user.role === 'TECHNICIAN' && 
+    user.assignments?.some(a => a.projectId === projectId)
+  ).length;
 };
 
 const projectStatusVariant = (project: Project): "default" | "secondary" | "outline" | "destructive" => {
@@ -49,7 +52,7 @@ const formatDatePretty = (dateString?: string) => {
 
 export function ProjectAssignmentsCard({ projects, users }: ProjectAssignmentsCardProps) {
   const now = new Date();
-  const router = useRouter(); // Initialize router
+  const router = useRouter(); 
 
   if (projects.length === 0) {
     return (
@@ -109,7 +112,7 @@ export function ProjectAssignmentsCard({ projects, users }: ProjectAssignmentsCa
                       "cursor-pointer hover:bg-muted/50 transition-colors",
                       alertNeeded && "bg-amber-50 dark:bg-amber-900/30 hover:bg-amber-100 dark:hover:bg-amber-800/40"
                     )}
-                    onClick={() => router.push(`/admin/projects`)} // Updated navigation target
+                    onClick={() => router.push(`/admin/projects`)} 
                   >
                     <TableCell className="font-medium">
                       <div className="text-primary hover:underline text-left justify-start whitespace-normal">
@@ -143,8 +146,5 @@ export function ProjectAssignmentsCard({ projects, users }: ProjectAssignmentsCa
   );
 }
 
-// Added Card, CardHeader, CardContent, CardTitle, CardDescription to satisfy imports for this component if it's the only one modified.
-// Assuming they are already correctly defined in their respective files.
-// If not, they are standard ShadCN components.
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 
