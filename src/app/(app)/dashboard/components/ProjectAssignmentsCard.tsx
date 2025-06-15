@@ -3,13 +3,6 @@
 
 import React from 'react';
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from '@/components/ui/card';
-import {
   Table,
   TableBody,
   TableCell,
@@ -22,12 +15,11 @@ import { Badge } from '@/components/ui/badge';
 import type { Project, User } from '@/lib/types';
 import { HardHat, AlertTriangle } from 'lucide-react';
 import { differenceInDays, format, isFuture, isPast, parseISO } from 'date-fns';
-import Link from 'next/link';
-import { Button } from '@/components/ui/button';
+import { useRouter } from 'next/navigation'; // Import useRouter
 import { cn } from '@/lib/utils';
 
 interface ProjectAssignmentsCardProps {
-  projects: Project[]; // Now receives pre-filtered and sorted projects
+  projects: Project[];
   users: User[];
 }
 
@@ -57,6 +49,7 @@ const formatDatePretty = (dateString?: string) => {
 
 export function ProjectAssignmentsCard({ projects, users }: ProjectAssignmentsCardProps) {
   const now = new Date();
+  const router = useRouter(); // Initialize router
 
   if (projects.length === 0) {
     return (
@@ -82,7 +75,7 @@ export function ProjectAssignmentsCard({ projects, users }: ProjectAssignmentsCa
           <HardHat className="mr-2 h-5 w-5 text-primary" />
           Aperçu des Assignations de Projets
         </CardTitle>
-        <CardDescription>Projets et assignations de techniciens pour la période sélectionnée.</CardDescription>
+        <CardDescription>Projets et assignations de techniciens pour la période sélectionnée. Cliquez sur une ligne pour accéder au chat du projet.</CardDescription>
       </CardHeader>
       <CardContent className="px-0 pt-0">
         <ScrollArea className="h-96">
@@ -98,7 +91,7 @@ export function ProjectAssignmentsCard({ projects, users }: ProjectAssignmentsCa
               </TableRow>
             </TableHeader>
             <TableBody>
-              {projects.map(project => { // Uses the directly passed (and filtered) projects
+              {projects.map(project => {
                 const assignedTechniciansCount = getAssignedTechniciansCount(project.id, users);
                 const daysUntilStart = project.startDate ? differenceInDays(parseISO(project.startDate), now) : null;
                 
@@ -106,19 +99,22 @@ export function ProjectAssignmentsCard({ projects, users }: ProjectAssignmentsCa
                 if (project.status === 'ACTIVE' && assignedTechniciansCount === 0) {
                   alertNeeded = true;
                 } else if (daysUntilStart !== null && daysUntilStart >= 0 && daysUntilStart <= 7 && assignedTechniciansCount === 0) {
-                  // This specific alert logic might be redundant if AlertsCard handles it,
-                  // but can be kept for visual cue in this table.
                   alertNeeded = true;
                 }
 
                 return (
-                  <TableRow key={project.id} className={cn(alertNeeded && "bg-amber-50 dark:bg-amber-900/30")}>
+                  <TableRow 
+                    key={project.id} 
+                    className={cn(
+                      "cursor-pointer hover:bg-muted/50 transition-colors",
+                      alertNeeded && "bg-amber-50 dark:bg-amber-900/30 hover:bg-amber-100 dark:hover:bg-amber-800/40"
+                    )}
+                    onClick={() => router.push(`/project/${project.id}/chat`)}
+                  >
                     <TableCell className="font-medium">
-                      <Link href={`/project/${project.id}/chat`} passHref>
-                        <Button variant="link" className="p-0 h-auto text-primary hover:underline text-left justify-start whitespace-normal">
-                          {project.name}
-                        </Button>
-                      </Link>
+                      <div className="text-primary hover:underline text-left justify-start whitespace-normal">
+                        {project.name}
+                      </div>
                       {project.description && <p className="text-xs text-muted-foreground truncate max-w-[180px]">{project.description}</p>}
                     </TableCell>
                     <TableCell className="text-xs">{formatDatePretty(project.startDate)}</TableCell>
@@ -147,3 +143,7 @@ export function ProjectAssignmentsCard({ projects, users }: ProjectAssignmentsCa
   );
 }
 
+// Added Card, CardHeader, CardContent, CardTitle, CardDescription to satisfy imports for this component if it's the only one modified.
+// Assuming they are already correctly defined in their respective files.
+// If not, they are standard ShadCN components.
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
