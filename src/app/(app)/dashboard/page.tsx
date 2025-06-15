@@ -148,12 +148,9 @@ export default function DashboardPage() {
           reportsToSetForDashboard = await getReportsByTechnicianId(mappedTechId);
           setTechnicianReports(reportsToSetForDashboard);
           setAllReportsData(reportsToSetForDashboard); 
-          // For technician, we might not need all projects/users unless a specific feature requires it.
-          // If "My Projects" page shows projects assigned to them, they might not need allProjectsData here.
-          // Let's fetch all projects if they need to see names, but user list might be excessive.
-          const projects = await getProjects(); // Or only assigned ones if preferred
+          const projects = await getProjects(); 
           setAllProjectsData(projects); 
-          setAllUsersData([]); // Technicians typically don't need the full user list on dashboard
+          setAllUsersData([]); 
         } else if (role === 'TECHNICIAN' && !mappedTechId) {
            setTechnicianReports([]);
            setAllReportsData([]);
@@ -295,15 +292,19 @@ export default function DashboardPage() {
     return allProjectsData
       .filter(p => {
         if (p.status === 'COMPLETED' || p.status === 'INACTIVE') return false;
-        if (!p.startDate) return false; 
-  
-        const projectStartDate = parseISO(p.startDate);
-        if (isNaN(projectStartDate.getTime())) return false;
+        
+        const projectStartDateStr = p.startDate;
+        const projectEndDateStr = p.endDate;
+
+        if (!projectStartDateStr) return false; 
+
+        const projectStartDate = parseISO(projectStartDateStr);
+        if (isNaN(projectStartDate.getTime())) return false; 
         const projectStart = startOfDay(projectStartDate);
         
-        if (p.endDate) {
-          const projectEndDate = parseISO(p.endDate);
-          if (isNaN(projectEndDate.getTime())) return false;
+        if (projectEndDateStr) {
+          const projectEndDate = parseISO(projectEndDateStr);
+          if (isNaN(projectEndDate.getTime())) return false; 
           const projectEnd = endOfDay(projectEndDate);
           return !isAfter(projectStart, rangeEnd) && !isBefore(projectEnd, rangeStart);
         } else {
@@ -323,18 +324,24 @@ export default function DashboardPage() {
         </div>
         {(currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') && (
           <>
+            <Skeleton className="h-72 w-full rounded-lg mb-6" /> {/* Alerts Placeholder */}
             <Skeleton className="h-24 w-full mb-6 rounded-lg" /> {/* Date Picker Placeholder */}
             <Skeleton className="h-96 w-full mb-6 rounded-lg" /> {/* Assignments Placeholder */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-                <Skeleton className="h-72 rounded-lg" /> {/* Alerts Placeholder */}
-                <Skeleton className="lg:col-span-2 h-72 rounded-lg" /> {/* Other Graph Placeholder */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <Skeleton className="h-72 rounded-lg" /> 
+                <Skeleton className="h-72 rounded-lg" /> 
+                <Skeleton className="lg:col-span-2 h-72 rounded-lg" />
+                <Skeleton className="lg:col-span-2 h-72 rounded-lg" />
             </div>
           </>
         )}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Skeleton className="lg:col-span-2 h-96 rounded-lg" />
-          <Skeleton className="h-96 rounded-lg" />
-        </div>
+        { currentUserRole === 'TECHNICIAN' && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <Skeleton className="lg:col-span-1 h-96 rounded-lg" />
+            <Skeleton className="lg:col-span-1 h-96 rounded-lg" />
+            <Skeleton className="lg:col-span-1 h-96 rounded-lg" />
+            </div>
+        )}
       </>
     );
   }
@@ -402,6 +409,7 @@ export default function DashboardPage() {
 
       { (currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') && (
         <>
+          {/* KPI Cards */}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
               {adminKpiData.map((kpi) => (
                 kpi.tooltipContent ? (
@@ -435,7 +443,17 @@ export default function DashboardPage() {
                 )
               ))}
           </div>
+          
+          {/* Alerts Card - Moved Up */}
+          {isLoadingDashboardData ? (
+            <Skeleton className="h-72 w-full rounded-lg mb-6" />
+          ) : (
+            <div className="mb-6">
+              <AlertsCard projects={allProjectsData} users={allUsersData} />
+            </div>
+          )}
 
+          {/* Date Filter Card */}
           <Card className="mb-6 shadow-lg rounded-lg">
             <CardHeader>
                 <CardTitle className="flex items-center"><FilterIcon className="mr-2 h-5 w-5 text-primary"/>Filtres d'Assignation de Projets</CardTitle>
@@ -487,6 +505,7 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
+          {/* ProjectAssignmentsCard Wrapper */}
           {isLoadingDashboardData ? (
             <Skeleton className="h-96 w-full mb-6 rounded-lg" />
           ) : noProjectsExistForAdmin ? (
@@ -500,40 +519,23 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
           ) : (
-            <div className="mb-6"> {/* ProjectAssignmentsCard takes full width here */}
+            <div className="mb-6"> 
               <ProjectAssignmentsCard projects={filteredProjectsForAssignments} users={allUsersData} />
             </div>
           )}
           
-          {/* New grid for Alerts and other analytics */}
+          {/* Grid for other analytics - AlertsCard removed from here */}
           {isLoadingDashboardData ? (
-             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <Skeleton className="h-72 rounded-lg" /> {/* Alerts Placeholder */}
-                <Skeleton className="lg:col-span-2 h-72 rounded-lg" /> {/* Graph Placeholder */}
+             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Skeleton className="h-72 rounded-lg" /> 
+                <Skeleton className="h-72 rounded-lg" /> 
+                <Skeleton className="lg:col-span-2 h-96 rounded-lg" />
+                <Skeleton className="lg:col-span-2 h-96 rounded-lg" />
             </div>
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {!noProjectsExistForAdmin ? (
-                    <AlertsCard projects={allProjectsData} users={allUsersData} />
-                ) : (
-                    // If no projects, AlertsCard might be less useful or show an empty state.
-                    // For now, let's include it but it will internally show "no alerts".
-                    // Or we could show a placeholder message for this part of the dashboard too.
-                    <div className="lg:col-span-1">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center"><AlertCircleIcon className="mr-2 h-5 w-5 text-primary" />Project Alerts</CardTitle>
-                                <CardDescription>No projects available to show alerts.</CardDescription>
-                            </CardHeader>
-                             <CardContent>
-                                <p className="text-muted-foreground text-center py-4">Create projects to see relevant alerts.</p>
-                            </CardContent>
-                        </Card>
-                    </div>
-                )}
-
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {noReportsExistForUser && !noProjectsExistForAdmin && (
-                    <div className="lg:col-span-2">
+                    <div className="lg:col-span-full">
                         <Card>
                             <CardHeader>
                                 <CardTitle>No Reports Found</CardTitle>
@@ -548,17 +550,14 @@ export default function DashboardPage() {
 
                 {!noReportsExistForUser && !noProjectsExistForAdmin && (
                     <>
-                        {/* MaterialReportsChart and SupplierUsageChart on the same "row" as AlertsCard if space allows, or next row */}
                         <MaterialReportsChart data={materialUsageData} /> 
                         <SupplierUsageChart data={supplierUsageData} />
-                        
-                        {/* These take full width of the 3-col grid */}
-                        <ComplianceTrendChart className="lg:col-span-3" />
-                        <ActivityLog className="lg:col-span-3" />
+                        <ComplianceTrendChart className="lg:col-span-2" />
+                        <ActivityLog className="lg:col-span-2" />
                     </>
                 )}
-                 {noProjectsExistForAdmin && ( // Message if no projects at all, affecting analytics
-                    <div className="lg:col-span-3">
+                 {noProjectsExistForAdmin && ( 
+                    <div className="lg:col-span-full">
                        <Card>
                            <CardHeader>
                                <CardTitle>Analytics Unavailable</CardTitle>
