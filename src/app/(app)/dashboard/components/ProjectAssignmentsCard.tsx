@@ -75,7 +75,7 @@ export function ProjectAssignmentsCard({ projects, users }: ProjectAssignmentsCa
           <HardHat className="mr-2 h-5 w-5 text-primary" />
           Aperçu des Assignations de Projets
         </CardTitle>
-        <CardDescription>Projets et assignations de techniciens pour la période sélectionnée. Cliquez sur une ligne pour accéder au chat du projet.</CardDescription>
+        <CardDescription>Projets et assignations de techniciens pour la période sélectionnée. Cliquez sur une ligne pour accéder à la gestion des projets.</CardDescription>
       </CardHeader>
       <CardContent className="px-0 pt-0">
         <ScrollArea className="h-96">
@@ -109,7 +109,7 @@ export function ProjectAssignmentsCard({ projects, users }: ProjectAssignmentsCa
                       "cursor-pointer hover:bg-muted/50 transition-colors",
                       alertNeeded && "bg-amber-50 dark:bg-amber-900/30 hover:bg-amber-100 dark:hover:bg-amber-800/40"
                     )}
-                    onClick={() => router.push(`/project/${project.id}/chat`)}
+                    onClick={() => router.push(`/admin/projects`)} // Updated navigation target
                   >
                     <TableCell className="font-medium">
                       <div className="text-primary hover:underline text-left justify-start whitespace-normal">
@@ -147,3 +147,4 @@ export function ProjectAssignmentsCard({ projects, users }: ProjectAssignmentsCa
 // Assuming they are already correctly defined in their respective files.
 // If not, they are standard ShadCN components.
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+
