@@ -20,14 +20,14 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import type { Project, User } from '@/lib/types';
-import { HardHat, Users, CalendarDays, AlertTriangle } from 'lucide-react';
+import { HardHat, AlertTriangle } from 'lucide-react';
 import { differenceInDays, format, isFuture, isPast, parseISO } from 'date-fns';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 interface ProjectAssignmentsCardProps {
-  projects: Project[];
+  projects: Project[]; // Now receives pre-filtered and sorted projects
   users: User[];
 }
 
@@ -40,10 +40,10 @@ const projectStatusVariant = (project: Project): "default" | "secondary" | "outl
   if (project.status === 'INACTIVE') return 'outline';
   
   const startDate = project.startDate ? parseISO(project.startDate) : null;
-  if (startDate && isFuture(startDate)) return 'default'; // Upcoming - Blue
-  if (startDate && isPast(startDate) && project.status === 'ACTIVE') return 'default'; // Active and past start - Green (default is primary for active)
+  if (startDate && isFuture(startDate)) return 'default';
+  if (startDate && isPast(startDate) && project.status === 'ACTIVE') return 'default'; 
   
-  return 'outline'; // Default for other cases like ACTIVE but future start (or if dates are missing)
+  return 'outline';
 };
 
 const formatDatePretty = (dateString?: string) => {
@@ -58,51 +58,47 @@ const formatDatePretty = (dateString?: string) => {
 export function ProjectAssignmentsCard({ projects, users }: ProjectAssignmentsCardProps) {
   const now = new Date();
 
-  const relevantProjects = projects
-    .filter(p => p.status === 'ACTIVE' || (p.startDate && isFuture(parseISO(p.startDate)) && differenceInDays(parseISO(p.startDate), now) <= 30))
-    .sort((a, b) => (a.startDate && b.startDate ? parseISO(a.startDate).getTime() - parseISO(b.startDate).getTime() : 0));
-
-  if (relevantProjects.length === 0) {
+  if (projects.length === 0) {
     return (
-      <Card className="shadow-lg rounded-lg">
+      <Card className="shadow-lg rounded-lg lg:col-span-2">
         <CardHeader>
           <CardTitle className="flex items-center">
             <HardHat className="mr-2 h-5 w-5 text-primary" />
-            Project Assignments Overview
+            Aperçu des Assignations de Projets
           </CardTitle>
-          <CardDescription>No active or upcoming projects within the next 30 days requiring technician assignment overview.</CardDescription>
+          <CardDescription>Projets et assignations de techniciens pour la période sélectionnée.</CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground text-center py-4">All clear for now!</p>
+          <p className="text-muted-foreground text-center py-4">Aucun projet ne correspond à la plage de dates sélectionnée ou aux critères actifs/à venir.</p>
         </CardContent>
       </Card>
     );
   }
 
   return (
-    <Card className="shadow-lg rounded-lg lg:col-span-2"> {/* Added lg:col-span-2 to make it wider */}
+    <Card className="shadow-lg rounded-lg lg:col-span-2">
       <CardHeader>
         <CardTitle className="flex items-center">
           <HardHat className="mr-2 h-5 w-5 text-primary" />
-          Project Assignments Overview
+          Aperçu des Assignations de Projets
         </CardTitle>
-        <CardDescription>Status of active and upcoming projects (next 30 days) and their technician assignments.</CardDescription>
+        <CardDescription>Projets et assignations de techniciens pour la période sélectionnée.</CardDescription>
       </CardHeader>
-      <CardContent className="px-0 pt-0"> {/* Remove padding for full-width table */}
-        <ScrollArea className="h-96"> {/* Increased height for better table view */}
+      <CardContent className="px-0 pt-0">
+        <ScrollArea className="h-96">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[200px]">Project Name</TableHead>
-                <TableHead>Start Date</TableHead>
-                <TableHead>End Date</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-center">Technicians</TableHead>
-                <TableHead className="text-center">Alert</TableHead>
+                <TableHead className="w-[200px]">Nom du Projet</TableHead>
+                <TableHead>Date Début</TableHead>
+                <TableHead>Date Fin</TableHead>
+                <TableHead>Statut</TableHead>
+                <TableHead className="text-center">Techniciens</TableHead>
+                <TableHead className="text-center">Alerte</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {relevantProjects.map(project => {
+              {projects.map(project => { // Uses the directly passed (and filtered) projects
                 const assignedTechniciansCount = getAssignedTechniciansCount(project.id, users);
                 const daysUntilStart = project.startDate ? differenceInDays(parseISO(project.startDate), now) : null;
                 
@@ -110,6 +106,8 @@ export function ProjectAssignmentsCard({ projects, users }: ProjectAssignmentsCa
                 if (project.status === 'ACTIVE' && assignedTechniciansCount === 0) {
                   alertNeeded = true;
                 } else if (daysUntilStart !== null && daysUntilStart >= 0 && daysUntilStart <= 7 && assignedTechniciansCount === 0) {
+                  // This specific alert logic might be redundant if AlertsCard handles it,
+                  // but can be kept for visual cue in this table.
                   alertNeeded = true;
                 }
 
@@ -117,11 +115,11 @@ export function ProjectAssignmentsCard({ projects, users }: ProjectAssignmentsCa
                   <TableRow key={project.id} className={cn(alertNeeded && "bg-amber-50 dark:bg-amber-900/30")}>
                     <TableCell className="font-medium">
                       <Link href={`/admin/projects`} passHref>
-                        <Button variant="link" className="p-0 h-auto text-primary hover:underline text-left justify-start">
+                        <Button variant="link" className="p-0 h-auto text-primary hover:underline text-left justify-start whitespace-normal">
                           {project.name}
                         </Button>
                       </Link>
-                      <p className="text-xs text-muted-foreground truncate max-w-[180px]">{project.description}</p>
+                      {project.description && <p className="text-xs text-muted-foreground truncate max-w-[180px]">{project.description}</p>}
                     </TableCell>
                     <TableCell className="text-xs">{formatDatePretty(project.startDate)}</TableCell>
                     <TableCell className="text-xs">{formatDatePretty(project.endDate)}</TableCell>
@@ -148,3 +146,4 @@ export function ProjectAssignmentsCard({ projects, users }: ProjectAssignmentsCa
     </Card>
   );
 }
+

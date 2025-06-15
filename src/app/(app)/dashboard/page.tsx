@@ -3,30 +3,34 @@
 
 import { PageTitle } from '@/components/common/PageTitle';
 import { KpiCard } from './components/KpiCard';
-import { FileText, CheckCircle, AlertTriangle as KpiAlertTriangle, LayoutDashboard, ListChecks, UserCheck, Clock, Bot, Users as UsersIconLucide, HardHat, AlertCircle as AlertCircleIcon } from 'lucide-react';
+import { FileText, CheckCircle, AlertTriangle as KpiAlertTriangle, LayoutDashboard, ListChecks, UserCheck, Clock, Bot, Users as UsersIconLucide, HardHat, AlertCircle as AlertCircleIcon, Calendar as CalendarIconLucide, Filter as FilterIcon } from 'lucide-react'; // Added CalendarIconLucide, FilterIcon
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { MaterialReportsChart } from './components/MaterialReportsChart';
 import { SupplierUsageChart } from './components/SupplierUsageChart';
 import { ComplianceTrendChart } from './components/ComplianceTrendChart';
 import { ActivityLog } from './components/ActivityLog';
-import { ProjectAssignmentsCard } from './components/ProjectAssignmentsCard'; // New
-import { AlertsCard } from './components/AlertsCard'; // New
+import { ProjectAssignmentsCard } from './components/ProjectAssignmentsCard';
+import { AlertsCard } from './components/AlertsCard';
 import { useAuth } from '@/contexts/AuthContext'; 
 import type { UserRole } from '@/lib/constants';
 import { MOCK_TECHNICIAN_EMAIL, MOCK_TECHNICIAN_REPORTS_ID } from '@/lib/constants';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useEffect, useState, useMemo } from 'react';
-import type { FieldReport, MaterialType, Project, User } from '@/lib/types'; // Added Project, User
+import type { FieldReport, MaterialType, Project, User } from '@/lib/types';
 import { getReportsByTechnicianId, getReports as getAllReports } from '@/services/reportService'; 
-import { getProjects } from '@/services/projectService'; // New
-import { getUsers } from '@/services/userService'; // New
+import { getProjects } from '@/services/projectService';
+import { getUsers } from '@/services/userService';
 import { Badge } from '@/components/ui/badge';
-import { formatDistanceToNow } from 'date-fns';
+import { format, formatDistanceToNow, isSameDay, startOfDay, endOfDay, parseISO, isAfter, isBefore, isEqual } from 'date-fns'; // Added date-fns functions
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip, Legend as RechartsLegend } from 'recharts';
 import { predictCompliancePercentage, type CompliancePredictionOutput } from '@/ai/flows/compliance-prediction';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'; // Added Popover
+import { Calendar } from '@/components/ui/calendar'; // Added Calendar
+import type { DateRange } from 'react-day-picker'; // Added DateRange
+import { cn } from '@/lib/utils';
 
 
 interface MappedUserRoleAndId { 
@@ -88,8 +92,8 @@ export default function DashboardPage() {
   
   const [allReportsData, setAllReportsData] = useState<FieldReport[]>([]);
   const [technicianReports, setTechnicianReports] = useState<FieldReport[]>([]);
-  const [allProjectsData, setAllProjectsData] = useState<Project[]>([]); // New
-  const [allUsersData, setAllUsersData] = useState<User[]>([]); // New
+  const [allProjectsData, setAllProjectsData] = useState<Project[]>([]);
+  const [allUsersData, setAllUsersData] = useState<User[]>([]);
   
   const [isLoadingDashboardData, setIsLoadingDashboardData] = useState(true);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
@@ -97,6 +101,11 @@ export default function DashboardPage() {
   const [currentCompliancePrediction, setCurrentCompliancePrediction] = useState<CompliancePredictionOutput | null>(null);
   const [isLoadingCompliance, setIsLoadingCompliance] = useState(false);
   const [complianceError, setComplianceError] = useState<string | null>(null);
+
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: startOfDay(new Date()),
+    to: endOfDay(new Date()),
+  });
 
 
   useEffect(() => {
@@ -110,8 +119,8 @@ export default function DashboardPage() {
         setIsLoadingDashboardData(false);
         setAllReportsData([]);
         setTechnicianReports([]);
-        setAllProjectsData([]); // Reset project data
-        setAllUsersData([]); // Reset user data
+        setAllProjectsData([]);
+        setAllUsersData([]);
         setCurrentUserRole(null); 
         setDashboardError(null); 
         return;
@@ -126,7 +135,7 @@ export default function DashboardPage() {
       try {
         let reportsToSetForDashboard: FieldReport[] = [];
         if (role === 'ADMIN' || role === 'SUPERVISOR') {
-          const [reports, projects, users] = await Promise.all([
+          const [reports, projects, usersList] = await Promise.all([
             getAllReports(),
             getProjects(),
             getUsers()
@@ -134,12 +143,11 @@ export default function DashboardPage() {
           reportsToSetForDashboard = reports;
           setAllReportsData(reports);
           setAllProjectsData(projects);
-          setAllUsersData(users);
+          setAllUsersData(usersList);
         } else if (role === 'TECHNICIAN' && mappedTechId) {
           reportsToSetForDashboard = await getReportsByTechnicianId(mappedTechId);
           setTechnicianReports(reportsToSetForDashboard);
           setAllReportsData(reportsToSetForDashboard); 
-          // Technicians don't need all projects/users for their specific dashboard view here
           setAllProjectsData([]);
           setAllUsersData([]);
         } else if (role === 'TECHNICIAN' && !mappedTechId) {
@@ -273,6 +281,34 @@ export default function DashboardPage() {
     return chartData;
   }, [allReportsData, technicianReports, currentUserRole]);
 
+  const filteredProjectsForAssignments = useMemo(() => {
+    const selectedRangeFrom = dateRange?.from ? startOfDay(dateRange.from) : null;
+    const selectedRangeTo = dateRange?.to ? endOfDay(dateRange.to) : selectedRangeFrom ? endOfDay(selectedRangeFrom) : null;
+  
+    // If range is not properly set (e.g. cleared, or initial state issue), default to today
+    const effectiveRangeFrom = selectedRangeFrom || startOfDay(new Date());
+    const effectiveRangeTo = selectedRangeTo || endOfDay(new Date());
+
+    return allProjectsData
+      .filter(p => {
+        if (p.status === 'COMPLETED' || p.status === 'INACTIVE') return false;
+        if (!p.startDate) return false; // Must have a start date
+  
+        const projectStart = startOfDay(parseISO(p.startDate));
+        const projectEnd = p.endDate ? endOfDay(parseISO(p.endDate)) : null;
+  
+        if (projectEnd) { // Project has a defined start and end date
+          // Check for overlap: projectStart <= effectiveRangeTo AND projectEnd >= effectiveRangeFrom
+          return !(isAfter(projectStart, effectiveRangeTo) || isBefore(projectEnd, effectiveRangeFrom));
+        } else { // Project is ongoing (no end date)
+          // Overlap if it starts before or during the range's end: projectStart <= effectiveRangeTo
+          return !isAfter(projectStart, effectiveRangeTo);
+        }
+      })
+      .sort((a, b) => (a.startDate && b.startDate ? parseISO(a.startDate).getTime() - parseISO(b.startDate).getTime() : 0));
+  }, [allProjectsData, dateRange]);
+
+
   if (authLoading || isLoadingDashboardData) { 
     return (
       <>
@@ -282,8 +318,9 @@ export default function DashboardPage() {
         </div>
         {(currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') && (
           <>
-            <Skeleton className="h-64 w-full mb-6 rounded-lg" /> {/* Placeholder for Alerts/Assignments */}
-            <Skeleton className="h-64 w-full mb-6 rounded-lg" /> 
+            <Skeleton className="h-16 w-full mb-6 rounded-lg" /> {/* Date Picker Placeholder */}
+            <Skeleton className="h-72 w-full mb-6 rounded-lg" /> {/* Alerts Placeholder */}
+            <Skeleton className="h-96 w-full mb-6 rounded-lg" /> {/* Assignments Placeholder */}
           </>
         )}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -391,10 +428,62 @@ export default function DashboardPage() {
               ))}
           </div>
 
+          <Card className="mb-6 shadow-lg rounded-lg">
+            <CardHeader>
+                <CardTitle className="flex items-center"><FilterIcon className="mr-2 h-5 w-5 text-primary"/>Filtres d'Assignation de Projets</CardTitle>
+                <CardDescription>Sélectionnez une plage de dates pour afficher les projets pertinents.</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col sm:flex-row gap-2 items-center">
+                <Popover>
+                    <PopoverTrigger asChild>
+                    <Button
+                        id="date-range-picker"
+                        variant={"outline"}
+                        className={cn(
+                        "w-full sm:w-[300px] justify-start text-left font-normal",
+                        !dateRange && "text-muted-foreground"
+                        )}
+                    >
+                        <CalendarIconLucide className="mr-2 h-4 w-4" />
+                        {dateRange?.from ? (
+                        dateRange.to ? (
+                            isSameDay(dateRange.from, new Date()) && isSameDay(dateRange.to, new Date()) ? "Aujourd'hui" :
+                            `${format(dateRange.from, "LLL dd, y")} - ${format(dateRange.to, "LLL dd, y")}`
+                        ) : (
+                            isSameDay(dateRange.from, new Date()) ? "Aujourd'hui" : format(dateRange.from, "LLL dd, y")
+                        )
+                        ) : (
+                        <span>Choisir une plage de dates</span>
+                        )}
+                    </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                        initialFocus
+                        mode="range"
+                        defaultMonth={dateRange?.from}
+                        selected={dateRange}
+                        onSelect={setDateRange}
+                        numberOfMonths={2}
+                    />
+                    </PopoverContent>
+                </Popover>
+                <Button 
+                    variant="ghost" 
+                    onClick={() => setDateRange({ from: startOfDay(new Date()), to: endOfDay(new Date()) })}
+                    className="w-full sm:w-auto"
+                    disabled={dateRange?.from && isSameDay(dateRange.from, new Date()) && dateRange.to && isSameDay(dateRange.to, new Date())}
+                >
+                    Aujourd'hui
+                </Button>
+            </CardContent>
+          </Card>
+
+
           {isLoadingDashboardData ? (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
               <Skeleton className="h-72 rounded-lg" />
-              <Skeleton className="h-72 rounded-lg" />
+              <Skeleton className="h-96 rounded-lg" />
             </div>
           ) : noProjectsExistForAdmin ? (
             <Card className="mb-6">
@@ -407,9 +496,9 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-              <AlertsCard projects={allProjectsData} users={allUsersData} />
-              <ProjectAssignmentsCard projects={allProjectsData} users={allUsersData} />
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6"> {/* Changed to lg:grid-cols-3 */}
+              <AlertsCard projects={allProjectsData} users={allUsersData} /> {/* Occupies 1 column */}
+              <ProjectAssignmentsCard projects={filteredProjectsForAssignments} users={allUsersData} /> {/* Occupies 2 columns (defined in its own class) */}
             </div>
           )}
           
@@ -541,3 +630,4 @@ export default function DashboardPage() {
     </TooltipProvider>
   );
 }
+
