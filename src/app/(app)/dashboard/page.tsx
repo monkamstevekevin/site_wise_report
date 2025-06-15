@@ -3,24 +3,28 @@
 
 import { PageTitle } from '@/components/common/PageTitle';
 import { KpiCard } from './components/KpiCard';
-import { FileText, CheckCircle, AlertTriangle, BarChart3, LayoutDashboard, ListChecks, UserCheck, Clock, AlertTriangleIcon, Bot } from 'lucide-react';
+import { FileText, CheckCircle, AlertTriangle as KpiAlertTriangle, LayoutDashboard, ListChecks, UserCheck, Clock, Bot, Users as UsersIconLucide, HardHat, AlertCircle as AlertCircleIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { MaterialReportsChart } from './components/MaterialReportsChart';
 import { SupplierUsageChart } from './components/SupplierUsageChart';
 import { ComplianceTrendChart } from './components/ComplianceTrendChart';
 import { ActivityLog } from './components/ActivityLog';
+import { ProjectAssignmentsCard } from './components/ProjectAssignmentsCard'; // New
+import { AlertsCard } from './components/AlertsCard'; // New
 import { useAuth } from '@/contexts/AuthContext'; 
 import type { UserRole } from '@/lib/constants';
 import { MOCK_TECHNICIAN_EMAIL, MOCK_TECHNICIAN_REPORTS_ID } from '@/lib/constants';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useEffect, useState, useMemo } from 'react';
-import type { FieldReport, MaterialType } from '@/lib/types';
+import type { FieldReport, MaterialType, Project, User } from '@/lib/types'; // Added Project, User
 import { getReportsByTechnicianId, getReports as getAllReports } from '@/services/reportService'; 
+import { getProjects } from '@/services/projectService'; // New
+import { getUsers } from '@/services/userService'; // New
 import { Badge } from '@/components/ui/badge';
 import { formatDistanceToNow } from 'date-fns';
-import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip, Legend as RechartsLegend } from 'recharts'; // Renamed to avoid conflict
+import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip, Legend as RechartsLegend } from 'recharts';
 import { predictCompliancePercentage, type CompliancePredictionOutput } from '@/ai/flows/compliance-prediction';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -39,11 +43,9 @@ const mapFirebaseUserToAppRoleAndId = (firebaseUser: any): MappedUserRoleAndId =
   if (firebaseUser.email === MOCK_TECHNICIAN_EMAIL) {
     return { role: 'TECHNICIAN', effectiveTechnicianId: MOCK_TECHNICIAN_REPORTS_ID };
   }
-  // Keep these generic ones for broader testing if needed.
   if (firebaseUser.email?.includes('admin@example.com')) return { role: 'ADMIN', effectiveTechnicianId: null };
   if (firebaseUser.email?.includes('supervisor@example.com')) return { role: 'SUPERVISOR', effectiveTechnicianId: null };
   
-  // Default to using Firebase UID as technicianId for other users.
   return { role: 'TECHNICIAN', effectiveTechnicianId: firebaseUser.uid }; 
 };
 
@@ -75,7 +77,7 @@ const supplierChartColors: string[] = [
   'hsl(var(--chart-2))',
   'hsl(var(--chart-3))',
   'hsl(var(--chart-4))',
-  'hsl(var(--chart-5))', // Color for "Other"
+  'hsl(var(--chart-5))', 
 ];
 
 
@@ -86,6 +88,9 @@ export default function DashboardPage() {
   
   const [allReportsData, setAllReportsData] = useState<FieldReport[]>([]);
   const [technicianReports, setTechnicianReports] = useState<FieldReport[]>([]);
+  const [allProjectsData, setAllProjectsData] = useState<Project[]>([]); // New
+  const [allUsersData, setAllUsersData] = useState<User[]>([]); // New
+  
   const [isLoadingDashboardData, setIsLoadingDashboardData] = useState(true);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
 
@@ -105,6 +110,8 @@ export default function DashboardPage() {
         setIsLoadingDashboardData(false);
         setAllReportsData([]);
         setTechnicianReports([]);
+        setAllProjectsData([]); // Reset project data
+        setAllUsersData([]); // Reset user data
         setCurrentUserRole(null); 
         setDashboardError(null); 
         return;
@@ -119,15 +126,27 @@ export default function DashboardPage() {
       try {
         let reportsToSetForDashboard: FieldReport[] = [];
         if (role === 'ADMIN' || role === 'SUPERVISOR') {
-          reportsToSetForDashboard = await getAllReports();
-          setAllReportsData(reportsToSetForDashboard);
+          const [reports, projects, users] = await Promise.all([
+            getAllReports(),
+            getProjects(),
+            getUsers()
+          ]);
+          reportsToSetForDashboard = reports;
+          setAllReportsData(reports);
+          setAllProjectsData(projects);
+          setAllUsersData(users);
         } else if (role === 'TECHNICIAN' && mappedTechId) {
           reportsToSetForDashboard = await getReportsByTechnicianId(mappedTechId);
           setTechnicianReports(reportsToSetForDashboard);
           setAllReportsData(reportsToSetForDashboard); 
+          // Technicians don't need all projects/users for their specific dashboard view here
+          setAllProjectsData([]);
+          setAllUsersData([]);
         } else if (role === 'TECHNICIAN' && !mappedTechId) {
            setTechnicianReports([]);
            setAllReportsData([]);
+           setAllProjectsData([]);
+           setAllUsersData([]);
         }
       } catch (err) {
         console.error("Error loading dashboard data:", err);
@@ -146,7 +165,6 @@ export default function DashboardPage() {
         setIsLoadingCompliance(true);
         setComplianceError(null);
         try {
-          // TODO: Replace with actual dynamic data or a more sophisticated way to gather this for prediction
           const mockHistoricalData = "Past 3 months: 85% compliance. Previous project X: 90% compliance. Project Y: 78% with similar conditions.";
           const mockCurrentConditions = "Current project: Roadway Paving. Weather: Fair, 25°C. Staffing: Full team. Material delivery: On schedule for asphalt, slight delay on aggregates. Equipment: All operational.";
           const mockValidationRules = "Asphalt PG 64-22: Temperature range 135-160°C. Density: 92-97% of Marshall. Compaction: Min 8 passes. Concrete Slump: 75-125mm.";
@@ -175,7 +193,7 @@ export default function DashboardPage() {
 
     return [
         { title: "Total Reports", value: reportsForKpi.length, icon: FileText, trend: "", trendDirection: "neutral" as const }, 
-        { title: "Pending Validation", value: reportsForKpi.filter(r => r.status === 'SUBMITTED').length, icon: AlertTriangle, trend: "", trendDirection: "neutral" as const },
+        { title: "Pending Validation", value: reportsForKpi.filter(r => r.status === 'SUBMITTED').length, icon: KpiAlertTriangle, trend: "", trendDirection: "neutral" as const },
         { title: "Validated Reports", value: reportsForKpi.filter(r => r.status === 'VALIDATED').length, icon: CheckCircle, trend: "", trendDirection: "neutral" as const },
         { 
           title: "AI Predicted Compliance", 
@@ -210,7 +228,7 @@ export default function DashboardPage() {
 
   const materialUsageData = useMemo(() => {
     const reportsSource = (currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') ? allReportsData : technicianReports;
-    const counts: { [key in MaterialType | string]: number } = { cement: 0, asphalt: 0, gravel: 0, sand: 0, other: 0 }; // Allow string for key
+    const counts: { [key in MaterialType | string]: number } = { cement: 0, asphalt: 0, gravel: 0, sand: 0, other: 0 }; 
     reportsSource.forEach(report => {
       if (counts[report.materialType] !== undefined) {
         counts[report.materialType]++;
@@ -255,7 +273,6 @@ export default function DashboardPage() {
     return chartData;
   }, [allReportsData, technicianReports, currentUserRole]);
 
-
   if (authLoading || isLoadingDashboardData) { 
     return (
       <>
@@ -263,6 +280,12 @@ export default function DashboardPage() {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
           {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-36 rounded-lg" />)}
         </div>
+        {(currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') && (
+          <>
+            <Skeleton className="h-64 w-full mb-6 rounded-lg" /> {/* Placeholder for Alerts/Assignments */}
+            <Skeleton className="h-64 w-full mb-6 rounded-lg" /> 
+          </>
+        )}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <Skeleton className="lg:col-span-2 h-96 rounded-lg" />
           <Skeleton className="h-96 rounded-lg" />
@@ -288,7 +311,7 @@ export default function DashboardPage() {
   if (dashboardError) {
     return (
       <>
-        <PageTitle title="Dashboard Error" icon={AlertTriangleIcon} subtitle="Could not load dashboard data." />
+        <PageTitle title="Dashboard Error" icon={KpiAlertTriangle} subtitle="Could not load dashboard data." />
         <Card>
             <CardHeader><CardTitle>Error Details</CardTitle></CardHeader>
             <CardContent>
@@ -313,6 +336,9 @@ export default function DashboardPage() {
 
   const noReportsExistForUser = (currentUserRole === 'TECHNICIAN' && technicianReports.length === 0) ||
                                ((currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') && allReportsData.length === 0);
+  
+  const noProjectsExistForAdmin = (currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') && allProjectsData.length === 0;
+
 
   return (
     <TooltipProvider>
@@ -331,52 +357,75 @@ export default function DashboardPage() {
 
       { (currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') && (
         <>
-          {noReportsExistForUser && !isLoadingDashboardData && !dashboardError && (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
+              {adminKpiData.map((kpi) => (
+                kpi.tooltipContent ? (
+                  <Tooltip key={kpi.title} delayDuration={100}>
+                    <TooltipTrigger asChild>
+                      <div> 
+                          <KpiCard
+                            title={kpi.title}
+                            value={kpi.value}
+                            icon={kpi.icon}
+                            trend={kpi.trend}
+                            trendDirection={kpi.trendDirection}
+                            description={kpi.description}
+                          />
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent className="bg-card border-border shadow-xl">
+                      {kpi.tooltipContent}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <KpiCard
+                    key={kpi.title}
+                    title={kpi.title}
+                    value={kpi.value}
+                    icon={kpi.icon}
+                    trend={kpi.trend}
+                    trendDirection={kpi.trendDirection}
+                    description={kpi.description}
+                  />
+                )
+              ))}
+          </div>
+
+          {isLoadingDashboardData ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+              <Skeleton className="h-72 rounded-lg" />
+              <Skeleton className="h-72 rounded-lg" />
+            </div>
+          ) : noProjectsExistForAdmin ? (
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle className="flex items-center"><HardHat className="mr-2 h-5 w-5 text-muted-foreground" />No Projects Found</CardTitle>
+                <CardDescription>There are currently no projects in the system to display project-related overviews or alerts.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p>You can start by <Link href="/admin/projects" className="text-primary hover:underline">adding new projects</Link>.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+              <AlertsCard projects={allProjectsData} users={allUsersData} />
+              <ProjectAssignmentsCard projects={allProjectsData} users={allUsersData} />
+            </div>
+          )}
+          
+          {noReportsExistForUser && !isLoadingDashboardData && !dashboardError && !noProjectsExistForAdmin && (
             <Card className="mb-8">
               <CardHeader>
                 <CardTitle>No Reports Found</CardTitle>
-                <CardDescription>There are currently no reports in the system to display on the dashboard.</CardDescription>
+                <CardDescription>There are currently no reports in the system to display related charts.</CardDescription>
               </CardHeader>
               <CardContent>
                 <p>You can start by <Link href="/reports/create" className="text-primary hover:underline">creating a new report</Link>.</p>
               </CardContent>
             </Card>
           )}
+
           {!noReportsExistForUser && (
-            <>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
-                {adminKpiData.map((kpi) => (
-                  kpi.tooltipContent ? (
-                    <Tooltip key={kpi.title} delayDuration={100}>
-                      <TooltipTrigger asChild>
-                        <div> {/* KpiCard is not a valid child for TooltipTrigger directly sometimes, wrap it */}
-                           <KpiCard
-                              title={kpi.title}
-                              value={kpi.value}
-                              icon={kpi.icon}
-                              trend={kpi.trend}
-                              trendDirection={kpi.trendDirection}
-                              description={kpi.description}
-                            />
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent className="bg-card border-border shadow-xl">
-                        {kpi.tooltipContent}
-                      </TooltipContent>
-                    </Tooltip>
-                  ) : (
-                    <KpiCard
-                      key={kpi.title}
-                      title={kpi.title}
-                      value={kpi.value}
-                      icon={kpi.icon}
-                      trend={kpi.trend}
-                      trendDirection={kpi.trendDirection}
-                      description={kpi.description}
-                    />
-                  )
-                ))}
-            </div>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2">
                 <MaterialReportsChart data={materialUsageData} />
@@ -387,7 +436,6 @@ export default function DashboardPage() {
                 <ComplianceTrendChart />
                 <ActivityLog />
             </div>
-            </>
           )}
         </>
       )}
