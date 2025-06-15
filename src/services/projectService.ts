@@ -2,7 +2,7 @@
 'use server';
 
 import { db } from '@/lib/firebase';
-import type { Project } from '@/lib/types';
+import type { Project, MaterialType } from '@/lib/types';
 import { collection, getDocs, doc, getDoc, Timestamp, query, orderBy, addDoc, serverTimestamp, updateDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import type { ProjectSubmitData } from '@/app/(app)/admin/projects/components/ProjectFormDialog';
 
@@ -55,8 +55,9 @@ export async function getProjects(): Promise<Project[]> {
         location: data.location || 'Unknown Location',
         description: data.description || '',
         status: data.status || 'INACTIVE',
-        startDate: data.startDate, // Firestore stores it as string if it was string
-        endDate: data.endDate,     // Firestore stores it as string if it was string
+        startDate: data.startDate, 
+        endDate: data.endDate,     
+        assignedMaterialTypes: data.assignedMaterialTypes || [], // Ensure it's an array
         createdAt: formatTimestamp(data.createdAt),
         updatedAt: formatTimestamp(data.updatedAt),
       } as Project; 
@@ -70,7 +71,7 @@ export async function getProjects(): Promise<Project[]> {
       if (match && match[0]) {
           console.warn(`[Service/getProjects] Create Index Link: ${match[0]}`);
       }
-      return []; // Return empty or handle as appropriate for your UI
+      return []; 
     }
     throw new Error("Failed to fetch projects from database. Check server logs for Firebase error details.");
   }
@@ -96,6 +97,7 @@ export async function getProjectById(projectId: string): Promise<Project | null>
         status: data.status || 'INACTIVE',
         startDate: data.startDate,
         endDate: data.endDate,
+        assignedMaterialTypes: data.assignedMaterialTypes || [], // Ensure it's an array
         createdAt: formatTimestamp(data.createdAt),
         updatedAt: formatTimestamp(data.updatedAt),
       } as Project;
@@ -120,8 +122,9 @@ export async function addProject(projectData: ProjectSubmitData): Promise<string
     const projectsCollectionRef = collection(db, 'projects');
     const dataToSave: any = {
       ...projectData,
-      startDate: projectData.startDate || null, // Store as null if undefined
-      endDate: projectData.endDate || null,     // Store as null if undefined
+      startDate: projectData.startDate || null,
+      endDate: projectData.endDate || null,    
+      assignedMaterialTypes: projectData.assignedMaterialTypes || [], // Ensure array, even if empty
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
@@ -147,14 +150,17 @@ export async function updateProject(projectId: string, projectData: Partial<Proj
       ...projectData,
       updatedAt: serverTimestamp(),
     };
-    // Handle optional date fields: if they are explicitly passed as undefined, store null
-    // or remove them if your DB handles absence better. Storing null is often simpler.
+    
     if (Object.prototype.hasOwnProperty.call(projectData, 'startDate')) {
       dataToUpdate.startDate = projectData.startDate || null;
     }
     if (Object.prototype.hasOwnProperty.call(projectData, 'endDate')) {
       dataToUpdate.endDate = projectData.endDate || null;
     }
+    if (Object.prototype.hasOwnProperty.call(projectData, 'assignedMaterialTypes')) {
+      dataToUpdate.assignedMaterialTypes = projectData.assignedMaterialTypes || [];
+    }
+
 
     await updateDoc(projectDocRef, dataToUpdate);
   } catch (error) {

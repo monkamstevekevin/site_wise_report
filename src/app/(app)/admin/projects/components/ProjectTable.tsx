@@ -13,7 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Edit, Trash2, MoreVertical, MessageSquare, MapPin, AlertTriangle, CalendarDays } from 'lucide-react';
+import { Edit, Trash2, MoreVertical, MessageSquare, MapPin, AlertTriangle, CalendarDays, TestTube2 } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,7 +32,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from '@/components/ui/badge';
-import type { Project } from '@/lib/types';
+import type { Project, MaterialType } from '@/lib/types';
 import { format } from 'date-fns';
 
 interface ProjectTableProps {
@@ -47,10 +47,20 @@ const projectStatusBadgeVariant: Record<Project['status'], "default" | "secondar
   INACTIVE: "outline",
 };
 
+// Badge variants for material types (can be customized)
+const materialTypeBadgeVariant: Record<MaterialType, "default" | "secondary" | "outline" | "destructive" | "default"> = {
+  cement: "default",
+  asphalt: "secondary",
+  gravel: "outline",
+  sand: "destructive",
+  other: "default", // A general variant for "other"
+};
+
+
 const formatDate = (dateString?: string) => {
   if (!dateString) return 'N/A';
   try {
-    return format(new Date(dateString), 'PP'); // 'PP' for localized date format like 'Oct 22, 2023'
+    return format(new Date(dateString), 'PP'); 
   } catch (e) {
     return 'Invalid Date';
   }
@@ -109,8 +119,8 @@ export function ProjectTable({ projects, onEditProject, onDeleteProject }: Proje
               <TableHead>Localisation</TableHead>
               <TableHead><CalendarDays className="inline-block mr-1 h-4 w-4" /> Date Début</TableHead>
               <TableHead><CalendarDays className="inline-block mr-1 h-4 w-4" /> Date Fin</TableHead>
+              <TableHead><TestTube2 className="inline-block mr-1 h-4 w-4" /> Matériaux</TableHead>
               <TableHead>Statut</TableHead>
-              <TableHead>Créé le</TableHead>
               <TableHead className="text-right w-[100px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -126,9 +136,21 @@ export function ProjectTable({ projects, onEditProject, onDeleteProject }: Proje
                 <TableCell className="text-xs">{formatDate(project.startDate)}</TableCell>
                 <TableCell className="text-xs">{formatDate(project.endDate)}</TableCell>
                 <TableCell>
+                  {project.assignedMaterialTypes && project.assignedMaterialTypes.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {project.assignedMaterialTypes.map((type) => (
+                        <Badge key={type} variant={materialTypeBadgeVariant[type] || 'outline'} className="text-xs">
+                          {type.charAt(0).toUpperCase() + type.slice(1)}
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">N/A</span>
+                  )}
+                </TableCell>
+                <TableCell>
                   <Badge variant={projectStatusBadgeVariant[project.status] || 'outline'}>{project.status}</Badge>
                 </TableCell>
-                <TableCell>{new Date(project.createdAt).toLocaleDateString()}</TableCell>
                 <TableCell className="text-right">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>

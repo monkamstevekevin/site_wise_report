@@ -22,6 +22,8 @@ export interface User {
   updatedAt: string;
 }
 
+export type MaterialType = 'cement' | 'asphalt' | 'gravel' | 'sand' | 'other';
+
 export interface Project {
   id: string;
   name: string;
@@ -30,11 +32,11 @@ export interface Project {
   status: 'ACTIVE' | 'INACTIVE' | 'COMPLETED';
   startDate?: string; // ISO string date
   endDate?: string;   // ISO string date
+  assignedMaterialTypes?: MaterialType[]; // New field: Material types to be tested for this project
   createdAt: string;
   updatedAt: string;
 }
 
-export type MaterialType = 'cement' | 'asphalt' | 'gravel' | 'sand' | 'other';
 
 export interface MaterialValidationRules {
   minDensity?: number;

@@ -2,7 +2,7 @@
 'use client';
 
 import React from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -20,12 +21,14 @@ import {
   DialogTrigger,
   DialogClose,
 } from '@/components/ui/dialog';
-import type { Project } from '@/lib/types';
-import { Loader2, PlusCircle, Save, CalendarIcon } from 'lucide-react';
+import type { Project, MaterialType } from '@/lib/types';
+import { Loader2, PlusCircle, Save, CalendarIcon, TestTube2 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
+
+const materialTypeEnum = z.enum(['cement', 'asphalt', 'gravel', 'sand', 'other']);
 
 const projectFormSchema = z.object({
   name: z.string().min(1, 'Project name is required').max(100, 'Project name is too long'),
@@ -36,6 +39,7 @@ const projectFormSchema = z.object({
   }),
   startDate: z.date().optional(),
   endDate: z.date().optional(),
+  assignedMaterialTypes: z.array(materialTypeEnum).optional().default([]),
 }).superRefine(({ startDate, endDate }, ctx) => {
   if (startDate && endDate && endDate < startDate) {
     ctx.addIssue({
@@ -47,10 +51,11 @@ const projectFormSchema = z.object({
 });
 
 export type ProjectFormData = z.infer<typeof projectFormSchema>;
-// This type will be used when submitting to the service, converting dates to ISO strings
+
 export type ProjectSubmitData = Omit<ProjectFormData, 'startDate' | 'endDate'> & {
   startDate?: string;
   endDate?: string;
+  assignedMaterialTypes?: MaterialType[];
 };
 
 
@@ -68,10 +73,27 @@ const projectStatusOptions: { value: Project['status']; label: string }[] = [
   { value: 'COMPLETED', label: 'Completed' },
 ];
 
+const allMaterialTypeOptions: { value: MaterialType; label: string }[] = [
+  { value: 'cement', label: 'Cement' },
+  { value: 'asphalt', label: 'Asphalt' },
+  { value: 'gravel', label: 'Gravel' },
+  { value: 'sand', label: 'Sand' },
+  { value: 'other', label: 'Other (General Purpose)' },
+];
+
 export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange, onFormSubmit }: ProjectFormDialogProps) {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const form = useForm<ProjectFormData>({
     resolver: zodResolver(projectFormSchema),
+    defaultValues: { // Ensure all fields, including new ones, have default values
+      name: '',
+      location: '',
+      description: '',
+      status: 'ACTIVE',
+      startDate: undefined,
+      endDate: undefined,
+      assignedMaterialTypes: [],
+    }
   });
 
   React.useEffect(() => {
@@ -84,9 +106,10 @@ export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange,
           status: projectToEdit.status || 'ACTIVE',
           startDate: projectToEdit.startDate ? parseISO(projectToEdit.startDate) : undefined,
           endDate: projectToEdit.endDate ? parseISO(projectToEdit.endDate) : undefined,
+          assignedMaterialTypes: projectToEdit.assignedMaterialTypes || [],
         });
       } else {
-        form.reset({ name: '', location: '', description: '', status: 'ACTIVE', startDate: undefined, endDate: undefined });
+        form.reset({ name: '', location: '', description: '', status: 'ACTIVE', startDate: undefined, endDate: undefined, assignedMaterialTypes: [] });
       }
     }
   }, [projectToEdit, form, open]);
@@ -97,6 +120,7 @@ export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange,
       ...data,
       startDate: data.startDate ? data.startDate.toISOString() : undefined,
       endDate: data.endDate ? data.endDate.toISOString() : undefined,
+      assignedMaterialTypes: data.assignedMaterialTypes || [],
     };
     await onFormSubmit(submitData, projectToEdit?.id);
     setIsSubmitting(false);
@@ -106,6 +130,7 @@ export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange,
     <Dialog open={open} onOpenChange={(isOpen) => {
       onOpenChange?.(isOpen);
       if (!isOpen) {
+        // Reset form to initial state or specific state based on projectToEdit
         form.reset(projectToEdit ? {
             name: projectToEdit.name,
             location: projectToEdit.location,
@@ -113,11 +138,12 @@ export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange,
             status: projectToEdit.status,
             startDate: projectToEdit.startDate ? parseISO(projectToEdit.startDate) : undefined,
             endDate: projectToEdit.endDate ? parseISO(projectToEdit.endDate) : undefined,
-        } : { name: '', location: '', description: '', status: 'ACTIVE', startDate: undefined, endDate: undefined });
+            assignedMaterialTypes: projectToEdit.assignedMaterialTypes || [],
+        } : { name: '', location: '', description: '', status: 'ACTIVE', startDate: undefined, endDate: undefined, assignedMaterialTypes: [] });
       }
     }}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-lg"> {/* Increased width for date pickers */}
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{projectToEdit ? 'Edit Project' : 'Add New Project'}</DialogTitle>
           <DialogDescription>
@@ -249,6 +275,60 @@ export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange,
                   <FormControl>
                     <Textarea placeholder="Brief overview of the project..." {...field} value={field.value || ''} rows={3} />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="assignedMaterialTypes"
+              render={() => (
+                <FormItem>
+                  <div className="mb-4">
+                    <FormLabel className="text-base flex items-center">
+                        <TestTube2 className="mr-2 h-4 w-4 text-muted-foreground" />
+                        Assigned Material Types (Optional)
+                    </FormLabel>
+                    <FormDescription>
+                      Select which types of materials are expected to be tested for this project.
+                    </FormDescription>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                  {allMaterialTypeOptions.map((option) => (
+                    <FormField
+                      key={option.value}
+                      control={form.control}
+                      name="assignedMaterialTypes"
+                      render={({ field }) => {
+                        return (
+                          <FormItem
+                            key={option.value}
+                            className="flex flex-row items-center space-x-2 space-y-0"
+                          >
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value?.includes(option.value)}
+                                onCheckedChange={(checked) => {
+                                  const currentValue = field.value || [];
+                                  return checked
+                                    ? field.onChange([...currentValue, option.value])
+                                    : field.onChange(
+                                        currentValue.filter(
+                                          (value) => value !== option.value
+                                        )
+                                      );
+                                }}
+                              />
+                            </FormControl>
+                            <FormLabel className="text-sm font-normal cursor-pointer">
+                              {option.label}
+                            </FormLabel>
+                          </FormItem>
+                        );
+                      }}
+                    />
+                  ))}
+                  </div>
                   <FormMessage />
                 </FormItem>
               )}
