@@ -28,6 +28,8 @@ export interface Project {
   location: string;
   description?: string;
   status: 'ACTIVE' | 'INACTIVE' | 'COMPLETED';
+  startDate?: string; // ISO string date
+  endDate?: string;   // ISO string date
   createdAt: string;
   updatedAt: string;
 }

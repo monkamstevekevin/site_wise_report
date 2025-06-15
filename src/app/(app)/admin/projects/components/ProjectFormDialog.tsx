@@ -7,10 +7,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-// import { Label } from '@/components/ui/label'; // No longer directly used here for form fields
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import {
   Dialog,
   DialogContent,
@@ -22,7 +21,11 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import type { Project } from '@/lib/types';
-import { Loader2, PlusCircle, Save } from 'lucide-react';
+import { Loader2, PlusCircle, Save, CalendarIcon } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { format, parseISO } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 const projectFormSchema = z.object({
   name: z.string().min(1, 'Project name is required').max(100, 'Project name is too long'),
@@ -31,16 +34,32 @@ const projectFormSchema = z.object({
   status: z.enum(['ACTIVE', 'INACTIVE', 'COMPLETED'], {
     required_error: 'Project status is required.',
   }),
+  startDate: z.date().optional(),
+  endDate: z.date().optional(),
+}).superRefine(({ startDate, endDate }, ctx) => {
+  if (startDate && endDate && endDate < startDate) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'End date cannot be before the start date.',
+      path: ['endDate'],
+    });
+  }
 });
 
 export type ProjectFormData = z.infer<typeof projectFormSchema>;
+// This type will be used when submitting to the service, converting dates to ISO strings
+export type ProjectSubmitData = Omit<ProjectFormData, 'startDate' | 'endDate'> & {
+  startDate?: string;
+  endDate?: string;
+};
+
 
 interface ProjectFormDialogProps {
   children: React.ReactNode; // Trigger button
-  projectToEdit?: Project; // Changed to full Project type for editing
+  projectToEdit?: Project;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
-  onFormSubmit: (data: ProjectFormData, id?: string) => Promise<void>; 
+  onFormSubmit: (data: ProjectSubmitData, id?: string) => Promise<void>; 
 }
 
 const projectStatusOptions: { value: Project['status']; label: string }[] = [
@@ -53,7 +72,6 @@ export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange,
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const form = useForm<ProjectFormData>({
     resolver: zodResolver(projectFormSchema),
-    // Default values will be set by useEffect based on projectToEdit or cleared
   });
 
   React.useEffect(() => {
@@ -64,35 +82,42 @@ export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange,
           location: projectToEdit.location || '',
           description: projectToEdit.description || '',
           status: projectToEdit.status || 'ACTIVE',
+          startDate: projectToEdit.startDate ? parseISO(projectToEdit.startDate) : undefined,
+          endDate: projectToEdit.endDate ? parseISO(projectToEdit.endDate) : undefined,
         });
       } else {
-        form.reset({ name: '', location: '', description: '', status: 'ACTIVE' });
+        form.reset({ name: '', location: '', description: '', status: 'ACTIVE', startDate: undefined, endDate: undefined });
       }
     }
   }, [projectToEdit, form, open]);
 
   const onSubmit = async (data: ProjectFormData) => {
     setIsSubmitting(true);
-    await onFormSubmit(data, projectToEdit?.id);
+    const submitData: ProjectSubmitData = {
+      ...data,
+      startDate: data.startDate ? data.startDate.toISOString() : undefined,
+      endDate: data.endDate ? data.endDate.toISOString() : undefined,
+    };
+    await onFormSubmit(submitData, projectToEdit?.id);
     setIsSubmitting(false);
-    // Dialog closing and form reset for next time is handled by onOpenChange in parent or useEffect
   };
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => {
       onOpenChange?.(isOpen);
       if (!isOpen) {
-        // When dialog closes, reset the form to initial state or default if no projectToEdit was set
         form.reset(projectToEdit ? {
             name: projectToEdit.name,
             location: projectToEdit.location,
             description: projectToEdit.description,
             status: projectToEdit.status,
-        } : { name: '', location: '', description: '', status: 'ACTIVE' });
+            startDate: projectToEdit.startDate ? parseISO(projectToEdit.startDate) : undefined,
+            endDate: projectToEdit.endDate ? parseISO(projectToEdit.endDate) : undefined,
+        } : { name: '', location: '', description: '', status: 'ACTIVE', startDate: undefined, endDate: undefined });
       }
     }}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg"> {/* Increased width for date pickers */}
         <DialogHeader>
           <DialogTitle>{projectToEdit ? 'Edit Project' : 'Add New Project'}</DialogTitle>
           <DialogDescription>
@@ -100,7 +125,7 @@ export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange,
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4 max-h-[70vh] overflow-y-auto pr-2">
             <FormField
               control={form.control}
               name="name"
@@ -123,6 +148,94 @@ export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange,
                   <FormControl>
                     <Input placeholder="e.g., Springfield, IL" {...field} />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="startDate"
+              render={({ field }) => (
+                <FormItem className="flex flex-col">
+                  <FormLabel>Start Date (Optional)</FormLabel>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <FormControl>
+                        <Button
+                          variant={"outline"}
+                          className={cn(
+                            "w-full pl-3 text-left font-normal",
+                            !field.value && "text-muted-foreground"
+                          )}
+                        >
+                          {field.value ? (
+                            format(field.value, "PPP")
+                          ) : (
+                            <span>Pick a date</span>
+                          )}
+                          <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                        </Button>
+                      </FormControl>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={field.value}
+                        onSelect={field.onChange}
+                        disabled={(date) =>
+                          (form.getValues("endDate") ? date > form.getValues("endDate")! : false) || date < new Date("1900-01-01")
+                        }
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <FormDescription>
+                    When the project is scheduled to begin.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="endDate"
+              render={({ field }) => (
+                <FormItem className="flex flex-col">
+                  <FormLabel>End Date (Optional)</FormLabel>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <FormControl>
+                        <Button
+                          variant={"outline"}
+                          className={cn(
+                            "w-full pl-3 text-left font-normal",
+                            !field.value && "text-muted-foreground"
+                          )}
+                        >
+                          {field.value ? (
+                            format(field.value, "PPP")
+                          ) : (
+                            <span>Pick a date</span>
+                          )}
+                          <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                        </Button>
+                      </FormControl>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={field.value}
+                        onSelect={field.onChange}
+                        disabled={(date) =>
+                          (form.getValues("startDate") ? date < form.getValues("startDate")! : false)
+                        }
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <FormDescription>
+                    When the project is scheduled to be completed.
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

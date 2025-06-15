@@ -13,7 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Edit, Trash2, MoreVertical, MessageSquare, MapPin, AlertTriangle } from 'lucide-react';
+import { Edit, Trash2, MoreVertical, MessageSquare, MapPin, AlertTriangle, CalendarDays } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from '@/components/ui/badge';
 import type { Project } from '@/lib/types';
+import { format } from 'date-fns';
 
 interface ProjectTableProps {
   projects: Project[];
@@ -44,6 +45,15 @@ const projectStatusBadgeVariant: Record<Project['status'], "default" | "secondar
   ACTIVE: "default",
   COMPLETED: "secondary",
   INACTIVE: "outline",
+};
+
+const formatDate = (dateString?: string) => {
+  if (!dateString) return 'N/A';
+  try {
+    return format(new Date(dateString), 'PP'); // 'PP' for localized date format like 'Oct 22, 2023'
+  } catch (e) {
+    return 'Invalid Date';
+  }
 };
 
 export function ProjectTable({ projects, onEditProject, onDeleteProject }: ProjectTableProps) {
@@ -97,6 +107,8 @@ export function ProjectTable({ projects, onEditProject, onDeleteProject }: Proje
               <TableHead className="w-[100px]">ID Projet</TableHead>
               <TableHead>Nom</TableHead>
               <TableHead>Localisation</TableHead>
+              <TableHead><CalendarDays className="inline-block mr-1 h-4 w-4" /> Date Début</TableHead>
+              <TableHead><CalendarDays className="inline-block mr-1 h-4 w-4" /> Date Fin</TableHead>
               <TableHead>Statut</TableHead>
               <TableHead>Créé le</TableHead>
               <TableHead className="text-right w-[100px]">Actions</TableHead>
@@ -111,6 +123,8 @@ export function ProjectTable({ projects, onEditProject, onDeleteProject }: Proje
                   {project.description && <div className="text-xs text-muted-foreground truncate max-w-xs">{project.description}</div>}
                 </TableCell>
                 <TableCell>{project.location}</TableCell>
+                <TableCell className="text-xs">{formatDate(project.startDate)}</TableCell>
+                <TableCell className="text-xs">{formatDate(project.endDate)}</TableCell>
                 <TableCell>
                   <Badge variant={projectStatusBadgeVariant[project.status] || 'outline'}>{project.status}</Badge>
                 </TableCell>

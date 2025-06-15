@@ -4,6 +4,8 @@
 import { db } from '@/lib/firebase';
 import type { Project } from '@/lib/types';
 import { collection, getDocs, doc, getDoc, Timestamp, query, orderBy, addDoc, serverTimestamp, updateDoc, setDoc, deleteDoc } from 'firebase/firestore';
+import type { ProjectSubmitData } from '@/app/(app)/admin/projects/components/ProjectFormDialog';
+
 
 /**
  * @fileOverview Project service for interacting with Firestore.
@@ -42,9 +44,7 @@ const formatTimestamp = (timestampField: any): string => {
 export async function getProjects(): Promise<Project[]> {
   try {
     const projectsCollectionRef = collection(db, 'projects');
-    // To order by name, ensure an index exists for the 'name' field in the 'projects' collection.
-    // const q = query(projectsCollectionRef, orderBy('name')); 
-    const q = query(projectsCollectionRef); // Removed orderBy for now, ensure an index exists if you re-enable
+    const q = query(projectsCollectionRef, orderBy('createdAt', 'desc')); 
     const querySnapshot = await getDocs(q);
     
     const projects: Project[] = querySnapshot.docs.map(docSnapshot => {
@@ -54,14 +54,24 @@ export async function getProjects(): Promise<Project[]> {
         name: data.name || 'Unnamed Project',
         location: data.location || 'Unknown Location',
         description: data.description || '',
-        status: data.status || 'INACTIVE', 
+        status: data.status || 'INACTIVE',
+        startDate: data.startDate, // Firestore stores it as string if it was string
+        endDate: data.endDate,     // Firestore stores it as string if it was string
         createdAt: formatTimestamp(data.createdAt),
         updatedAt: formatTimestamp(data.updatedAt),
       } as Project; 
     });
     return projects;
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error fetching projects (see details below): ", error);
+    if (error.code === 'failed-precondition') {
+      console.warn(`[Service/getProjects] Firestore query for projects (orderBy createdAt) failed due to a missing index. Firebase message: ${error.message}. Please create the required index in your Firebase console. Returning empty array for now.`);
+      const match = error.message.match(/(https:\/\/[^\s]+)/);
+      if (match && match[0]) {
+          console.warn(`[Service/getProjects] Create Index Link: ${match[0]}`);
+      }
+      return []; // Return empty or handle as appropriate for your UI
+    }
     throw new Error("Failed to fetch projects from database. Check server logs for Firebase error details.");
   }
 }
@@ -84,6 +94,8 @@ export async function getProjectById(projectId: string): Promise<Project | null>
         location: data.location || 'Unknown Location',
         description: data.description || '',
         status: data.status || 'INACTIVE',
+        startDate: data.startDate,
+        endDate: data.endDate,
         createdAt: formatTimestamp(data.createdAt),
         updatedAt: formatTimestamp(data.updatedAt),
       } as Project;
@@ -99,18 +111,21 @@ export async function getProjectById(projectId: string): Promise<Project | null>
 
 /**
  * Adds a new project to the 'projects' collection in Firestore.
- * @param {Omit<Project, 'id' | 'createdAt' | 'updatedAt'>} projectData The data for the new project.
+ * @param {ProjectSubmitData} projectData The data for the new project.
  * @returns {Promise<string>} A promise that resolves to the ID of the newly created project.
  * @throws Will throw an error if adding the project fails.
  */
-export async function addProject(projectData: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
+export async function addProject(projectData: ProjectSubmitData): Promise<string> {
   try {
     const projectsCollectionRef = collection(db, 'projects');
-    const docRef = await addDoc(projectsCollectionRef, {
+    const dataToSave: any = {
       ...projectData,
+      startDate: projectData.startDate || null, // Store as null if undefined
+      endDate: projectData.endDate || null,     // Store as null if undefined
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    });
+    };
+    const docRef = await addDoc(projectsCollectionRef, dataToSave);
     return docRef.id;
   } catch (error) {
     console.error("Error adding project: ", error);
@@ -121,17 +136,27 @@ export async function addProject(projectData: Omit<Project, 'id' | 'createdAt' |
 /**
  * Updates an existing project in Firestore.
  * @param {string} projectId The ID of the project to update.
- * @param {Partial<Omit<Project, 'id' | 'createdAt' | 'updatedAt'>>} projectData The data to update.
+ * @param {Partial<ProjectSubmitData>} projectData The data to update.
  * @returns {Promise<void>} A promise that resolves when the project is successfully updated.
  * @throws Will throw an error if updating the project fails.
  */
-export async function updateProject(projectId: string, projectData: Partial<Omit<Project, 'id' | 'createdAt' | 'updatedAt'>>): Promise<void> {
+export async function updateProject(projectId: string, projectData: Partial<ProjectSubmitData>): Promise<void> {
   try {
     const projectDocRef = doc(db, 'projects', projectId);
-    await updateDoc(projectDocRef, {
+    const dataToUpdate: any = {
       ...projectData,
       updatedAt: serverTimestamp(),
-    });
+    };
+    // Handle optional date fields: if they are explicitly passed as undefined, store null
+    // or remove them if your DB handles absence better. Storing null is often simpler.
+    if (Object.prototype.hasOwnProperty.call(projectData, 'startDate')) {
+      dataToUpdate.startDate = projectData.startDate || null;
+    }
+    if (Object.prototype.hasOwnProperty.call(projectData, 'endDate')) {
+      dataToUpdate.endDate = projectData.endDate || null;
+    }
+
+    await updateDoc(projectDocRef, dataToUpdate);
   } catch (error) {
     console.error(`Error updating project ${projectId}: `, error);
     throw new Error(`Failed to update project ${projectId} in database.`);

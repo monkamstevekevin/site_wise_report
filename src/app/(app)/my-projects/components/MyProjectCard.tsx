@@ -7,7 +7,7 @@ import type { Project } from '@/lib/types';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { MessageSquare, MapPin, FileText, AlertTriangle } from 'lucide-react';
+import { MessageSquare, MapPin, FileText, AlertTriangle, CalendarDays } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,6 +18,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { format } from 'date-fns';
 
 interface MyProjectCardProps {
   project: Project;
@@ -27,6 +28,15 @@ const projectStatusBadgeVariant: Record<Project['status'], "default" | "secondar
   ACTIVE: "default",
   COMPLETED: "secondary",
   INACTIVE: "outline",
+};
+
+const formatDate = (dateString?: string) => {
+  if (!dateString) return 'N/A';
+  try {
+    return format(new Date(dateString), 'PP');
+  } catch (e) {
+    return 'Invalid Date';
+  }
 };
 
 export function MyProjectCard({ project }: MyProjectCardProps) {
@@ -64,22 +74,34 @@ export function MyProjectCard({ project }: MyProjectCardProps) {
           </div>
           {project.description && <p className="text-sm text-muted-foreground pt-2">{project.description}</p>}
         </CardHeader>
-        <CardContent className="flex-grow">
-          <p className="text-xs text-muted-foreground">Project ID: {project.id}</p>
-          <p className="text-xs text-muted-foreground">Created: {new Date(project.createdAt).toLocaleDateString()}</p>
+        <CardContent className="flex-grow space-y-2">
+          <div>
+            <p className="text-xs text-muted-foreground flex items-center">
+              <CalendarDays className="mr-1.5 h-3 w-3" /> Date de début:
+            </p>
+            <p className="text-sm font-medium">{formatDate(project.startDate)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground flex items-center">
+              <CalendarDays className="mr-1.5 h-3 w-3" /> Date de fin:
+            </p>
+            <p className="text-sm font-medium">{formatDate(project.endDate)}</p>
+          </div>
+          <p className="text-xs text-muted-foreground pt-2">ID Projet: {project.id}</p>
+          {/* <p className="text-xs text-muted-foreground">Créé le: {new Date(project.createdAt).toLocaleDateString()}</p> */}
         </CardContent>
         <CardFooter className="flex flex-col sm:flex-row justify-end gap-2 pt-4">
           <Button variant="outline" size="sm" asChild className="w-full sm:w-auto rounded-lg">
             <Link href={`/reports?projectId=${project.id}`}>
-              <FileText className="mr-2 h-4 w-4" /> View Reports
+              <FileText className="mr-2 h-4 w-4" /> Voir Rapports
             </Link>
           </Button>
           <Button variant="outline" size="sm" className="w-full sm:w-auto rounded-lg" onClick={() => handleOpenNavigateDialog(project.location)}>
-            <MapPin className="mr-2 h-4 w-4" /> Navigate to Site
+            <MapPin className="mr-2 h-4 w-4" /> Naviguer
           </Button>
           <Button size="sm" asChild className="w-full sm:w-auto rounded-lg">
             <Link href={`/project/${project.id}/chat`}>
-              <MessageSquare className="mr-2 h-4 w-4" /> Open Chat
+              <MessageSquare className="mr-2 h-4 w-4" /> Ouvrir Chat
             </Link>
           </Button>
         </CardFooter>
@@ -88,14 +110,14 @@ export function MyProjectCard({ project }: MyProjectCardProps) {
       <AlertDialog open={isNavigateDialogOpen} onOpenChange={setIsNavigateDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirm Navigation</AlertDialogTitle>
+            <AlertDialogTitle>Confirmer la navigation</AlertDialogTitle>
             <AlertDialogDescription>
-              You are about to open the location "{navigationTarget}" in your map application. Do you want to continue?
+              Voulez-vous ouvrir la localisation "{navigationTarget}" dans votre application de cartographie ?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setIsNavigateDialogOpen(false)}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmNavigation}>Navigate</AlertDialogAction>
+            <AlertDialogCancel onClick={() => setIsNavigateDialogOpen(false)}>Annuler</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmNavigation}>Naviguer</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

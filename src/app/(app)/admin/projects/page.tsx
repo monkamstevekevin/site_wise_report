@@ -6,7 +6,7 @@ import { PageTitle } from '@/components/common/PageTitle';
 import { HardHat, PlusCircle, Filter, Loader2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ProjectTable } from './components/ProjectTable';
-import { ProjectFormDialog, type ProjectFormData } from './components/ProjectFormDialog';
+import { ProjectFormDialog, type ProjectSubmitData } from './components/ProjectFormDialog';
 import type { Project } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
@@ -78,7 +78,7 @@ export default function ProjectManagementPage() {
     }
   };
 
-  const handleProjectFormSubmit = async (data: ProjectFormData, id?: string) => {
+  const handleProjectFormSubmit = async (data: ProjectSubmitData, id?: string) => {
     setIsProjectFormOpen(false); 
 
     if (id) {
