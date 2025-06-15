@@ -104,7 +104,7 @@ export default function DashboardPage() {
 
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: startOfDay(new Date()),
-    to: startOfDay(new Date()), // Changed from endOfDay to startOfDay for consistency
+    to: startOfDay(new Date()),
   });
 
 
@@ -148,8 +148,12 @@ export default function DashboardPage() {
           reportsToSetForDashboard = await getReportsByTechnicianId(mappedTechId);
           setTechnicianReports(reportsToSetForDashboard);
           setAllReportsData(reportsToSetForDashboard); 
-          setAllProjectsData([]);
-          setAllUsersData([]);
+          // For technician, we might not need all projects/users unless a specific feature requires it.
+          // If "My Projects" page shows projects assigned to them, they might not need allProjectsData here.
+          // Let's fetch all projects if they need to see names, but user list might be excessive.
+          const projects = await getProjects(); // Or only assigned ones if preferred
+          setAllProjectsData(projects); 
+          setAllUsersData([]); // Technicians typically don't need the full user list on dashboard
         } else if (role === 'TECHNICIAN' && !mappedTechId) {
            setTechnicianReports([]);
            setAllReportsData([]);
@@ -282,8 +286,8 @@ export default function DashboardPage() {
   }, [allReportsData, technicianReports, currentUserRole]);
 
   const filteredProjectsForAssignments = useMemo(() => {
-    const effectiveFromDate = dateRange?.from || new Date(); // Default to today if undefined
-    const effectiveToDate = dateRange?.to || effectiveFromDate; // If 'to' is undefined, use 'from' (single day range)
+    const effectiveFromDate = dateRange?.from || new Date();
+    const effectiveToDate = dateRange?.to || effectiveFromDate; 
 
     const rangeStart = startOfDay(effectiveFromDate);
     const rangeEnd = endOfDay(effectiveToDate);
@@ -294,19 +298,15 @@ export default function DashboardPage() {
         if (!p.startDate) return false; 
   
         const projectStartDate = parseISO(p.startDate);
-        if (isNaN(projectStartDate.getTime())) return false; // Skip if project start date is invalid
+        if (isNaN(projectStartDate.getTime())) return false;
         const projectStart = startOfDay(projectStartDate);
         
         if (p.endDate) {
           const projectEndDate = parseISO(p.endDate);
-          if (isNaN(projectEndDate.getTime())) return false; // Skip if project end date is invalid
+          if (isNaN(projectEndDate.getTime())) return false;
           const projectEnd = endOfDay(projectEndDate);
-          // Check for overlap:
-          // Project starts before or on range_end AND project ends after or on range_start
           return !isAfter(projectStart, rangeEnd) && !isBefore(projectEnd, rangeStart);
         } else {
-          // Ongoing project (no end date):
-          // overlaps if its start is before or on range_end
           return !isAfter(projectStart, rangeEnd);
         }
       })
@@ -323,9 +323,12 @@ export default function DashboardPage() {
         </div>
         {(currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') && (
           <>
-            <Skeleton className="h-16 w-full mb-6 rounded-lg" /> {/* Date Picker Placeholder */}
-            <Skeleton className="h-72 w-full mb-6 rounded-lg" /> {/* Alerts Placeholder */}
+            <Skeleton className="h-24 w-full mb-6 rounded-lg" /> {/* Date Picker Placeholder */}
             <Skeleton className="h-96 w-full mb-6 rounded-lg" /> {/* Assignments Placeholder */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                <Skeleton className="h-72 rounded-lg" /> {/* Alerts Placeholder */}
+                <Skeleton className="lg:col-span-2 h-72 rounded-lg" /> {/* Other Graph Placeholder */}
+            </div>
           </>
         )}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -452,7 +455,7 @@ export default function DashboardPage() {
                         <CalendarIconLucide className="mr-2 h-4 w-4" />
                         {dateRange?.from ? (
                         dateRange.to ? (
-                            isSameDay(dateRange.from, new Date()) && isSameDay(dateRange.to, new Date()) && isSameDay(dateRange.from, dateRange.to) ? "Aujourd'hui" : // Check if from and to are the same for "Aujourd'hui"
+                            isSameDay(dateRange.from, new Date()) && isSameDay(dateRange.to, new Date()) && isSameDay(dateRange.from, dateRange.to) ? "Aujourd'hui" : 
                             `${format(dateRange.from, "LLL dd, y")} - ${format(dateRange.to, "LLL dd, y")}`
                         ) : (
                             isSameDay(dateRange.from, new Date()) ? "Aujourd'hui" : format(dateRange.from, "LLL dd, y")
@@ -475,7 +478,7 @@ export default function DashboardPage() {
                 </Popover>
                 <Button 
                     variant="ghost" 
-                    onClick={() => setDateRange({ from: startOfDay(new Date()), to: startOfDay(new Date()) })} // Set 'to' to startOfDay as well for today
+                    onClick={() => setDateRange({ from: startOfDay(new Date()), to: startOfDay(new Date()) })} 
                     className="w-full sm:w-auto"
                     disabled={dateRange?.from && isSameDay(dateRange.from, new Date()) && dateRange.to && isSameDay(dateRange.to, new Date()) && isSameDay(dateRange.from, dateRange.to) }
                 >
@@ -484,51 +487,86 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-
           {isLoadingDashboardData ? (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-              <Skeleton className="h-72 rounded-lg" />
-              <Skeleton className="h-96 rounded-lg" />
-            </div>
+            <Skeleton className="h-96 w-full mb-6 rounded-lg" />
           ) : noProjectsExistForAdmin ? (
             <Card className="mb-6">
               <CardHeader>
                 <CardTitle className="flex items-center"><HardHat className="mr-2 h-5 w-5 text-muted-foreground" />No Projects Found</CardTitle>
-                <CardDescription>There are currently no projects in the system to display project-related overviews or alerts.</CardDescription>
+                <CardDescription>There are currently no projects in the system to display an assignments overview.</CardDescription>
               </CardHeader>
               <CardContent>
                 <p>You can start by <Link href="/admin/projects" className="text-primary hover:underline">adding new projects</Link>.</p>
               </CardContent>
             </Card>
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6"> 
-              <AlertsCard projects={allProjectsData} users={allUsersData} /> 
-              <ProjectAssignmentsCard projects={filteredProjectsForAssignments} users={allUsersData} /> 
+            <div className="mb-6"> {/* ProjectAssignmentsCard takes full width here */}
+              <ProjectAssignmentsCard projects={filteredProjectsForAssignments} users={allUsersData} />
             </div>
           )}
           
-          {noReportsExistForUser && !isLoadingDashboardData && !dashboardError && !noProjectsExistForAdmin && (
-            <Card className="mb-8">
-              <CardHeader>
-                <CardTitle>No Reports Found</CardTitle>
-                <CardDescription>There are currently no reports in the system to display related charts.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p>You can start by <Link href="/reports/create" className="text-primary hover:underline">creating a new report</Link>.</p>
-              </CardContent>
-            </Card>
-          )}
-
-          {!noReportsExistForUser && (
+          {/* New grid for Alerts and other analytics */}
+          {isLoadingDashboardData ? (
+             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <Skeleton className="h-72 rounded-lg" /> {/* Alerts Placeholder */}
+                <Skeleton className="lg:col-span-2 h-72 rounded-lg" /> {/* Graph Placeholder */}
+            </div>
+          ) : (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2">
-                <MaterialReportsChart data={materialUsageData} />
-                </div>
-                <div>
-                <SupplierUsageChart data={supplierUsageData} />
-                </div>
-                <ComplianceTrendChart />
-                <ActivityLog />
+                {!noProjectsExistForAdmin ? (
+                    <AlertsCard projects={allProjectsData} users={allUsersData} />
+                ) : (
+                    // If no projects, AlertsCard might be less useful or show an empty state.
+                    // For now, let's include it but it will internally show "no alerts".
+                    // Or we could show a placeholder message for this part of the dashboard too.
+                    <div className="lg:col-span-1">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center"><AlertCircleIcon className="mr-2 h-5 w-5 text-primary" />Project Alerts</CardTitle>
+                                <CardDescription>No projects available to show alerts.</CardDescription>
+                            </CardHeader>
+                             <CardContent>
+                                <p className="text-muted-foreground text-center py-4">Create projects to see relevant alerts.</p>
+                            </CardContent>
+                        </Card>
+                    </div>
+                )}
+
+                {noReportsExistForUser && !noProjectsExistForAdmin && (
+                    <div className="lg:col-span-2">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>No Reports Found</CardTitle>
+                                <CardDescription>There are currently no reports in the system to display related charts.</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <p>You can start by <Link href="/reports/create" className="text-primary hover:underline">creating a new report</Link>.</p>
+                            </CardContent>
+                        </Card>
+                    </div>
+                )}
+
+                {!noReportsExistForUser && !noProjectsExistForAdmin && (
+                    <>
+                        {/* MaterialReportsChart and SupplierUsageChart on the same "row" as AlertsCard if space allows, or next row */}
+                        <MaterialReportsChart data={materialUsageData} /> 
+                        <SupplierUsageChart data={supplierUsageData} />
+                        
+                        {/* These take full width of the 3-col grid */}
+                        <ComplianceTrendChart className="lg:col-span-3" />
+                        <ActivityLog className="lg:col-span-3" />
+                    </>
+                )}
+                 {noProjectsExistForAdmin && ( // Message if no projects at all, affecting analytics
+                    <div className="lg:col-span-3">
+                       <Card>
+                           <CardHeader>
+                               <CardTitle>Analytics Unavailable</CardTitle>
+                               <CardDescription>Report-based analytics require project and report data.</CardDescription>
+                           </CardHeader>
+                       </Card>
+                    </div>
+                )}
             </div>
           )}
         </>
