@@ -114,7 +114,7 @@ export function ProjectAssignmentsCard({ projects, users }: ProjectAssignmentsCa
                 return (
                   <TableRow key={project.id} className={cn(alertNeeded && "bg-amber-50 dark:bg-amber-900/30")}>
                     <TableCell className="font-medium">
-                      <Link href={`/admin/projects`} passHref>
+                      <Link href={`/project/${project.id}/chat`} passHref>
                         <Button variant="link" className="p-0 h-auto text-primary hover:underline text-left justify-start whitespace-normal">
                           {project.name}
                         </Button>
