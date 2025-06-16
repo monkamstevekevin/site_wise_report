@@ -22,7 +22,8 @@ import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 
 const profileFormSchema = z.object({
   displayName: z.string().min(1, 'Display name is required').max(50, 'Display name is too long'),
-  photoURL: z.string().url("Must be a valid URL or will be a data URI.").or(z.literal('')).optional(),
+  // Accept any string for photoURL (data URI or HTTP/S), or empty string
+  photoURL: z.string().optional(),
 });
 
 type ProfileFormData = z.infer<typeof profileFormSchema>;
@@ -54,8 +55,6 @@ export default function ProfilePage() {
   });
 
   useEffect(() => {
-    // This effect runs when `user` (from context) changes, or when exiting edit mode.
-    // It ensures the form is reset to the current user's state from the context.
     if (user && !isEditing) {
       const currentPhoto = user.photoURL || '';
       form.reset({
@@ -115,7 +114,6 @@ export default function ProfilePage() {
   };
 
   useEffect(() => {
-    // Cleanup camera stream when component unmounts or dialog closes
     return () => {
       if (cameraStream) {
         cameraStream.getTracks().forEach(track => track.stop());
@@ -151,40 +149,37 @@ export default function ProfilePage() {
     }
 
     try {
-      const updateData: { displayName?: string; photoURL?: string | null } = {};
+      const updatePayload: { displayName?: string; photoURL?: string | null } = {};
       let changed = false;
 
       if (data.displayName !== (user.displayName || '')) {
-        updateData.displayName = data.displayName;
+        updatePayload.displayName = data.displayName;
         changed = true;
       }
       
-      // data.photoURL here can be a data URI from new upload/capture, an existing http/s URL, or empty string
       const newPhotoURLFromForm = data.photoURL === '' ? null : data.photoURL;
-      const currentPhotoURLInAuth = user.photoURL || null;
-
-      if (newPhotoURLFromForm !== currentPhotoURLInAuth) {
-        updateData.photoURL = newPhotoURLFromForm; // Pass the current form value to updateUserProfile
+      // Check if new photo is different from the current photoURL in context (which might be from Firestore)
+      if (newPhotoURLFromForm !== (user.photoURL || null)) {
+        updatePayload.photoURL = newPhotoURLFromForm;
         changed = true;
       }
 
       if (changed) {
-        // updateUserProfile will handle uploading to storage if photoURL is a data URI
-        // and will return the final (short) storage URL.
-        const finalReturnedPhotoURL = await updateUserProfile(updateData); 
+        // updateUserProfile will handle storing the photoURL (data URI or http) in Firestore's avatarUrl
+        // and attempting to update Firebase Auth's photoURL (if it's not a data URI).
+        const finalSavedPhotoURL = await updateUserProfile(updatePayload); 
         
         toast({
           title: 'Profile Updated',
           description: 'Your profile information has been successfully updated.',
         });
-
-        // Explicitly reset the form with the potentially new display name
-        // and the definitive photo URL (which should be the short storage URL from Firebase).
+        
+        // Reset form with the definitive data (displayName from form, photoURL from what was actually saved/returned)
         form.reset({
             displayName: data.displayName, 
-            photoURL: finalReturnedPhotoURL || '',
+            photoURL: finalSavedPhotoURL || '',
         });
-        setPhotoPreview(finalReturnedPhotoURL || ''); // Update visual preview with the short URL
+        setPhotoPreview(finalSavedPhotoURL || '');
 
       } else {
         toast({
@@ -192,7 +187,7 @@ export default function ProfilePage() {
           description: 'No information was changed.',
         });
       }
-      setIsEditing(false); // Exit edit mode, useEffect will sync form with potentially updated user context
+      setIsEditing(false);
     } catch (error) {
       console.error('Error updating profile:', error);
       toast({
@@ -200,15 +195,14 @@ export default function ProfilePage() {
         title: 'Update Failed',
         description: (error as Error).message || 'Could not update profile.',
       });
-      // Keep isEditing true on error so user can see form values and try again
     } finally {
       setIsSubmitting(false);
     }
   };
   
-  // Determine the source for the main avatar based on current state
-  const currentAvatarSrc = isEditing ? (photoPreview || user?.photoURL || `https://placehold.co/100x100.png?text=${user?.email?.[0]?.toUpperCase() || 'U'}`) 
-                                   : (user?.photoURL || `https://placehold.co/100x100.png?text=${user?.email?.[0]?.toUpperCase() || 'U'}`);
+  const currentAvatarSrc = isEditing 
+                           ? (photoPreview || user?.photoURL || `https://placehold.co/100x100.png?text=${user?.email?.[0]?.toUpperCase() || 'U'}`) 
+                           : (user?.photoURL || `https://placehold.co/100x100.png?text=${user?.email?.[0]?.toUpperCase() || 'U'}`);
 
 
   if (authLoading) {
@@ -255,8 +249,6 @@ export default function ProfilePage() {
           !isEditing && (
             <Button onClick={() => {
               setIsEditing(true);
-              // When entering edit mode, ensure form and preview are synced with current user state
-              // This user.photoURL should be the short storage URL if previously saved.
               const currentPhoto = user.photoURL || '';
               form.reset({ displayName: user.displayName || '', photoURL: currentPhoto });
               setPhotoPreview(currentPhoto);
@@ -337,7 +329,7 @@ export default function ProfilePage() {
                         />
                       </FormControl>
                       <FormDescription>
-                        If you upload or take a photo, its data will appear here temporarily. After saving, this will show the permanent storage URL.
+                        After uploading or taking a photo, its data will appear here. If you paste an external URL, it will be used.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -385,7 +377,15 @@ export default function ProfilePage() {
               </div>
               <div>
                 <Label className="text-sm text-muted-foreground">Photo URL</Label>
-                <p className="text-lg break-all">{user.photoURL || 'Not set'}</p>
+                {user.photoURL ? (
+                  (user.photoURL.startsWith('data:image') || user.photoURL.startsWith('http')) ? (
+                     <Image src={user.photoURL} alt="Profile" width={100} height={100} className="rounded-md mt-1" data-ai-hint="profile image" />
+                  ) : (
+                     <p className="text-lg break-all">{user.photoURL}</p>
+                  )
+                ) : (
+                  <p className="text-lg">Not set</p>
+                )}
               </div>
             </div>
           )}
@@ -444,5 +444,3 @@ export default function ProfilePage() {
     </>
   );
 }
-
-    

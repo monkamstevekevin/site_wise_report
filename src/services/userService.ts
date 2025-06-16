@@ -121,7 +121,6 @@ export async function addUser(
 
     await updateAuthProfile(firebaseUser, {
       displayName: userData.displayName,
-      // photoURL can be set here if available/desired at creation
     });
 
     const userDocRef = doc(db, 'users', firebaseUser.uid);
@@ -129,7 +128,7 @@ export async function addUser(
       name: userData.displayName, 
       email: firebaseUser.email,
       role: userData.role,
-      avatarUrl: firebaseUser.photoURL || '', // Save initial photoURL if available
+      avatarUrl: firebaseUser.photoURL || '', 
       assignments: [], 
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -152,7 +151,8 @@ export async function addUser(
 /**
  * Updates a user's information (name, role, avatarUrl) in Firestore.
  * @param {string} userId The ID of the user to update.
- * @param {object} data The data to update, can include `name` (from `displayName`), `role`, and/or `avatarUrl`.
+ * @param {object} data The data to update, can include `name`, `role`, and/or `avatarUrl`.
+ *                     `avatarUrl` can be a string (URL or data URI) or `null` to clear.
  * @returns {Promise<void>} A promise that resolves when the user is successfully updated.
  * @throws Will throw an error if updating the user fails.
  */
@@ -167,9 +167,11 @@ export async function updateUser(userId: string, data: { name?: string; role?: U
     if (data.role !== undefined) {
       updateData.role = data.role;
     }
-    if (data.avatarUrl !== undefined) { // Check if avatarUrl is explicitly passed
-      updateData.avatarUrl = data.avatarUrl; // This can be a string (URL or data URI) or null
+    // Explicitly handle avatarUrl to allow setting it to null (to clear it) or a string
+    if (data.avatarUrl !== undefined) { 
+      updateData.avatarUrl = data.avatarUrl; // This can be string (URL/data URI) or null
     }
+
 
     if (Object.keys(updateData).length === 0) {
       console.log("No data provided to update user in Firestore.");
@@ -208,7 +210,6 @@ export async function updateUserAssignments(userId: string, newAssignments: User
   const currentUserData = userDocSnap.data() as User;
   const oldAssignments = currentUserData.assignments || [];
 
-  // Check for FULL_TIME conflicts
   const fullTimeNewAssignments = newAssignments.filter(a => a.assignmentType === 'FULL_TIME');
   if (fullTimeNewAssignments.length > 0) {
     const existingFullTimeAssignments = oldAssignments.filter(
@@ -217,7 +218,6 @@ export async function updateUserAssignments(userId: string, newAssignments: User
     
     let activeFullTimeProjectIds: string[] = [];
 
-    // Check new full-time assignments against each other for active status
     for (const assignment of fullTimeNewAssignments) {
         const project = await getProjectById(assignment.projectId);
         if (project && isProjectActive(project)) {
@@ -228,8 +228,6 @@ export async function updateUserAssignments(userId: string, newAssignments: User
         throw new Error(`Technician cannot be assigned FULL_TIME to multiple active projects simultaneously. Conflict with new assignments for projects: ${activeFullTimeProjectIds.join(', ')}.`);
     }
 
-
-    // Check new full-time assignments against existing active full-time assignments
     for (const newFtAssignment of fullTimeNewAssignments) {
       const newProject = await getProjectById(newFtAssignment.projectId);
       if (newProject && isProjectActive(newProject)) {
@@ -252,7 +250,6 @@ export async function updateUserAssignments(userId: string, newAssignments: User
       updatedAt: serverTimestamp(),
     });
 
-    // Determine newly assigned projects (any type) and send notifications
     const oldProjectIdsSet = new Set(oldAssignments.map(a => a.projectId));
     const newlyAssignedProjectDetails: { project: Project; assignmentType: UserAssignment['assignmentType'] }[] = [];
 
@@ -281,7 +278,7 @@ export async function updateUserAssignments(userId: string, newAssignments: User
 
   } catch (error) {
     console.error(`Error updating assigned projects for user ${userId}: `, error);
-    if (error instanceof Error) { // Propagate custom error messages
+    if (error instanceof Error) { 
         throw error;
     }
     throw new Error(`Failed to update assigned projects for user ${userId} in database.`);
@@ -304,4 +301,3 @@ export async function deleteUserFirestoreRecord(userId: string): Promise<void> {
     throw new Error(`Failed to delete user record ${userId} from database.`);
   }
 }
-
