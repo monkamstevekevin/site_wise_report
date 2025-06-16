@@ -17,12 +17,12 @@ import { useToast } from '@/hooks/use-toast';
 import { UserCircle, Edit3, Save, Loader2, Camera as CameraIcon, Upload, XCircle } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
-import Image from 'next/image'; // For previewing uploaded/captured image
+import Image from 'next/image';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 
 const profileFormSchema = z.object({
   displayName: z.string().min(1, 'Display name is required').max(50, 'Display name is too long'),
-  photoURL: z.string().optional(), // Can be URL or data URI
+  photoURL: z.string().url("Must be a valid URL or will be a data URI.").or(z.literal('')).optional(),
 });
 
 type ProfileFormData = z.infer<typeof profileFormSchema>;
@@ -32,7 +32,7 @@ const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 
 export default function ProfilePage() {
-  const { user, loading: authLoading, updateUserProfile } = useAuth(); // Assuming updateUserProfile exists in AuthContext
+  const { user, loading: authLoading, updateUserProfile } = useAuth();
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -63,7 +63,7 @@ export default function ProfilePage() {
       });
       setPhotoPreview(currentPhoto);
     }
-  }, [user, form, isEditing]); // Re-run if isEditing changes to reset preview on cancel
+  }, [user, form, isEditing]);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -114,7 +114,6 @@ export default function ProfilePage() {
   };
 
   useEffect(() => {
-    // Cleanup camera stream when dialog closes or component unmounts
     return () => {
       if (cameraStream) {
         cameraStream.getTracks().forEach(track => track.stop());
@@ -136,7 +135,7 @@ export default function ProfilePage() {
         setPhotoPreview(dataUri);
         form.setValue('photoURL', dataUri, { shouldValidate: true, shouldDirty: true });
       }
-      cameraStream.getTracks().forEach(track => track.stop()); // Stop stream after capture
+      cameraStream.getTracks().forEach(track => track.stop());
       setCameraStream(null);
       setShowCameraDialog(false);
     }
@@ -144,30 +143,58 @@ export default function ProfilePage() {
 
   const onSubmit = async (data: ProfileFormData) => {
     setIsSubmitting(true);
-    // In a real app, if photoURL is a data URI, you'd upload it to Firebase Storage first,
-    // get the storage URL, and then update the user's profile with that URL.
-    // For this simulation, we'll directly use the data.photoURL (which could be a data URI or an external URL).
-    
-    // Simulating the update process
-    // await updateUserProfile({ displayName: data.displayName, photoURL: data.photoURL }); // Hypothetical function in AuthContext
-    
-    // For now, just toast the "update"
-    console.log('Simulating profile update with:', data);
-    
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    if (!user) {
+      toast({ variant: 'destructive', title: 'Error', description: 'User not found.' });
+      setIsSubmitting(false);
+      return;
+    }
 
-    toast({
-      title: 'Profile Updated (Simulated)',
-      description: 'Your profile information has been "updated". If a new photo was provided as data, it would typically be uploaded to storage first.',
-    });
-    setIsEditing(false);
-    setIsSubmitting(false);
-    // If using Firebase Auth:
-    // if (auth.currentUser) {
-    //   await updateProfile(auth.currentUser, { displayName: data.displayName, photoURL: data.photoURL });
-    //   // Force re-fetch or update context user
-    // }
+    try {
+      const updateData: { displayName?: string; photoURL?: string } = {};
+      let changed = false;
+
+      if (data.displayName !== (user.displayName || '')) {
+        updateData.displayName = data.displayName;
+        changed = true;
+      }
+      
+      // Handle photoURL: if it's a new data URI or a new URL, or if it's cleared
+      const newPhotoURL = data.photoURL === '' ? null : data.photoURL; // Treat empty string as clearing the photo
+      const currentPhotoURL = user.photoURL || null;
+
+      if (newPhotoURL !== currentPhotoURL) {
+        // If photoPreview is different from the original user.photoURL, it means a new image was selected/taken
+        // or an existing URL was changed/cleared.
+        // If photoPreview is null AND form.photoURL is empty, it means clear the photo.
+        // If photoPreview has a value, it's either a data URI or an external URL.
+         updateData.photoURL = newPhotoURL || ''; // Send empty string to Firebase to clear photo
+        changed = true;
+      }
+
+
+      if (changed) {
+        await updateUserProfile(updateData);
+        toast({
+          title: 'Profile Updated',
+          description: 'Your profile information has been successfully updated.',
+        });
+      } else {
+        toast({
+          title: 'No Changes',
+          description: 'No information was changed.',
+        });
+      }
+      setIsEditing(false);
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Update Failed',
+        description: (error as Error).message || 'Could not update profile.',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
   
   const currentPhotoForAvatar = photoPreview || user?.photoURL || `https://placehold.co/100x100.png?text=${user?.email?.[0]?.toUpperCase() || 'U'}`;
@@ -253,7 +280,6 @@ export default function ProfilePage() {
                   )}
                 />
                 
-                {/* Photo Upload and Camera Options */}
                 <div className="space-y-2">
                     <FormLabel>Profile Photo</FormLabel>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -278,12 +304,17 @@ export default function ProfilePage() {
                   name="photoURL"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Photo URL</FormLabel>
+                      <FormLabel>Photo URL (or leave empty to clear)</FormLabel>
                       <FormControl>
-                        <Input placeholder="Or paste an image URL" {...field} disabled={isSubmitting} />
+                        <Input 
+                          placeholder="Paste an image URL or leave empty to clear" 
+                          {...field} 
+                          value={field.value || ''} // Ensure controlled component
+                          disabled={isSubmitting} 
+                        />
                       </FormControl>
                       <FormDescription>
-                        The URL will be used if no photo is uploaded or taken.
+                        If you upload or take a photo, this field will be updated with a data URI. You can also manually paste an image URL or clear it.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -294,7 +325,13 @@ export default function ProfilePage() {
                     <Label>Current Photo Preview:</Label>
                     <div className="relative w-fit border p-2 rounded-md">
                       <Image src={photoPreview} alt="Profile preview" width={150} height={150} className="rounded-md object-cover max-h-48 w-auto" data-ai-hint="profile preview" />
-                       <Button variant="ghost" size="icon" className="absolute -top-3 -right-3 h-7 w-7 bg-background rounded-full text-destructive hover:bg-destructive/10" onClick={() => { setPhotoPreview(user.photoURL || null); form.setValue('photoURL', user.photoURL || ''); if(fileInputRef.current) fileInputRef.current.value = ''; }} title="Clear new photo selection" type="button" disabled={isSubmitting}>
+                       <Button variant="ghost" size="icon" className="absolute -top-3 -right-3 h-7 w-7 bg-background rounded-full text-destructive hover:bg-destructive/10" 
+                         onClick={() => { 
+                            setPhotoPreview(null); 
+                            form.setValue('photoURL', ''); // Set to empty string to indicate clearing
+                            if(fileInputRef.current) fileInputRef.current.value = ''; 
+                         }} 
+                         title="Clear photo selection" type="button" disabled={isSubmitting}>
                           <XCircle className="h-5 w-5"/>
                        </Button>
                     </div>
@@ -332,7 +369,6 @@ export default function ProfilePage() {
         </CardContent>
       </Card>
 
-      {/* Camera Dialog */}
       <Dialog open={showCameraDialog} onOpenChange={(isOpen) => {
         setShowCameraDialog(isOpen);
         if (!isOpen && cameraStream) {
