@@ -1,12 +1,13 @@
 
 'use client';
 
-import { Sidebar } from '@/components/common/Sidebar';
+import { SiteWiseSidebar } from '@/components/common/Sidebar';
 import { Header } from '@/components/common/Header';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-import { Skeleton } from '@/components/ui/skeleton'; // For loading state
+import { Skeleton } from '@/components/ui/skeleton';
+import { SidebarProvider, Sidebar, SidebarInset } from '@/components/ui/sidebar';
 
 export default function AppLayout({
   children,
@@ -35,8 +36,6 @@ export default function AppLayout({
   }
 
   if (!user) {
-    // This will be briefly shown before redirect, or if redirect fails.
-    // Alternatively, can return null or a more specific "Redirecting..." message.
     return (
        <div className="flex min-h-screen bg-background items-center justify-center">
          <p>Redirecting to login...</p>
@@ -45,14 +44,16 @@ export default function AppLayout({
   }
 
   return (
-    <div className="flex min-h-screen bg-background">
-      <Sidebar />
-      <div className="flex flex-col flex-1 ml-64"> {/* Adjust ml value based on sidebar width */}
+    <SidebarProvider defaultOpen={true}>
+      <Sidebar>
+        <SiteWiseSidebar />
+      </Sidebar>
+      <SidebarInset>
         <Header />
-        <main className="flex-1 p-6 md:p-8 overflow-y-auto">
+        <main className="flex-1 p-4 sm:p-6 md:p-8 overflow-y-auto"> {/* Adjusted padding */}
           {children}
         </main>
-      </div>
-    </div>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }

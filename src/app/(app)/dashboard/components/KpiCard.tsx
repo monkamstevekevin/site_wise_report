@@ -22,7 +22,7 @@ export function KpiCard({ title, value, icon: Icon, trend, trendDirection = 'neu
         <Icon className="h-5 w-5 text-muted-foreground" />
       </CardHeader>
       <CardContent>
-        <div className="text-3xl font-bold font-headline text-foreground">{value}</div>
+        <div className="text-2xl sm:text-3xl font-bold font-headline text-foreground">{value}</div> {/* Responsive font size */}
         {trend && (
           <p className={cn("text-xs mt-1", trendColor)}>
             {trend}

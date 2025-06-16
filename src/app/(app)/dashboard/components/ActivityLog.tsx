@@ -86,9 +86,9 @@ export function ActivityLog() {
         <ScrollArea className="h-80 pr-4">
           <div className="space-y-4">
             {mockActivities.map((activity) => (
-              <div key={activity.id} className="flex items-start space-x-3 p-3 rounded-md hover:bg-muted/50 transition-colors">
-                <div className={`p-2 bg-muted rounded-full ${activity.iconClass}`}>
-                  <activity.icon className="h-5 w-5 text-white" />
+              <div key={activity.id} className="flex items-start space-x-2 sm:space-x-3 p-2 sm:p-3 rounded-md hover:bg-muted/50 transition-colors"> {/* Responsive space and padding */}
+                <div className={`p-1.5 sm:p-2 bg-muted rounded-full ${activity.iconClass}`}> {/* Responsive padding */}
+                  <activity.icon className="h-4 w-4 sm:h-5 sm:w-5 text-white" /> {/* Responsive icon size */}
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center justify-between">
