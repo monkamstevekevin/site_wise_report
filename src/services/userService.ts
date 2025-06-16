@@ -14,7 +14,7 @@ import { getProjectById } from './projectService'; // For fetching project detai
  * - getUsers - Fetches all users from Firestore.
  * - getUserById - Fetches a single user by their ID from Firestore.
  * - addUser - Creates a new user in Firebase Auth and Firestore.
- * - updateUser - Updates a user's information (name, role) in Firestore.
+ * - updateUser - Updates a user's information (name, role, avatarUrl) in Firestore.
  * - updateUserAssignments - Updates the assigned projects for a user in Firestore and sends notifications.
  * - deleteUserFirestoreRecord - Deletes a user's document from Firestore.
  */
@@ -57,7 +57,7 @@ export async function getUsers(): Promise<User[]> {
         email: data.email || 'no-email@example.com',
         role: data.role || 'TECHNICIAN',
         avatarUrl: data.avatarUrl || undefined,
-        assignments: Array.isArray(data.assignments) ? data.assignments : [], // Updated field
+        assignments: Array.isArray(data.assignments) ? data.assignments : [], 
         createdAt: formatTimestamp(data.createdAt),
         updatedAt: formatTimestamp(data.updatedAt),
       } as User;
@@ -87,7 +87,7 @@ export async function getUserById(userId: string): Promise<User | null> {
         email: data.email || 'no-email@example.com',
         role: data.role || 'TECHNICIAN',
         avatarUrl: data.avatarUrl || undefined,
-        assignments: Array.isArray(data.assignments) ? data.assignments : [], // Updated field
+        assignments: Array.isArray(data.assignments) ? data.assignments : [], 
         createdAt: formatTimestamp(data.createdAt),
         updatedAt: formatTimestamp(data.updatedAt),
       } as User;
@@ -121,6 +121,7 @@ export async function addUser(
 
     await updateAuthProfile(firebaseUser, {
       displayName: userData.displayName,
+      // photoURL can be set here if available/desired at creation
     });
 
     const userDocRef = doc(db, 'users', firebaseUser.uid);
@@ -128,8 +129,8 @@ export async function addUser(
       name: userData.displayName, 
       email: firebaseUser.email,
       role: userData.role,
-      avatarUrl: firebaseUser.photoURL || '',
-      assignments: [], // Initialize new field
+      avatarUrl: firebaseUser.photoURL || '', // Save initial photoURL if available
+      assignments: [], 
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -149,26 +150,29 @@ export async function addUser(
 }
 
 /**
- * Updates a user's information (name, role) in Firestore.
+ * Updates a user's information (name, role, avatarUrl) in Firestore.
  * @param {string} userId The ID of the user to update.
- * @param {object} data The data to update, can include `displayName` (maps to `name` in Firestore) and/or `role`.
+ * @param {object} data The data to update, can include `name` (from `displayName`), `role`, and/or `avatarUrl`.
  * @returns {Promise<void>} A promise that resolves when the user is successfully updated.
  * @throws Will throw an error if updating the user fails.
  */
-export async function updateUser(userId: string, data: { displayName?: string; role?: UserRole }): Promise<void> {
+export async function updateUser(userId: string, data: { name?: string; role?: UserRole; avatarUrl?: string | null }): Promise<void> {
   try {
     const userDocRef = doc(db, 'users', userId);
     const updateData: any = {};
 
-    if (data.displayName) {
-      updateData.name = data.displayName;
+    if (data.name !== undefined) {
+      updateData.name = data.name;
     }
-    if (data.role) {
+    if (data.role !== undefined) {
       updateData.role = data.role;
+    }
+    if (data.avatarUrl !== undefined) { // Check if avatarUrl is explicitly passed
+      updateData.avatarUrl = data.avatarUrl; // This can be a string (URL or data URI) or null
     }
 
     if (Object.keys(updateData).length === 0) {
-      console.log("No data provided to update user.");
+      console.log("No data provided to update user in Firestore.");
       return;
     }
 
@@ -176,7 +180,7 @@ export async function updateUser(userId: string, data: { displayName?: string; r
     await updateDoc(userDocRef, updateData);
 
   } catch (error) {
-    console.error(`Error updating user ${userId}: `, error);
+    console.error(`Error updating user ${userId} in Firestore: `, error);
     throw new Error(`Failed to update user ${userId} in database.`);
   }
 }
