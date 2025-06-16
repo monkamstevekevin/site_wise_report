@@ -2,7 +2,7 @@
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
 import { getAuth, type Auth } from 'firebase/auth';
 import { getFirestore, type Firestore } from 'firebase/firestore';
-import { getStorage, type FirebaseStorage } from 'firebase/storage'; // Added Storage import
+import { getStorage, type FirebaseStorage } from 'firebase/storage'; // Ensured Storage import
 
 // Configuration updated with provided project details from Firebase console.
 const firebaseConfig = {
@@ -30,4 +30,3 @@ db = getFirestore(app);
 storage = getStorage(app); // Initialize storage
 
 export { app, auth, db, storage }; // Export storage
-

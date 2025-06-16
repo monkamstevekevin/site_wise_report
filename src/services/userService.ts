@@ -152,11 +152,11 @@ export async function addUser(
  * Updates a user's information (name, role, avatarUrl) in Firestore.
  * @param {string} userId The ID of the user to update.
  * @param {object} data The data to update, can include `name`, `role`, and/or `avatarUrl`.
- *                     `avatarUrl` can be a string (URL or data URI) or `null` to clear.
- * @returns {Promise<void>} A promise that resolves when the user is successfully updated.
+ *                     `avatarUrl` can be a string (URL) or `null` to clear.
+ * @returns {Promise<User | null>} A promise that resolves to the updated User object or null if the user was not found.
  * @throws Will throw an error if updating the user fails.
  */
-export async function updateUser(userId: string, data: { name?: string; role?: UserRole; avatarUrl?: string | null }): Promise<void> {
+export async function updateUser(userId: string, data: { name?: string; role?: UserRole; avatarUrl?: string | null }): Promise<User | null> {
   try {
     const userDocRef = doc(db, 'users', userId);
     const updateData: any = {};
@@ -167,20 +167,34 @@ export async function updateUser(userId: string, data: { name?: string; role?: U
     if (data.role !== undefined) {
       updateData.role = data.role;
     }
-    // Explicitly handle avatarUrl to allow setting it to null (to clear it) or a string
     if (data.avatarUrl !== undefined) { 
-      updateData.avatarUrl = data.avatarUrl; // This can be string (URL/data URI) or null
+      updateData.avatarUrl = data.avatarUrl; // This can be string (URL) or null
     }
 
-
     if (Object.keys(updateData).length === 0) {
-      console.log("No data provided to update user in Firestore.");
-      return;
+      console.log("No data provided to update user in Firestore. Returning current user data.");
+      return getUserById(userId); // Return current data if no updates
     }
 
     updateData.updatedAt = serverTimestamp();
     await updateDoc(userDocRef, updateData);
-
+    
+    // Fetch and return the updated user document
+    const updatedDocSnap = await getDoc(userDocRef);
+    if (updatedDocSnap.exists()) {
+      const updatedData = updatedDocSnap.data();
+      return {
+        id: updatedDocSnap.id,
+        name: updatedData.name || 'Unnamed User',
+        email: updatedData.email || 'no-email@example.com',
+        role: updatedData.role || 'TECHNICIAN',
+        avatarUrl: updatedData.avatarUrl || undefined,
+        assignments: Array.isArray(updatedData.assignments) ? updatedData.assignments : [], 
+        createdAt: formatTimestamp(updatedData.createdAt),
+        updatedAt: formatTimestamp(updatedData.updatedAt),
+      } as User;
+    }
+    return null; // Should not happen if update was successful on an existing doc
   } catch (error) {
     console.error(`Error updating user ${userId} in Firestore: `, error);
     throw new Error(`Failed to update user ${userId} in database.`);

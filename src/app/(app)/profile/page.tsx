@@ -22,8 +22,7 @@ import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 
 const profileFormSchema = z.object({
   displayName: z.string().min(1, 'Display name is required').max(50, 'Display name is too long'),
-  // Accept any string for photoURL (data URI or HTTP/S), or empty string
-  photoURL: z.string().optional(),
+  photoURL: z.string().optional(), // Can be data URI, http/s URL, or empty
 });
 
 type ProfileFormData = z.infer<typeof profileFormSchema>;
@@ -54,6 +53,7 @@ export default function ProfilePage() {
     },
   });
 
+  // Effect to initialize form when user data is available or when not editing
   useEffect(() => {
     if (user && !isEditing) {
       const currentPhoto = user.photoURL || '';
@@ -64,6 +64,19 @@ export default function ProfilePage() {
       setPhotoPreview(currentPhoto);
     }
   }, [user, form, isEditing]);
+  
+  // Effect to initialize form when entering edit mode
+  const initializeFormForEditing = () => {
+    if (user) {
+      const currentPhoto = user.photoURL || '';
+      form.reset({
+        displayName: user.displayName || '',
+        photoURL: currentPhoto,
+      });
+      setPhotoPreview(currentPhoto);
+    }
+  };
+
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -149,45 +162,27 @@ export default function ProfilePage() {
     }
 
     try {
-      const updatePayload: { displayName?: string; photoURL?: string | null } = {};
-      let changed = false;
-
-      if (data.displayName !== (user.displayName || '')) {
-        updatePayload.displayName = data.displayName;
-        changed = true;
-      }
+      // data.photoURL here can be a data URI, an external URL, or an empty string/null
+      const finalSavedPhotoURL = await updateUserProfile({ 
+        displayName: data.displayName, 
+        photoURL: data.photoURL 
+      });
       
-      const newPhotoURLFromForm = data.photoURL === '' ? null : data.photoURL;
-      // Check if new photo is different from the current photoURL in context (which might be from Firestore)
-      if (newPhotoURLFromForm !== (user.photoURL || null)) {
-        updatePayload.photoURL = newPhotoURLFromForm;
-        changed = true;
-      }
-
-      if (changed) {
-        // updateUserProfile will handle storing the photoURL (data URI or http) in Firestore's avatarUrl
-        // and attempting to update Firebase Auth's photoURL (if it's not a data URI).
-        const finalSavedPhotoURL = await updateUserProfile(updatePayload); 
-        
-        toast({
-          title: 'Profile Updated',
-          description: 'Your profile information has been successfully updated.',
-        });
-        
-        // Reset form with the definitive data (displayName from form, photoURL from what was actually saved/returned)
-        form.reset({
-            displayName: data.displayName, 
-            photoURL: finalSavedPhotoURL || '',
-        });
-        setPhotoPreview(finalSavedPhotoURL || '');
-
-      } else {
-        toast({
-          title: 'No Changes',
-          description: 'No information was changed.',
-        });
-      }
+      toast({
+        title: 'Profile Updated',
+        description: 'Your profile information has been successfully updated.',
+      });
+      
+      // Reset form with the definitive data from context (which should reflect storage URL)
+      // updateUserProfile in AuthContext updates the user object which triggers re-render and useEffect.
+      // We also explicitly reset the form here with the final URL for good measure.
+      form.reset({
+        displayName: data.displayName, 
+        photoURL: finalSavedPhotoURL || '', // Use the URL returned by updateUserProfile
+      });
+      setPhotoPreview(finalSavedPhotoURL || '');
       setIsEditing(false);
+
     } catch (error) {
       console.error('Error updating profile:', error);
       toast({
@@ -249,9 +244,7 @@ export default function ProfilePage() {
           !isEditing && (
             <Button onClick={() => {
               setIsEditing(true);
-              const currentPhoto = user.photoURL || '';
-              form.reset({ displayName: user.displayName || '', photoURL: currentPhoto });
-              setPhotoPreview(currentPhoto);
+              initializeFormForEditing();
             }} className="rounded-lg">
               <Edit3 className="mr-2 h-4 w-4" /> Edit Profile
             </Button>
@@ -318,7 +311,7 @@ export default function ProfilePage() {
                       <FormLabel>Photo URL (or leave empty to clear)</FormLabel>
                       <FormControl>
                         <Input 
-                          placeholder="Paste an image URL or leave empty to clear" 
+                          placeholder="Paste an image URL or leave empty to clear. Will show Storage URL after upload." 
                           {...field} 
                           value={field.value || ''} 
                           disabled={isSubmitting} 
@@ -329,7 +322,7 @@ export default function ProfilePage() {
                         />
                       </FormControl>
                       <FormDescription>
-                        After uploading or taking a photo, its data will appear here. If you paste an external URL, it will be used.
+                        After uploading or taking a photo, its data will appear here temporarily. After saving, if successful, a Firebase Storage URL will appear here.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -356,9 +349,12 @@ export default function ProfilePage() {
                 <div className="flex space-x-2 justify-end pt-4">
                   <Button type="button" variant="outline" onClick={() => {
                     setIsEditing(false); 
-                    const currentPhoto = user.photoURL || '';
-                    form.reset({ displayName: user.displayName || '', photoURL: currentPhoto });
-                    setPhotoPreview(currentPhoto);
+                    // Re-initialize form from user context when canceling
+                    if (user) {
+                        const currentPhoto = user.photoURL || '';
+                        form.reset({ displayName: user.displayName || '', photoURL: currentPhoto });
+                        setPhotoPreview(currentPhoto);
+                    }
                     if (fileInputRef.current) fileInputRef.current.value = '';
                   }} disabled={isSubmitting}>
                     Cancel

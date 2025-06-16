@@ -1,65 +1,137 @@
-{
-  "name": "nextn",
-  "version": "0.1.0",
-  "private": true,
-  "scripts": {
-    "dev": "next dev --turbopack",
-    "genkit:dev": "genkit start -- tsx src/ai/dev.ts",
-    "genkit:watch": "genkit start -- tsx --watch src/ai/dev.ts",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint",
-    "typecheck": "tsc --noEmit"
-  },
-  "dependencies": {
-    "@genkit-ai/googleai": "^1.8.0",
-    "@genkit-ai/next": "^1.8.0",
-    "@hookform/resolvers": "^4.1.3",
-    "@radix-ui/react-accordion": "^1.2.3",
-    "@radix-ui/react-alert-dialog": "^1.1.6",
-    "@radix-ui/react-avatar": "^1.1.3",
-    "@radix-ui/react-checkbox": "^1.1.4",
-    "@radix-ui/react-dialog": "^1.1.6",
-    "@radix-ui/react-dropdown-menu": "^2.1.6",
-    "@radix-ui/react-label": "^2.1.2",
-    "@radix-ui/react-menubar": "^1.1.6",
-    "@radix-ui/react-popover": "^1.1.6",
-    "@radix-ui/react-progress": "^1.1.2",
-    "@radix-ui/react-radio-group": "^1.2.3",
-    "@radix-ui/react-scroll-area": "^1.2.3",
-    "@radix-ui/react-select": "^2.1.6",
-    "@radix-ui/react-separator": "^1.1.2",
-    "@radix-ui/react-slider": "^1.2.3",
-    "@radix-ui/react-slot": "^1.1.2",
-    "@radix-ui/react-switch": "^1.1.3",
-    "@radix-ui/react-tabs": "^1.1.3",
-    "@radix-ui/react-toast": "^1.2.6",
-    "@radix-ui/react-tooltip": "^1.1.8",
-    "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
-    "date-fns": "^3.6.0",
-    "dotenv": "^16.5.0",
-    "firebase": "^11.8.1",
-    "genkit": "^1.8.0",
-    "lucide-react": "^0.475.0",
-    "next": "15.3.3",
-    "patch-package": "^8.0.0",
-    "react": "^18.3.1",
-    "react-day-picker": "^8.10.1",
-    "react-dom": "^18.3.1",
-    "react-hook-form": "^7.54.2",
-    "recharts": "^2.15.1",
-    "tailwind-merge": "^3.0.1",
-    "tailwindcss-animate": "^1.0.7",
-    "zod": "^3.24.2"
-  },
-  "devDependencies": {
-    "@types/node": "^20",
-    "@types/react": "^18",
-    "@types/react-dom": "^18",
-    "genkit-cli": "^1.8.0",
-    "postcss": "^8",
-    "tailwindcss": "^3.4.1",
-    "typescript": "^5"
+
+'use server';
+
+import { storage, auth } from '@/lib/firebase';
+import { ref, uploadString, getDownloadURL, deleteObject, type StorageError, listAll } from 'firebase/storage';
+import { v4 as uuidv4 } from 'uuid';
+
+/**
+ * @fileOverview Firebase Storage service for handling file uploads and deletions,
+ * specifically for user profile images.
+ *
+ * - uploadProfileImage: Uploads an image (file or data URI) to Firebase Storage.
+ * - deleteProfileImage: Deletes a profile image from Firebase Storage.
+ * - dataURIToBlob: Converts a data URI to a Blob object.
+ */
+
+/**
+ * Converts a data URI string to a Blob object.
+ * @param {string} dataURI The data URI to convert.
+ * @returns {Blob} The Blob object.
+ */
+function dataURIToBlob(dataURI: string): Blob {
+  const byteString = atob(dataURI.split(',')[1]);
+  const mimeString = dataURI.split(',')[0].split(':')[1].split(';')[0];
+  const ab = new ArrayBuffer(byteString.length);
+  const ia = new Uint8Array(ab);
+  for (let i = 0; i < byteString.length; i++) {
+    ia[i] = byteString.charCodeAt(i);
+  }
+  return new Blob([ab], { type: mimeString });
+}
+
+/**
+ * Deletes an existing profile image from Firebase Storage.
+ * Attempts to extract the file path from the URL.
+ * @param {string | null | undefined} imageUrl The URL of the image to delete.
+ * @returns {Promise<void>}
+ */
+async function deleteOldImage(imageUrl: string | null | undefined): Promise<void> {
+  if (!imageUrl || !imageUrl.includes('firebasestorage.googleapis.com')) {
+    // Not a Firebase Storage URL or no image to delete
+    return;
+  }
+  try {
+    const imageRef = ref(storage, imageUrl);
+    await deleteObject(imageRef);
+    console.log('Old profile image deleted successfully from Firebase Storage.');
+  } catch (error) {
+    const storageError = error as StorageError;
+    if (storageError.code === 'storage/object-not-found') {
+      console.warn('Old profile image not found, no deletion needed.');
+    } else {
+      console.error('Error deleting old profile image from Firebase Storage:', storageError);
+      // Optionally re-throw or handle more gracefully
+    }
+  }
+}
+
+
+/**
+ * Uploads a profile image to Firebase Storage.
+ * If an oldImageUrl is provided and it's a Firebase Storage URL, it attempts to delete the old image first.
+ * @param {string} userId The ID of the user.
+ * @param {string} imageDataURI The image data as a data URI.
+ * @param {string | null | undefined} oldImageUrl The URL of the user's current profile image, if any.
+ * @returns {Promise<string>} A promise that resolves to the public URL of the uploaded image.
+ * @throws Will throw an error if uploading fails.
+ */
+export async function uploadProfileImage(
+  userId: string,
+  imageDataURI: string,
+  oldImageUrl?: string | null
+): Promise<string> {
+  if (!userId) {
+    throw new Error('User ID is required to upload a profile image.');
+  }
+  if (!imageDataURI.startsWith('data:image')) {
+    throw new Error('Invalid image data URI provided.');
+  }
+
+  // Attempt to delete the old image first if it exists
+  if (oldImageUrl) {
+    await deleteOldImage(oldImageUrl);
+  }
+  
+  const fileExtension = imageDataURI.substring(imageDataURI.indexOf('/') + 1, imageDataURI.indexOf(';base64'));
+  const fileName = `profile_${userId}_${uuidv4()}.${fileExtension}`;
+  const storageRef = ref(storage, `profileImages/${userId}/${fileName}`);
+
+  try {
+    // Firebase Storage SDK's uploadString expects the base64 part of the data URI
+    const base64String = imageDataURI.split(',')[1];
+    const snapshot = await uploadString(storageRef, base64String, 'base64', {
+      contentType: `image/${fileExtension}`,
+    });
+    const downloadURL = await getDownloadURL(snapshot.ref);
+    console.log('Image uploaded successfully to Firebase Storage. URL:', downloadURL);
+    return downloadURL;
+  } catch (error) {
+    const storageError = error as StorageError;
+    console.error('Error uploading profile image to Firebase Storage:', storageError);
+    throw new Error(`Failed to upload image. Firebase Storage Error: ${storageError.code} - ${storageError.message}`);
+  }
+}
+
+
+/**
+ * Deletes a user's profile image from Firebase Storage.
+ * @param {string | null | undefined} imageUrl The URL of the image to delete.
+ * @returns {Promise<void>}
+ * @throws Will throw an error if deletion fails (other than object-not-found).
+ */
+export async function deleteProfileImage(imageUrl: string | null | undefined): Promise<void> {
+   if (!imageUrl) {
+    console.log('No image URL provided, skipping deletion.');
+    return;
+  }
+  // Check if it's a Firebase Storage URL before attempting to delete
+  if (!imageUrl.includes('firebasestorage.googleapis.com')) {
+    console.warn('Provided URL is not a Firebase Storage URL, skipping deletion from Storage:', imageUrl);
+    return;
+  }
+  try {
+    const imageRef = ref(storage, imageUrl);
+    await deleteObject(imageRef);
+    console.log('Profile image deleted successfully from Firebase Storage.');
+  } catch (error) {
+    const storageError = error as StorageError;
+    if (storageError.code === 'storage/object-not-found') {
+      // This is not an error for this operation, as the goal is for the image to not exist.
+      console.warn('Profile image not found in Firebase Storage, no deletion needed.');
+    } else {
+      console.error('Error deleting profile image from Firebase Storage:', storageError);
+      throw new Error(`Failed to delete image. Firebase Storage Error: ${storageError.code} - ${storageError.message}`);
+    }
   }
 }

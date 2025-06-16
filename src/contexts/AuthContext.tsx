@@ -8,8 +8,7 @@ import { auth } from '@/lib/firebase';
 import { useRouter, usePathname } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { updateUser as updateUserInFirestore } from '@/services/userService';
-// Firebase Storage related imports are removed as Storage is not set up.
-// import { uploadProfileImage, deleteProfileImage } from '@/services/storageService';
+import { uploadProfileImage, deleteProfileImage } from '@/services/storageService';
 
 interface AuthContextType {
   user: FirebaseUser | null;
@@ -77,12 +76,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!auth.currentUser) {
       throw new Error("User not authenticated.");
     }
-
     const currentUserAuth = auth.currentUser;
+    let finalPhotoURLForAuthAndFirestore: string | null = currentUserAuth.photoURL; // Start with current photoURL
     const updatesForAuth: { displayName?: string; photoURL?: string } = {};
     const updatesForFirestore: { name?: string; avatarUrl?: string | null } = {};
-
-    let finalPhotoURLForContext: string | null = data.photoURL === undefined ? currentUserAuth.photoURL : data.photoURL;
 
     // Handle displayName update
     if (data.displayName !== undefined && data.displayName !== (currentUserAuth.displayName || '')) {
@@ -91,41 +88,57 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     // Handle photoURL update
-    // Only update Firebase Auth photoURL if it's not a data URI (i.e., it's an http/https URL or null)
-    if (data.photoURL !== undefined) {
-      if (data.photoURL === null || data.photoURL === '' || data.photoURL.startsWith('http')) {
-        updatesForAuth.photoURL = data.photoURL || undefined; // Firebase Auth expects undefined or string for photoURL, not null.
+    if (data.photoURL !== undefined) { // If photoURL is part of the update data
+      if (data.photoURL === null || data.photoURL === '') { // User wants to clear the photo
+        if (currentUserAuth.photoURL) {
+            await deleteProfileImage(currentUserAuth.photoURL); // Delete old image from storage
+        }
+        finalPhotoURLForAuthAndFirestore = null;
+      } else if (data.photoURL.startsWith('data:image')) { // New image (data URI) provided
+        try {
+          // Upload new image to Firebase Storage, delete old one if it existed
+          finalPhotoURLForAuthAndFirestore = await uploadProfileImage(currentUserAuth.uid, data.photoURL, currentUserAuth.photoURL);
+        } catch (uploadError) {
+          console.error("Error uploading new profile image:", uploadError);
+          toast({ variant: 'destructive', title: 'Image Upload Failed', description: (uploadError as Error).message });
+          throw uploadError; // Propagate error
+        }
+      } else { // External HTTP/HTTPS URL provided
+        if (currentUserAuth.photoURL && currentUserAuth.photoURL !== data.photoURL) {
+            // If the old URL was a Firebase Storage URL, consider deleting it.
+            // For simplicity here, we're not, assuming external URLs aren't ours to manage.
+            // await deleteProfileImage(currentUserAuth.photoURL); // Potentially delete if old was a storage URL
+        }
+        finalPhotoURLForAuthAndFirestore = data.photoURL;
       }
-      // For Firestore, always update avatarUrl with the provided photoURL (data URI, http, or null)
-      updatesForFirestore.avatarUrl = data.photoURL;
+    }
+    
+    // Prepare updates for Firebase Auth (photoURL should be string or undefined)
+    if (finalPhotoURLForAuthAndFirestore !== currentUserAuth.photoURL) {
+        updatesForAuth.photoURL = finalPhotoURLForAuthAndFirestore || undefined;
+    }
+    // Prepare updates for Firestore (avatarUrl can be string or null)
+    if (finalPhotoURLForAuthAndFirestore !== (updatesForFirestore.avatarUrl !== undefined ? updatesForFirestore.avatarUrl : (await updateUserInFirestore(currentUserAuth.uid, {}) as any)?.avatarUrl)) { // A bit complex check, simplified: if it changed
+        updatesForFirestore.avatarUrl = finalPhotoURLForAuthAndFirestore;
     }
 
 
     try {
-      // Update Firebase Authentication profile (only displayName and non-dataURI photoURL)
+      // Update Firebase Authentication profile
       if (Object.keys(updatesForAuth).length > 0) {
         await updateProfile(currentUserAuth, updatesForAuth);
       }
 
-      // Update Firestore user document (name and avatarUrl which can be data URI)
-      if (updatesForFirestore.name || updatesForFirestore.avatarUrl !== undefined) {
+      // Update Firestore user document
+      if (Object.keys(updatesForFirestore).length > 0) {
          await updateUserInFirestore(currentUserAuth.uid, updatesForFirestore);
       }
       
-      // Update context user state
-      // Create a new user object for the context state update
-      const updatedUserContextData = { ...currentUserAuth } as FirebaseUser; // Create a new object copy
-      if (updatesForAuth.displayName) {
-        (updatedUserContextData as any).displayName = updatesForAuth.displayName;
-      }
-      // The photoURL in the context should reflect what was intended to be saved,
-      // which is the photoURL from the input form (data.photoURL).
-      // This could be a data URI (stored in Firestore) or an HTTP URL (stored in Auth & Firestore).
-      (updatedUserContextData as any).photoURL = finalPhotoURLForContext;
-      
+      // Update context user state - create a new object to trigger re-renders
+      const updatedUserContextData = { ...auth.currentUser } as FirebaseUser; // Get fresh auth.currentUser state
       setUser(updatedUserContextData);
 
-      return finalPhotoURLForContext;
+      return updatedUserContextData.photoURL; // Return the definitive photoURL from Auth
 
     } catch (error) {
       const authError = error as AuthError;
