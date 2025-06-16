@@ -45,7 +45,6 @@ export default function ProfilePage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
 
-
   const form = useForm<ProfileFormData>({
     resolver: zodResolver(profileFormSchema),
     defaultValues: {
@@ -55,7 +54,7 @@ export default function ProfilePage() {
   });
 
   useEffect(() => {
-    if (user) {
+    if (user && !isEditing) { // Only reset form from user context when not editing
       const currentPhoto = user.photoURL || '';
       form.reset({
         displayName: user.displayName || '',
@@ -121,7 +120,6 @@ export default function ProfilePage() {
     };
   }, [cameraStream]);
 
-
   const handleCapturePhoto = () => {
     if (videoRef.current && canvasRef.current && cameraStream) {
       const video = videoRef.current;
@@ -150,7 +148,7 @@ export default function ProfilePage() {
     }
 
     try {
-      const updateData: { displayName?: string; photoURL?: string } = {};
+      const updateData: { displayName?: string; photoURL?: string | null } = {};
       let changed = false;
 
       if (data.displayName !== (user.displayName || '')) {
@@ -158,33 +156,31 @@ export default function ProfilePage() {
         changed = true;
       }
       
-      // Handle photoURL: if it's a new data URI or a new URL, or if it's cleared
-      const newPhotoURL = data.photoURL === '' ? null : data.photoURL; // Treat empty string as clearing the photo
-      const currentPhotoURL = user.photoURL || null;
+      const newPhotoURLFromForm = data.photoURL === '' ? null : data.photoURL;
+      const currentPhotoURLInAuth = user.photoURL || null;
 
-      if (newPhotoURL !== currentPhotoURL) {
-        // If photoPreview is different from the original user.photoURL, it means a new image was selected/taken
-        // or an existing URL was changed/cleared.
-        // If photoPreview is null AND form.photoURL is empty, it means clear the photo.
-        // If photoPreview has a value, it's either a data URI or an external URL.
-         updateData.photoURL = newPhotoURL || ''; // Send empty string to Firebase to clear photo
+      if (newPhotoURLFromForm !== currentPhotoURLInAuth) {
+        updateData.photoURL = newPhotoURLFromForm;
         changed = true;
       }
 
-
       if (changed) {
-        await updateUserProfile(updateData);
+        const finalReturnedPhotoURL = await updateUserProfile(updateData);
         toast({
           title: 'Profile Updated',
           description: 'Your profile information has been successfully updated.',
         });
+        // Explicitly update form and preview with the URL returned from context
+        // which should be the storage URL if a new image was processed.
+        form.setValue('photoURL', finalReturnedPhotoURL || '');
+        setPhotoPreview(finalReturnedPhotoURL || '');
       } else {
         toast({
           title: 'No Changes',
           description: 'No information was changed.',
         });
       }
-      setIsEditing(false);
+      setIsEditing(false); // This will trigger useEffect to reset form based on context user state
     } catch (error) {
       console.error('Error updating profile:', error);
       toast({
@@ -241,7 +237,13 @@ export default function ProfilePage() {
         subtitle="View and manage your profile details."
         actions={
           !isEditing && (
-            <Button onClick={() => setIsEditing(true)} className="rounded-lg">
+            <Button onClick={() => {
+              setIsEditing(true);
+              // When entering edit mode, ensure form and preview are synced with current user state
+              const currentPhoto = user.photoURL || '';
+              form.reset({ displayName: user.displayName || '', photoURL: currentPhoto });
+              setPhotoPreview(currentPhoto);
+            }} className="rounded-lg">
               <Edit3 className="mr-2 h-4 w-4" /> Edit Profile
             </Button>
           )
@@ -256,7 +258,7 @@ export default function ProfilePage() {
               <AvatarFallback className="text-3xl sm:text-4xl">{user.email?.[0]?.toUpperCase() || 'U'}</AvatarFallback>
             </Avatar>
             <div className="text-center sm:text-left">
-              <CardTitle className="text-2xl sm:text-3xl">{form.watch('displayName') || user.displayName || 'User Name'}</CardTitle>
+              <CardTitle className="text-2xl sm:text-3xl">{isEditing ? form.watch('displayName') : (user.displayName || 'User Name')}</CardTitle>
               <CardDescription className="text-base">{user.email}</CardDescription>
               <CardDescription className="text-sm mt-1">UID: {user.uid}</CardDescription>
             </div>
@@ -309,12 +311,16 @@ export default function ProfilePage() {
                         <Input 
                           placeholder="Paste an image URL or leave empty to clear" 
                           {...field} 
-                          value={field.value || ''} // Ensure controlled component
+                          value={field.value || ''} 
                           disabled={isSubmitting} 
+                          onChange={(e) => { // Allow manual URL input to also update preview
+                            field.onChange(e);
+                            setPhotoPreview(e.target.value);
+                          }}
                         />
                       </FormControl>
                       <FormDescription>
-                        If you upload or take a photo, this field will be updated with a data URI. You can also manually paste an image URL or clear it.
+                        If you upload or take a photo, this field will be updated. You can also manually paste an image URL or clear it.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -328,7 +334,7 @@ export default function ProfilePage() {
                        <Button variant="ghost" size="icon" className="absolute -top-3 -right-3 h-7 w-7 bg-background rounded-full text-destructive hover:bg-destructive/10" 
                          onClick={() => { 
                             setPhotoPreview(null); 
-                            form.setValue('photoURL', ''); // Set to empty string to indicate clearing
+                            form.setValue('photoURL', ''); 
                             if(fileInputRef.current) fileInputRef.current.value = ''; 
                          }} 
                          title="Clear photo selection" type="button" disabled={isSubmitting}>
@@ -340,10 +346,7 @@ export default function ProfilePage() {
 
                 <div className="flex space-x-2 justify-end pt-4">
                   <Button type="button" variant="outline" onClick={() => {
-                    setIsEditing(false);
-                    const currentPhoto = user.photoURL || '';
-                    form.reset({ displayName: user.displayName || '', photoURL: currentPhoto });
-                    setPhotoPreview(currentPhoto);
+                    setIsEditing(false); // This will trigger useEffect to reset form to user context state
                     if (fileInputRef.current) fileInputRef.current.value = '';
                   }} disabled={isSubmitting}>
                     Cancel

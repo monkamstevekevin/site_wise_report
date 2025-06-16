@@ -8,14 +8,14 @@ import { auth } from '@/lib/firebase';
 import { useRouter, usePathname } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { updateUser as updateUserInFirestore } from '@/services/userService';
-import { uploadProfileImage, deleteProfileImage } from '@/services/storageService'; // Import storage services
+import { uploadProfileImage, deleteProfileImage } from '@/services/storageService';
 
 interface AuthContextType {
   user: FirebaseUser | null;
   loading: boolean;
   logout: () => Promise<void>;
   signInWithGoogle: () => Promise<void>;
-  updateUserProfile: (data: { displayName?: string; photoURL?: string | null }) => Promise<void>;
+  updateUserProfile: (data: { displayName?: string; photoURL?: string | null }) => Promise<string | null>; // Modified return type
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -59,6 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
       toast({ title: 'Sign In Successful', description: 'Welcome!' });
+      // Redirect is handled by onAuthStateChanged
     } catch (error) {
       const authError = error as AuthError;
       console.error('Google Sign-In error:', authError);
@@ -67,10 +68,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         title: 'Google Sign-In Failed',
         description: authError.message || 'An unexpected error occurred during Google Sign-In.',
       });
+    } finally {
+      setLoading(false); // Ensure loading is false even on error
     }
   };
 
-  const updateUserProfile = async (data: { displayName?: string; photoURL?: string | null }) => {
+  const updateUserProfile = async (data: { displayName?: string; photoURL?: string | null }): Promise<string | null> => {
     if (!auth.currentUser) {
       throw new Error("User not authenticated.");
     }
@@ -88,14 +91,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Handle photoURL update
     if (data.photoURL !== undefined) { // photoURL is explicitly part of the input
-      const newPhotoData = data.photoURL; // This could be data URI, http/s URL, or null/empty
+      const newPhotoData = data.photoURL;
 
       if (newPhotoData === null || newPhotoData === '') { // User wants to clear the photo
-        if (currentUserAuth.photoURL) { // If there's an existing photo
-          await deleteProfileImage(currentUserAuth.photoURL); // Attempt to delete from Storage
+        if (currentUserAuth.photoURL) {
+          await deleteProfileImage(currentUserAuth.photoURL);
         }
         finalPhotoURLForContext = null;
-        updatesForAuth.photoURL = undefined; // Send undefined to Firebase Auth to clear
+        updatesForAuth.photoURL = undefined; 
         updatesForFirestore.avatarUrl = null;
       } else if (newPhotoData.startsWith('data:')) { // New image (data URI) provided
         try {
@@ -104,56 +107,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           updatesForAuth.photoURL = storageURL;
           updatesForFirestore.avatarUrl = storageURL;
         } catch (uploadError) {
-          console.error("Error uploading new profile image to Firebase Storage:", uploadError);
+          console.error("Error uploading new profile image:", uploadError);
           toast({
             variant: 'destructive',
             title: 'Photo Upload Failed',
-            description: (uploadError as Error).message || "Could not upload new photo to storage. Name update (if any) will still be attempted.",
+            description: (uploadError as Error).message || "Could not upload new photo. Name update (if any) will still be attempted.",
           });
-          // Don't set photo updates for Auth/Firestore if upload failed
-          // finalPhotoURLForContext will remain the original photo
+          // Keep existing photo URL if upload fails
+          finalPhotoURLForContext = currentUserAuth.photoURL; 
         }
       } else if (newPhotoData.startsWith('http://') || newPhotoData.startsWith('https://')) { // External URL
-        if (newPhotoData !== currentUserAuth.photoURL) {
-             if (currentUserAuth.photoURL && currentUserAuth.photoURL.includes('firebasestorage.googleapis.com')) {
-                await deleteProfileImage(currentUserAuth.photoURL); // Delete old if it was a storage image
+         if (newPhotoData !== currentUserAuth.photoURL) {
+            if (currentUserAuth.photoURL && currentUserAuth.photoURL.includes('firebasestorage.googleapis.com')) {
+                await deleteProfileImage(currentUserAuth.photoURL);
             }
             finalPhotoURLForContext = newPhotoData;
             updatesForAuth.photoURL = newPhotoData;
             updatesForFirestore.avatarUrl = newPhotoData;
         } else {
-            // External URL is same as current, no change
             finalPhotoURLForContext = currentUserAuth.photoURL;
         }
       }
     }
 
     try {
-      // Update Firebase Auth Profile if changes are present
       if (Object.keys(updatesForAuth).length > 0) {
         await updateProfile(currentUserAuth, updatesForAuth);
       }
 
-      // Update Firestore user document if name or avatarUrl changed
       if (updatesForFirestore.name || updatesForFirestore.avatarUrl !== undefined) {
          await updateUserInFirestore(currentUserAuth.uid, updatesForFirestore);
       }
       
-      // Update local AuthContext state
-      const updatedUser = { ...currentUserAuth } as FirebaseUser; // Create a mutable copy
+      const updatedUser = { ...currentUserAuth } as FirebaseUser;
       if (updatesForAuth.displayName) {
         (updatedUser as any).displayName = updatesForAuth.displayName;
       }
-      // Update photoURL in context only if it was part of the input (data.photoURL !== undefined)
-      // and use the finalPhotoURLForContext which reflects the outcome of storage upload/deletion.
-      if (data.photoURL !== undefined) {
-          (updatedUser as any).photoURL = finalPhotoURLForContext;
-      }
+      // Use finalPhotoURLForContext for the context state
+      (updatedUser as any).photoURL = finalPhotoURLForContext; 
       setUser(updatedUser);
+      return finalPhotoURLForContext; // Return the definitive URL
 
     } catch (error) {
       const authError = error as AuthError;
-      console.error("Error updating user profile (Auth/Firestore):", authError);
+      console.error("Error updating user profile in Auth/Firestore:", authError);
       toast({
           variant: 'destructive',
           title: 'Profile Update Error',
