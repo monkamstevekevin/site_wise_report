@@ -12,16 +12,17 @@ import { ComplianceTrendChart } from './components/ComplianceTrendChart';
 import { ActivityLog } from './components/ActivityLog';
 import { ProjectAssignmentsCard } from './components/ProjectAssignmentsCard';
 import { AlertsCard } from './components/AlertsCard';
+import { ScheduleView } from './components/ScheduleView'; // Added import for ScheduleView
 import { useAuth } from '@/contexts/AuthContext'; 
 import type { UserRole } from '@/lib/constants';
 import { MOCK_TECHNICIAN_EMAIL, MOCK_TECHNICIAN_REPORTS_ID } from '@/lib/constants';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useEffect, useState, useMemo } from 'react';
-import type { FieldReport, MaterialType, Project, User } from '@/lib/types';
+import type { FieldReport, MaterialType, Project, User, UserAssignment } from '@/lib/types'; // Added UserAssignment
 import { getReportsByTechnicianId, getReports as getAllReports } from '@/services/reportService'; 
 import { getProjects } from '@/services/projectService';
-import { getUsers } from '@/services/userService';
+import { getUsers, getUserById } from '@/services/userService'; // Added getUserById
 import { Badge } from '@/components/ui/badge';
 import { format, formatDistanceToNow, isSameDay, startOfDay, endOfDay, parseISO, isAfter, isBefore, isEqual } from 'date-fns'; // Added date-fns functions
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip, Legend as RechartsLegend } from 'recharts';
@@ -89,6 +90,7 @@ export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
   const [currentUserRole, setCurrentUserRole] = useState<UserRole | null>(null);
   const [effectiveTechnicianId, setEffectiveTechnicianId] = useState<string | null>(null);
+  const [currentUserDetails, setCurrentUserDetails] = useState<User | null>(null); // Added for technician's assignments
   
   const [allReportsData, setAllReportsData] = useState<FieldReport[]>([]);
   const [technicianReports, setTechnicianReports] = useState<FieldReport[]>([]);
@@ -121,6 +123,7 @@ export default function DashboardPage() {
         setTechnicianReports([]);
         setAllProjectsData([]);
         setAllUsersData([]);
+        setCurrentUserDetails(null);
         setCurrentUserRole(null); 
         setDashboardError(null); 
         return;
@@ -134,6 +137,9 @@ export default function DashboardPage() {
 
       try {
         let reportsToSetForDashboard: FieldReport[] = [];
+        let projectsToSet: Project[] = [];
+        let usersToSet: User[] = [];
+        
         if (role === 'ADMIN' || role === 'SUPERVISOR') {
           const [reports, projects, usersList] = await Promise.all([
             getAllReports(),
@@ -141,22 +147,27 @@ export default function DashboardPage() {
             getUsers()
           ]);
           reportsToSetForDashboard = reports;
-          setAllReportsData(reports);
-          setAllProjectsData(projects);
-          setAllUsersData(usersList);
+          projectsToSet = projects;
+          usersToSet = usersList;
         } else if (role === 'TECHNICIAN' && mappedTechId) {
-          reportsToSetForDashboard = await getReportsByTechnicianId(mappedTechId);
-          setTechnicianReports(reportsToSetForDashboard);
-          setAllReportsData(reportsToSetForDashboard); 
-          const projects = await getProjects(); 
-          setAllProjectsData(projects); 
-          setAllUsersData([]); 
+           const [reports, projects, fetchedCurrentUser] = await Promise.all([
+            getReportsByTechnicianId(mappedTechId),
+            getProjects(),
+            getUserById(user.uid) // Fetch current user details for assignments
+          ]);
+          reportsToSetForDashboard = reports;
+          setTechnicianReports(reports);
+          projectsToSet = projects;
+          if (fetchedCurrentUser) {
+            setCurrentUserDetails(fetchedCurrentUser);
+          }
         } else if (role === 'TECHNICIAN' && !mappedTechId) {
            setTechnicianReports([]);
-           setAllReportsData([]);
-           setAllProjectsData([]);
-           setAllUsersData([]);
         }
+        setAllReportsData(reportsToSetForDashboard);
+        setAllProjectsData(projectsToSet);
+        setAllUsersData(usersToSet);
+
       } catch (err) {
         console.error("Error loading dashboard data:", err);
         setDashboardError((err as Error).message || "Failed to load report data for dashboard.");
@@ -336,11 +347,14 @@ export default function DashboardPage() {
           </>
         )}
         { currentUserRole === 'TECHNICIAN' && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <Skeleton className="lg:col-span-1 h-96 rounded-lg" />
-            <Skeleton className="lg:col-span-1 h-96 rounded-lg" />
-            <Skeleton className="lg:col-span-1 h-96 rounded-lg" />
-            </div>
+            <>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                <Skeleton className="lg:col-span-1 h-96 rounded-lg" />
+                <Skeleton className="lg:col-span-1 h-96 rounded-lg" />
+                <Skeleton className="lg:col-span-1 h-96 rounded-lg" />
+              </div>
+              <Skeleton className="h-[400px] w-full rounded-lg" /> {/* ScheduleView placeholder */}
+            </>
         )}
       </>
     );
@@ -444,14 +458,15 @@ export default function DashboardPage() {
               ))}
           </div>
           
-          {/* Alerts Card - Moved Up */}
-          {isLoadingDashboardData ? (
-            <Skeleton className="h-72 w-full rounded-lg mb-6" />
-          ) : (
-            <div className="mb-6">
+          {/* Alerts Card */}
+          <div className="mb-6">
+            {isLoadingDashboardData ? (
+              <Skeleton className="h-72 w-full rounded-lg" />
+            ) : (
               <AlertsCard projects={allProjectsData} users={allUsersData} />
-            </div>
-          )}
+            )}
+          </div>
+
 
           {/* Date Filter Card */}
           <Card className="mb-6 shadow-lg rounded-lg">
@@ -506,25 +521,25 @@ export default function DashboardPage() {
           </Card>
 
           {/* ProjectAssignmentsCard Wrapper */}
-          {isLoadingDashboardData ? (
-            <Skeleton className="h-96 w-full mb-6 rounded-lg" />
-          ) : noProjectsExistForAdmin ? (
-            <Card className="mb-6">
-              <CardHeader>
-                <CardTitle className="flex items-center"><HardHat className="mr-2 h-5 w-5 text-muted-foreground" />No Projects Found</CardTitle>
-                <CardDescription>There are currently no projects in the system to display an assignments overview.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p>You can start by <Link href="/admin/projects" className="text-primary hover:underline">adding new projects</Link>.</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="mb-6"> 
-              <ProjectAssignmentsCard projects={filteredProjectsForAssignments} users={allUsersData} />
-            </div>
-          )}
+          <div className="mb-6"> 
+            {isLoadingDashboardData ? (
+                <Skeleton className="h-96 w-full rounded-lg" />
+            ) : noProjectsExistForAdmin ? (
+                <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center"><HardHat className="mr-2 h-5 w-5 text-muted-foreground" />No Projects Found</CardTitle>
+                    <CardDescription>There are currently no projects in the system to display an assignments overview.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <p>You can start by <Link href="/admin/projects" className="text-primary hover:underline">adding new projects</Link>.</p>
+                </CardContent>
+                </Card>
+            ) : (
+                <ProjectAssignmentsCard projects={filteredProjectsForAssignments} users={allUsersData} />
+            )}
+          </div>
           
-          {/* Grid for other analytics - AlertsCard removed from here */}
+          {/* Grid for other analytics */}
           {isLoadingDashboardData ? (
              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Skeleton className="h-72 rounded-lg" /> 
@@ -666,6 +681,15 @@ export default function DashboardPage() {
                 </div>
             </div>
             </>
+          )}
+          {/* Schedule View for Technicians */}
+          {isLoadingDashboardData || !currentUserDetails ? (
+            <Skeleton className="h-[400px] w-full rounded-lg mt-6" />
+          ) : (
+            <ScheduleView
+              assignments={currentUserDetails?.assignments || []}
+              allProjects={allProjectsData}
+            />
           )}
         </>
       )}

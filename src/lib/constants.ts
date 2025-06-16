@@ -16,7 +16,7 @@ export const ALL_NAV_ITEMS: NavItem[] = [
   { href: '/reports', label: 'Field Reports', icon: FileText, roles: ['ADMIN', 'SUPERVISOR', 'TECHNICIAN'] },
   { href: '/reports/create', label: 'Create Report', icon: FileText, roles: ['ADMIN', 'SUPERVISOR', 'TECHNICIAN'] },
   { href: '/my-projects', label: 'My Projects', icon: Briefcase, roles: ['TECHNICIAN', 'SUPERVISOR'] },
-  { href: '/my-schedule', label: 'My Schedule', icon: CalendarDays, roles: ['TECHNICIAN', 'SUPERVISOR'] },
+  // { href: '/my-schedule', label: 'My Schedule', icon: CalendarDays, roles: ['TECHNICIAN', 'SUPERVISOR'] }, // Removed
   {
     href: '/admin',
     label: 'Admin Panel',

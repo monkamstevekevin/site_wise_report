@@ -10,7 +10,10 @@ import { getProjects } from '@/services/projectService';
 import { getUserById } from '@/services/userService';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ScheduleView } from './components/ScheduleView';
+// ScheduleView component will be removed from here if this page is deleted.
+// For now, let's assume it's still here to avoid breaking its import if dashboard changes are separate.
+// If this file is deleted, then ScheduleView's import in dashboard/page.tsx will need to be updated.
+import { ScheduleView } from './components/ScheduleView'; 
 
 export default function MySchedulePage() {
   const { user, loading: authLoading } = useAuth();
@@ -100,6 +103,8 @@ export default function MySchedulePage() {
     );
   }
 
+  // This page will be removed, so this return path might not be hit if deletion happens correctly.
+  // If ScheduleView is moved before this file is deleted, the import path for ScheduleView would need adjustment.
   return (
     <>
       <PageTitle
