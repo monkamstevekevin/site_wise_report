@@ -54,7 +54,9 @@ export default function ProfilePage() {
   });
 
   useEffect(() => {
-    if (user && !isEditing) { // Only reset form from user context when not editing
+    // This effect runs when `user` (from context) changes, or when exiting edit mode.
+    // It ensures the form is reset to the current user's state from the context.
+    if (user && !isEditing) {
       const currentPhoto = user.photoURL || '';
       form.reset({
         displayName: user.displayName || '',
@@ -113,6 +115,7 @@ export default function ProfilePage() {
   };
 
   useEffect(() => {
+    // Cleanup camera stream when component unmounts or dialog closes
     return () => {
       if (cameraStream) {
         cameraStream.getTracks().forEach(track => track.stop());
@@ -156,31 +159,40 @@ export default function ProfilePage() {
         changed = true;
       }
       
+      // data.photoURL here can be a data URI from new upload/capture, an existing http/s URL, or empty string
       const newPhotoURLFromForm = data.photoURL === '' ? null : data.photoURL;
       const currentPhotoURLInAuth = user.photoURL || null;
 
       if (newPhotoURLFromForm !== currentPhotoURLInAuth) {
-        updateData.photoURL = newPhotoURLFromForm;
+        updateData.photoURL = newPhotoURLFromForm; // Pass the current form value to updateUserProfile
         changed = true;
       }
 
       if (changed) {
-        const finalReturnedPhotoURL = await updateUserProfile(updateData);
+        // updateUserProfile will handle uploading to storage if photoURL is a data URI
+        // and will return the final (short) storage URL.
+        const finalReturnedPhotoURL = await updateUserProfile(updateData); 
+        
         toast({
           title: 'Profile Updated',
           description: 'Your profile information has been successfully updated.',
         });
-        // Explicitly update form and preview with the URL returned from context
-        // which should be the storage URL if a new image was processed.
-        form.setValue('photoURL', finalReturnedPhotoURL || '');
-        setPhotoPreview(finalReturnedPhotoURL || '');
+
+        // Explicitly reset the form with the potentially new display name
+        // and the definitive photo URL (which should be the short storage URL from Firebase).
+        form.reset({
+            displayName: data.displayName, 
+            photoURL: finalReturnedPhotoURL || '',
+        });
+        setPhotoPreview(finalReturnedPhotoURL || ''); // Update visual preview with the short URL
+
       } else {
         toast({
           title: 'No Changes',
           description: 'No information was changed.',
         });
       }
-      setIsEditing(false); // This will trigger useEffect to reset form based on context user state
+      setIsEditing(false); // Exit edit mode, useEffect will sync form with potentially updated user context
     } catch (error) {
       console.error('Error updating profile:', error);
       toast({
@@ -188,12 +200,16 @@ export default function ProfilePage() {
         title: 'Update Failed',
         description: (error as Error).message || 'Could not update profile.',
       });
+      // Keep isEditing true on error so user can see form values and try again
     } finally {
       setIsSubmitting(false);
     }
   };
   
-  const currentPhotoForAvatar = photoPreview || user?.photoURL || `https://placehold.co/100x100.png?text=${user?.email?.[0]?.toUpperCase() || 'U'}`;
+  // Determine the source for the main avatar based on current state
+  const currentAvatarSrc = isEditing ? (photoPreview || user?.photoURL || `https://placehold.co/100x100.png?text=${user?.email?.[0]?.toUpperCase() || 'U'}`) 
+                                   : (user?.photoURL || `https://placehold.co/100x100.png?text=${user?.email?.[0]?.toUpperCase() || 'U'}`);
+
 
   if (authLoading) {
     return (
@@ -240,6 +256,7 @@ export default function ProfilePage() {
             <Button onClick={() => {
               setIsEditing(true);
               // When entering edit mode, ensure form and preview are synced with current user state
+              // This user.photoURL should be the short storage URL if previously saved.
               const currentPhoto = user.photoURL || '';
               form.reset({ displayName: user.displayName || '', photoURL: currentPhoto });
               setPhotoPreview(currentPhoto);
@@ -254,7 +271,7 @@ export default function ProfilePage() {
         <CardHeader>
           <div className="flex flex-col sm:flex-row items-center sm:items-start space-y-4 sm:space-y-0 sm:space-x-6">
             <Avatar className="h-24 w-24 sm:h-32 sm:w-32 border-2 border-primary shadow-md">
-              <AvatarImage src={currentPhotoForAvatar} alt={form.watch('displayName') || user.displayName || 'User'} data-ai-hint="user avatar" />
+              <AvatarImage src={currentAvatarSrc} alt={form.watch('displayName') || user.displayName || 'User'} data-ai-hint="user avatar" />
               <AvatarFallback className="text-3xl sm:text-4xl">{user.email?.[0]?.toUpperCase() || 'U'}</AvatarFallback>
             </Avatar>
             <div className="text-center sm:text-left">
@@ -313,14 +330,14 @@ export default function ProfilePage() {
                           {...field} 
                           value={field.value || ''} 
                           disabled={isSubmitting} 
-                          onChange={(e) => { // Allow manual URL input to also update preview
+                          onChange={(e) => { 
                             field.onChange(e);
                             setPhotoPreview(e.target.value);
                           }}
                         />
                       </FormControl>
                       <FormDescription>
-                        If you upload or take a photo, this field will be updated. You can also manually paste an image URL or clear it.
+                        If you upload or take a photo, its data will appear here temporarily. After saving, this will show the permanent storage URL.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -346,7 +363,10 @@ export default function ProfilePage() {
 
                 <div className="flex space-x-2 justify-end pt-4">
                   <Button type="button" variant="outline" onClick={() => {
-                    setIsEditing(false); // This will trigger useEffect to reset form to user context state
+                    setIsEditing(false); 
+                    const currentPhoto = user.photoURL || '';
+                    form.reset({ displayName: user.displayName || '', photoURL: currentPhoto });
+                    setPhotoPreview(currentPhoto);
                     if (fileInputRef.current) fileInputRef.current.value = '';
                   }} disabled={isSubmitting}>
                     Cancel
@@ -424,3 +444,5 @@ export default function ProfilePage() {
     </>
   );
 }
+
+    
