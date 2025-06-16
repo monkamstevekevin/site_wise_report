@@ -15,30 +15,30 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
-  SidebarGroupLabel,
-  useSidebar, // Import useSidebar to check collapsed state
+  // SidebarGroupLabel, // Not currently used in this simplified version
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { useAuth } from '@/contexts/AuthContext';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { Skeleton } from '@/components/ui/skeleton';
 
-
 const mapFirebaseUserToAppRole = (firebaseUser: FirebaseUser | null): UserRole => {
-  if (!firebaseUser) return 'TECHNICIAN';
+  if (!firebaseUser) return 'TECHNICIAN'; // Default or guest role
+  // Specific email checks for roles
   if (firebaseUser.email === 'janesteve237@gmail.com') return 'ADMIN';
   if (firebaseUser.email?.includes('admin@example.com')) return 'ADMIN';
   if (firebaseUser.email?.includes('supervisor@example.com')) return 'SUPERVISOR';
-  return 'TECHNICIAN';
+  return 'TECHNICIAN'; // Default for other authenticated users
 };
 
-interface NavItemProps {
+interface NavItemDisplayProps {
   item: NavItem;
   currentRole: UserRole;
-  isCollapsed: boolean; // Pass collapsed state
-  level?: number; // For indentation
+  isCollapsed: boolean;
+  level?: number;
 }
 
-const NavItemDisplay: React.FC<NavItemProps> = ({ item, currentRole, isCollapsed, level = 0 }) => {
+const NavItemDisplayRecursive: React.FC<NavItemDisplayProps> = ({ item, currentRole, isCollapsed, level = 0 }) => {
   const pathname = usePathname();
   const isActive = pathname === item.href || (item.href !== '/' && item.href !== '/admin' && pathname.startsWith(item.href));
 
@@ -49,24 +49,29 @@ const NavItemDisplay: React.FC<NavItemProps> = ({ item, currentRole, isCollapsed
   const hasAccessibleChildren = item.children && item.children.some(child => !child.roles || child.roles.includes(currentRole));
 
   return (
-    <SidebarMenuItem key={item.href || item.label}>
-      <Link href={item.href} passHref legacyBehavior>
-        <SidebarMenuButton
-          isActive={isActive}
-          className={cn(
-            level > 0 && !isCollapsed && "pl-7", // Indent children only if not collapsed
-            level > 0 && isCollapsed && "pl-2" // Standard padding for icons if collapsed
-          )}
-          tooltip={isCollapsed ? item.label : undefined}
-        >
-          <item.icon className={cn(isActive ? "text-sidebar-accent-foreground" : "text-sidebar-foreground/70 group-hover/menu-button:text-sidebar-accent-foreground")} />
+    <SidebarMenuItem key={item.href || item.label} className={cn(level > 0 && 'ml-0')}>
+      <SidebarMenuButton
+        asChild // Allow Link to control the rendering
+        isActive={isActive}
+        className={cn(
+          level > 0 && !isCollapsed && "pl-7", // Indent sub-items text
+          level > 0 && isCollapsed && "pl-2"    // Standard padding for sub-items icons when collapsed
+        )}
+        tooltip={isCollapsed ? item.label : undefined}
+        size={level > 0 ? "sm" : "default"} // Slightly smaller sub-items
+      >
+        <Link href={item.href}> {/* No legacyBehavior or passHref needed here */}
+          <item.icon className={cn(
+            isActive ? "text-sidebar-accent-foreground" : "text-sidebar-foreground/70 group-hover/menu-button:text-sidebar-accent-foreground",
+            level > 0 ? "h-3.5 w-3.5" : "h-4 w-4" // Slightly smaller icon for sub-items
+          )} />
           {!isCollapsed && <span className="truncate">{item.label}</span>}
-        </SidebarMenuButton>
-      </Link>
+        </Link>
+      </SidebarMenuButton>
       {!isCollapsed && hasAccessibleChildren && item.children && (
-        <SidebarMenu className="pl-4 border-l border-sidebar-border/50 ml-3.5 my-1">
+        <SidebarMenu className={cn("pl-4 border-l border-sidebar-border/50 ml-3.5 my-1", level > 0 && "ml-3 pl-2")}> {/* Adjusted indentation for children list */}
           {item.children.map((child) => (
-            <NavItemDisplay key={child.href || child.label} item={child} currentRole={currentRole} isCollapsed={isCollapsed} level={level + 1} />
+            <NavItemDisplayRecursive key={child.href || child.label} item={child} currentRole={currentRole} isCollapsed={isCollapsed} level={level + 1} />
           ))}
         </SidebarMenu>
       )}
@@ -79,9 +84,8 @@ export function SiteWiseSidebar() {
   const { user, loading } = useAuth();
   const [navItems, setNavItems] = useState<NavItem[]>([]);
   const [currentUserRole, setCurrentUserRole] = useState<UserRole>('TECHNICIAN');
-  const { state: sidebarState } = useSidebar(); // Get collapsed state
+  const { state: sidebarState } = useSidebar();
   const isCollapsed = sidebarState === 'collapsed';
-
 
   useEffect(() => {
     if (!loading && user) {
@@ -89,32 +93,41 @@ export function SiteWiseSidebar() {
       setCurrentUserRole(role);
       setNavItems(getNavItemsForRole(role));
     } else if (!loading && !user) {
+      // Handle guest or logged-out state if necessary, or default to TECHNICIAN for nav structure
       const role = mapFirebaseUserToAppRole(null);
       setCurrentUserRole(role);
-      setNavItems(getNavItemsForRole(role));
+      setNavItems(getNavItemsForRole(role)); // Or a minimal set for guests
     }
   }, [user, loading]);
 
   if (loading) {
     return (
       <>
-        <SidebarHeader className="border-b border-sidebar-border">
-           <Skeleton className="h-7 w-7 mr-2 bg-primary/30" />
-           <Skeleton className="h-6 w-32 bg-primary/30" />
+        <SidebarHeader className="border-b border-sidebar-border h-16 flex items-center">
+           <Skeleton className={cn("h-7 w-7 mr-2 bg-primary/30", isCollapsed && "mx-auto")} />
+           {!isCollapsed && <Skeleton className="h-6 w-32 bg-primary/30" />}
         </SidebarHeader>
         <SidebarContent className="p-2">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-10 bg-sidebar-accent/50 rounded animate-pulse mb-2" />
+             <div key={i} className={cn("h-8 rounded animate-pulse mb-2 flex items-center gap-2 px-2", isCollapsed && "justify-center")}>
+                <Skeleton className="h-5 w-5 bg-sidebar-accent/50 rounded-sm" />
+                {!isCollapsed && <Skeleton className="h-4 flex-1 bg-sidebar-accent/50 rounded-sm" />}
+            </div>
           ))}
         </SidebarContent>
-        <SidebarFooter className="border-t border-sidebar-border">
-          <Skeleton className="h-4 w-20 bg-sidebar-foreground/30" />
-          <Skeleton className="h-3 w-16 bg-sidebar-foreground/20" />
+        <SidebarFooter className="border-t border-sidebar-border p-3">
+          {!isCollapsed ? (
+            <>
+              <Skeleton className="h-4 w-20 bg-sidebar-foreground/30 mb-1" />
+              <Skeleton className="h-3 w-16 bg-sidebar-foreground/20" />
+            </>
+          ): (
+            <Skeleton className="h-4 w-6 mx-auto bg-sidebar-foreground/30" />
+          )}
         </SidebarFooter>
       </>
     );
   }
-
 
   return (
     <>
@@ -126,7 +139,7 @@ export function SiteWiseSidebar() {
       <SidebarContent className="p-2">
         <SidebarMenu>
           {navItems.map((item) => (
-            <NavItemDisplay key={item.href || item.label} item={item} currentRole={currentUserRole} isCollapsed={isCollapsed} />
+            <NavItemDisplayRecursive key={item.href || item.label} item={item} currentRole={currentUserRole} isCollapsed={isCollapsed} />
           ))}
         </SidebarMenu>
       </SidebarContent>
@@ -135,10 +148,10 @@ export function SiteWiseSidebar() {
         {!isCollapsed ? (
           <>
             <p className="text-xs text-sidebar-foreground/60">© {new Date().getFullYear()} {APP_NAME}</p>
-            <p className="text-xs text-sidebar-foreground/50">Role: {currentUserRole}</p>
+            <p className="text-xs text-sidebar-foreground/50">Rôle: {currentUserRole}</p>
           </>
         ) : (
-          <p className="text-xs text-center text-sidebar-foreground/60">©</p>
+          <p className="text-[10px] text-center text-sidebar-foreground/60">©</p>
         )}
       </SidebarFooter>
     </>
