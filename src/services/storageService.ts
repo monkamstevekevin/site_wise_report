@@ -99,6 +99,10 @@ export async function uploadProfileImage(
   } catch (error) {
     const storageError = error as StorageError;
     console.error('Error uploading profile image to Firebase Storage:', storageError);
+    // Log the server response if available, as suggested by the error message
+    if (storageError.serverResponse) {
+      console.error('Server Response:', storageError.serverResponse);
+    }
     throw new Error(`Failed to upload image. Firebase Storage Error: ${storageError.code} - ${storageError.message}`);
   }
 }
@@ -131,6 +135,9 @@ export async function deleteProfileImage(imageUrl: string | null | undefined): P
       console.warn('Profile image not found in Firebase Storage, no deletion needed.');
     } else {
       console.error('Error deleting profile image from Firebase Storage:', storageError);
+       if (storageError.serverResponse) { // Also log server response here if available
+        console.error('Server Response on delete:', storageError.serverResponse);
+      }
       throw new Error(`Failed to delete image. Firebase Storage Error: ${storageError.code} - ${storageError.message}`);
     }
   }
