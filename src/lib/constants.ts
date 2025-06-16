@@ -1,6 +1,6 @@
 
 import type { LucideIcon } from 'lucide-react';
-import { LayoutDashboard, FileText, Users, HardHat, TestTube2, Settings, UserCircle, Briefcase } from 'lucide-react';
+import { LayoutDashboard, FileText, Users, HardHat, TestTube2, Settings, UserCircle, Briefcase, CalendarDays } from 'lucide-react';
 
 export interface NavItem {
   href: string;
@@ -16,6 +16,7 @@ export const ALL_NAV_ITEMS: NavItem[] = [
   { href: '/reports', label: 'Field Reports', icon: FileText, roles: ['ADMIN', 'SUPERVISOR', 'TECHNICIAN'] },
   { href: '/reports/create', label: 'Create Report', icon: FileText, roles: ['ADMIN', 'SUPERVISOR', 'TECHNICIAN'] },
   { href: '/my-projects', label: 'My Projects', icon: Briefcase, roles: ['TECHNICIAN', 'SUPERVISOR'] },
+  { href: '/my-schedule', label: 'My Schedule', icon: CalendarDays, roles: ['TECHNICIAN', 'SUPERVISOR'] },
   {
     href: '/admin',
     label: 'Admin Panel',
@@ -59,3 +60,4 @@ export type UserRole = 'ADMIN' | 'SUPERVISOR' | 'TECHNICIAN';
 // Mock technician identity for data population
 export const MOCK_TECHNICIAN_EMAIL = 'tech@example.com';
 export const MOCK_TECHNICIAN_REPORTS_ID = 'tech001';
+
