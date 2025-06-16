@@ -13,7 +13,7 @@ interface AuthContextType {
   loading: boolean;
   logout: () => Promise<void>;
   signInWithGoogle: () => Promise<void>;
-  updateUserProfile: (data: { displayName?: string; photoURL?: string }) => Promise<void>; // Added this
+  updateUserProfile: (data: { displayName?: string; photoURL?: string }) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -75,29 +75,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error("User not authenticated.");
     }
     try {
-      const updateData: { displayName?: string; photoURL?: string } = {};
+      const updateDataForAuth: { displayName?: string; photoURL?: string } = {};
+      
       if (data.displayName !== undefined) {
-        updateData.displayName = data.displayName;
+        updateDataForAuth.displayName = data.displayName;
       }
+
       if (data.photoURL !== undefined) {
-        // Send empty string to Firebase Auth if photoURL is meant to be cleared,
-        // or the new URL (which could be a data URI or an external URL).
-        updateData.photoURL = data.photoURL === null ? '' : data.photoURL;
+        if (data.photoURL === null || data.photoURL === '') {
+          updateDataForAuth.photoURL = ''; // Send empty string to Firebase to clear photo
+        } else if (data.photoURL.startsWith('http://') || data.photoURL.startsWith('https://')) {
+          updateDataForAuth.photoURL = data.photoURL;
+        } else if (data.photoURL.startsWith('data:')) {
+          // It's a data URI. Don't send to Firebase Auth directly to avoid "URL too long" error.
+          // The UI preview on the profile page will still show the new image.
+          // A full solution requires uploading to Firebase Storage and then using that URL.
+          console.warn("Attempted to set a data URI as photoURL in Firebase Auth. This step is skipped to prevent errors. Firebase Storage integration is needed for persistence of uploaded/taken photos.");
+          toast({
+            title: "Photo Preview Updated",
+            description: "Your photo preview is updated. To save new uploads/captures permanently, Firebase Storage integration is required. External URLs or clearing the photo will be saved in your profile.",
+            duration: 8000,
+          });
+          // Importantly, we do *not* add data.photoURL to updateDataForAuth if it's a data URI.
+        }
       }
       
-      await updateProfile(auth.currentUser, updateData);
-      // onAuthStateChanged should pick up the changes and update the user state.
-      // Forcing a local update for quicker UI response if needed, but usually not necessary:
-      // setUser({ ...auth.currentUser, ...updateData } as FirebaseUser) 
-      // However, it's better to rely on onAuthStateChanged to provide the canonical user object.
-      // A simple way to ensure the user object is fresh after an update:
-      if (auth.currentUser) { // Check again as it might have been updated
-        setUser(Object.assign({}, auth.currentUser)); // Create a new object reference to trigger re-renders
+      if (Object.keys(updateDataForAuth).length > 0) {
+        await updateProfile(auth.currentUser, updateDataForAuth);
+      }
+      
+      if (auth.currentUser) {
+        setUser(Object.assign({}, auth.currentUser)); 
       }
 
     } catch (error) {
       const authError = error as AuthError;
       console.error("Error updating Firebase user profile:", authError);
+      // The specific "Photo URL too long" error should be caught by the logic above for data URIs.
+      // This catch block will handle other potential errors from updateProfile.
+      toast({
+          variant: 'destructive',
+          title: 'Profile Update Error',
+          description: authError.message || "Failed to update profile.",
+      });
       throw new Error(authError.message || "Failed to update profile.");
     }
   };
