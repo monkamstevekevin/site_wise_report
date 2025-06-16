@@ -17,6 +17,7 @@ import { LogOut, Settings, UserCircle, LogInIcon } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Skeleton } from '@/components/ui/skeleton';
+import { SidebarTrigger } from '@/components/ui/sidebar'; // Importation du SidebarTrigger
 
 export function Header() {
   const { user, loading, logout } = useAuth();
@@ -33,8 +34,9 @@ export function Header() {
 
   if (!mounted || loading) {
     return (
-      <header className="h-16 bg-card text-card-foreground border-b border-border flex items-center justify-end px-6 shadow-sm sticky top-0 z-40">
-        <div className="flex items-center space-x-4">
+      <header className="h-16 bg-card text-card-foreground border-b border-border flex items-center justify-between px-4 sm:px-6 shadow-sm sticky top-0 z-30">
+        <Skeleton className="h-7 w-7 md:hidden" /> {/* SidebarTrigger placeholder for mobile */}
+        <div className="flex items-center space-x-4 ml-auto"> {/* ml-auto to push to right */}
           <Skeleton className="h-8 w-8 rounded-full" /> {/* NotificationBell placeholder */}
           <Skeleton className="h-10 w-10 rounded-full" /> {/* Avatar placeholder */}
         </div>
@@ -43,7 +45,13 @@ export function Header() {
   }
 
   return (
-    <header className="h-16 bg-card text-card-foreground border-b border-border flex items-center justify-end px-6 shadow-sm sticky top-0 z-40">
+    <header className="h-16 bg-card text-card-foreground border-b border-border flex items-center justify-between px-4 sm:px-6 shadow-sm sticky top-0 z-30">
+      {/* SidebarTrigger est visible sur mobile grâce à md:hidden dans sa définition */}
+      <SidebarTrigger className="mr-2" /> 
+      
+      {/* Ce div prendra l'espace restant pour pousser les éléments suivants à droite */}
+      <div className="flex-grow" /> 
+
       <div className="flex items-center space-x-3">
         <NotificationBell />
         {user ? (
@@ -95,4 +103,3 @@ export function Header() {
     </header>
   );
 }
-
