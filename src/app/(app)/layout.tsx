@@ -7,7 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { SidebarProvider, Sidebar, SidebarInset } from '@/components/ui/sidebar';
+import { SidebarProvider, Sidebar, SidebarInset, SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
 
 export default function AppLayout({
   children,
@@ -50,7 +50,7 @@ export default function AppLayout({
       </Sidebar>
       <SidebarInset>
         <Header />
-        <main className="flex-1 p-4 sm:p-6 md:p-8 overflow-y-auto"> {/* Adjusted padding */}
+        <main className="flex-1 p-3 sm:p-4 md:p-6 overflow-y-auto"> {/* Adjusted padding */}
           {children}
         </main>
       </SidebarInset>

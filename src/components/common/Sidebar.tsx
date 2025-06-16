@@ -6,161 +6,141 @@ import { usePathname } from 'next/navigation';
 import { ALL_NAV_ITEMS, APP_NAME, getNavItemsForRole } from '@/lib/constants';
 import type { NavItem, UserRole } from '@/lib/constants';
 import { cn } from '@/lib/utils';
-import { ChevronDown, ChevronRight, Building } from 'lucide-react';
+import { Building } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion"
-import { useAuth } from '@/contexts/AuthContext'; // Import useAuth
+  SidebarHeader,
+  SidebarContent,
+  SidebarFooter,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+  SidebarGroupLabel,
+  useSidebar, // Import useSidebar to check collapsed state
+} from "@/components/ui/sidebar";
+import { useAuth } from '@/contexts/AuthContext';
 import type { User as FirebaseUser } from 'firebase/auth';
+import { Skeleton } from '@/components/ui/skeleton';
 
-// Helper to map Firebase user to app's UserRole type
+
 const mapFirebaseUserToAppRole = (firebaseUser: FirebaseUser | null): UserRole => {
-  if (!firebaseUser) return 'TECHNICIAN'; 
-
-  // TEMPORARY: Assign ADMIN role to janesteve237@gmail.com for testing
+  if (!firebaseUser) return 'TECHNICIAN';
   if (firebaseUser.email === 'janesteve237@gmail.com') return 'ADMIN';
-
   if (firebaseUser.email?.includes('admin@example.com')) return 'ADMIN';
   if (firebaseUser.email?.includes('supervisor@example.com')) return 'SUPERVISOR';
   return 'TECHNICIAN';
 };
 
+interface NavItemProps {
+  item: NavItem;
+  currentRole: UserRole;
+  isCollapsed: boolean; // Pass collapsed state
+  level?: number; // For indentation
+}
 
-const SidebarNavItem: React.FC<{ item: NavItem; isChild?: boolean; currentRole: UserRole }> = ({ item, isChild = false, currentRole }) => {
+const NavItemDisplay: React.FC<NavItemProps> = ({ item, currentRole, isCollapsed, level = 0 }) => {
   const pathname = usePathname();
   const isActive = pathname === item.href || (item.href !== '/' && item.href !== '/admin' && pathname.startsWith(item.href));
-  
-  const isAdminParentActive = item.href === '/admin' && pathname.startsWith('/admin/');
 
   if (item.roles && !item.roles.includes(currentRole)) {
     return null;
   }
 
-  if (item.children && item.children.length > 0) {
-    const accessibleChildren = item.children.filter(child => !child.roles || child.roles.includes(currentRole));
-    if (accessibleChildren.length === 0) return null;
-
-    const isExpandedByDefault = accessibleChildren.some(child => pathname.startsWith(child.href)) || isAdminParentActive;
-
-
-    return (
-       <AccordionItem value={item.label} className="border-none">
-        <AccordionTrigger 
-          className={cn(
-            "flex items-center w-full text-left px-3 py-2.5 rounded-md transition-colors duration-150 ease-in-out",
-            "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-            (isActive || isExpandedByDefault || isAdminParentActive) ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium" : "text-sidebar-foreground",
-            isChild ? "pl-8 text-sm" : "text-base"
-          )}
-        >
-          <item.icon className={cn("mr-3 h-5 w-5 flex-shrink-0", (isActive || isExpandedByDefault || isAdminParentActive) ? "text-sidebar-accent-foreground" : "text-sidebar-foreground/80")} />
-          <span className="flex-grow">{item.label}</span>
-        </AccordionTrigger>
-        <AccordionContent className="pl-4 pt-1 pb-0">
-          <ul className="space-y-1">
-            {accessibleChildren.map((child) => (
-              <li key={child.href}>
-                <SidebarNavItem item={child} isChild={true} currentRole={currentRole} />
-              </li>
-            ))}
-          </ul>
-        </AccordionContent>
-      </AccordionItem>
-    );
-  }
+  const hasAccessibleChildren = item.children && item.children.some(child => !child.roles || child.roles.includes(currentRole));
 
   return (
-    <Link
-      href={item.href}
-      className={cn(
-        "flex items-center px-3 py-2.5 rounded-md transition-colors duration-150 ease-in-out group",
-        isActive ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium" : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-        isChild ? "pl-11 text-sm py-2" : "text-base" 
+    <SidebarMenuItem key={item.href || item.label}>
+      <Link href={item.href} passHref legacyBehavior>
+        <SidebarMenuButton
+          isActive={isActive}
+          className={cn(
+            level > 0 && !isCollapsed && "pl-7", // Indent children only if not collapsed
+            level > 0 && isCollapsed && "pl-2" // Standard padding for icons if collapsed
+          )}
+          tooltip={isCollapsed ? item.label : undefined}
+        >
+          <item.icon className={cn(isActive ? "text-sidebar-accent-foreground" : "text-sidebar-foreground/70 group-hover/menu-button:text-sidebar-accent-foreground")} />
+          {!isCollapsed && <span className="truncate">{item.label}</span>}
+        </SidebarMenuButton>
+      </Link>
+      {!isCollapsed && hasAccessibleChildren && item.children && (
+        <SidebarMenu className="pl-4 border-l border-sidebar-border/50 ml-3.5 my-1">
+          {item.children.map((child) => (
+            <NavItemDisplay key={child.href || child.label} item={child} currentRole={currentRole} isCollapsed={isCollapsed} level={level + 1} />
+          ))}
+        </SidebarMenu>
       )}
-    >
-      {!isChild && <item.icon className={cn("mr-3 h-5 w-5 flex-shrink-0", isActive ? "text-sidebar-accent-foreground" : "text-sidebar-foreground/80 group-hover:text-sidebar-accent-foreground")} />}
-      <span>{item.label}</span>
-    </Link>
+    </SidebarMenuItem>
   );
 };
 
 
-export function Sidebar() {
+export function SiteWiseSidebar() {
   const { user, loading } = useAuth();
   const [navItems, setNavItems] = useState<NavItem[]>([]);
-  const [currentUserRole, setCurrentUserRole] = useState<UserRole>('TECHNICIAN'); 
-  const pathname = usePathname();
+  const [currentUserRole, setCurrentUserRole] = useState<UserRole>('TECHNICIAN');
+  const { state: sidebarState } = useSidebar(); // Get collapsed state
+  const isCollapsed = sidebarState === 'collapsed';
 
 
   useEffect(() => {
     if (!loading && user) {
-      const role = mapFirebaseUserToAppRole(user); 
+      const role = mapFirebaseUserToAppRole(user);
       setCurrentUserRole(role);
       setNavItems(getNavItemsForRole(role));
     } else if (!loading && !user) {
-      // For a logged-out user, we might show no items or public items.
-      // For now, defaulting to TECHNICIAN to show something if roles are not fully set up for public.
-      const role = mapFirebaseUserToAppRole(null); // Or 'GUEST' if we define such a role
+      const role = mapFirebaseUserToAppRole(null);
       setCurrentUserRole(role);
       setNavItems(getNavItemsForRole(role));
     }
   }, [user, loading]);
-  
-  const defaultOpenAccordionItems = navItems
-    .filter(item => item.children && item.children.length > 0 && item.children.some(child => pathname.startsWith(child.href)))
-    .map(item => item.label);
-  
-  if (pathname.startsWith('/admin/')) {
-      const adminParent = navItems.find(item => item.href === '/admin');
-      if (adminParent && !defaultOpenAccordionItems.includes(adminParent.label)) {
-          defaultOpenAccordionItems.push(adminParent.label);
-      }
-  }
-
 
   if (loading) {
     return (
-      <aside className="w-64 h-screen bg-sidebar text-sidebar-foreground border-r border-sidebar-border flex flex-col fixed left-0 top-0 shadow-lg">
-        <div className="h-16 flex items-center px-4 border-b border-sidebar-border">
-          <Building className="h-7 w-7 mr-2 text-primary animate-pulse" />
-          <h1 className="text-xl font-headline font-semibold text-primary">{APP_NAME}</h1>
-        </div>
-        <div className="flex-grow p-2 space-y-2 overflow-y-auto">
-          {[...Array(3)].map((_, i) => (
-            <div key={i} className="h-10 bg-sidebar-accent/50 rounded animate-pulse" />
+      <>
+        <SidebarHeader className="border-b border-sidebar-border">
+           <Skeleton className="h-7 w-7 mr-2 bg-primary/30" />
+           <Skeleton className="h-6 w-32 bg-primary/30" />
+        </SidebarHeader>
+        <SidebarContent className="p-2">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="h-10 bg-sidebar-accent/50 rounded animate-pulse mb-2" />
           ))}
-        </div>
-      </aside>
+        </SidebarContent>
+        <SidebarFooter className="border-t border-sidebar-border">
+          <Skeleton className="h-4 w-20 bg-sidebar-foreground/30" />
+          <Skeleton className="h-3 w-16 bg-sidebar-foreground/20" />
+        </SidebarFooter>
+      </>
     );
   }
 
+
   return (
-    <aside className="w-64 h-screen bg-sidebar text-sidebar-foreground border-r border-sidebar-border flex flex-col fixed left-0 top-0 shadow-lg">
-      <div className="h-16 flex items-center px-4 border-b border-sidebar-border">
-        <Building className="h-7 w-7 mr-2 text-primary" />
-        <h1 className="text-xl font-headline font-semibold text-primary">{APP_NAME}</h1>
-      </div>
-      <nav className="flex-grow p-2 space-y-1 overflow-y-auto">
-       <Accordion type="multiple" defaultValue={defaultOpenAccordionItems} className="w-full">
+    <>
+      <SidebarHeader className="border-b border-sidebar-border h-16 flex items-center">
+        <Building className={cn("h-7 w-7 mr-2 text-primary", isCollapsed && "mx-auto")} />
+        {!isCollapsed && <h1 className="text-xl font-headline font-semibold text-primary">{APP_NAME}</h1>}
+      </SidebarHeader>
+
+      <SidebarContent className="p-2">
+        <SidebarMenu>
           {navItems.map((item) => (
-            item.children && item.children.length > 0 ? (
-              <SidebarNavItem key={item.label} item={item} currentRole={currentUserRole} />
-            ) : (
-               <li key={item.href} className="list-none">
-                <SidebarNavItem item={item} currentRole={currentUserRole} />
-              </li>
-            )
+            <NavItemDisplay key={item.href || item.label} item={item} currentRole={currentUserRole} isCollapsed={isCollapsed} />
           ))}
-        </Accordion>
-      </nav>
-      <div className="p-4 border-t border-sidebar-border">
-        <p className="text-xs text-sidebar-foreground/60">© {new Date().getFullYear()} {APP_NAME}</p>
-        <p className="text-xs text-sidebar-foreground/50">Role: {currentUserRole}</p>
-      </div>
-    </aside>
+        </SidebarMenu>
+      </SidebarContent>
+
+      <SidebarFooter className="border-t border-sidebar-border p-3">
+        {!isCollapsed ? (
+          <>
+            <p className="text-xs text-sidebar-foreground/60">© {new Date().getFullYear()} {APP_NAME}</p>
+            <p className="text-xs text-sidebar-foreground/50">Role: {currentUserRole}</p>
+          </>
+        ) : (
+          <p className="text-xs text-center text-sidebar-foreground/60">©</p>
+        )}
+      </SidebarFooter>
+    </>
   );
 }
