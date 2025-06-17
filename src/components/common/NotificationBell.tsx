@@ -19,7 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { getNotificationsSubscription } from '@/lib/notificationClientService';
-import { markNotificationAsRead, markAllNotificationsAsRead } from '@/services/notificationService';
+import { markNotificationAsRead, markAllNotificationsAsRead, deleteNotification } from '@/services/notificationService'; // Import deleteNotification
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale'; // For French relative time
 
@@ -32,11 +32,9 @@ interface DisplayNotification extends Notification {
 const getNotificationDisplayProps = (notification: Notification): { icon: LucideIcon, iconClass: string } => {
   switch (notification.type) {
     case 'report_update':
-      // Note: Messages are generated in French in notificationService.ts now.
-      // This logic for icons can remain.
       if (notification.message.toLowerCase().includes('validé')) return { icon: FileCheck2, iconClass: 'text-green-500' };
       if (notification.message.toLowerCase().includes('rejeté')) return { icon: FileX2, iconClass: 'text-red-500' };
-      return { icon: FileText, iconClass: 'text-orange-500' }; // Default for other report updates
+      return { icon: FileText, iconClass: 'text-orange-500' };
     case 'project_assignment':
       return { icon: Briefcase, iconClass: 'text-purple-500' };
     case 'new_chat_message':
@@ -79,7 +77,7 @@ export function NotificationBell() {
         setNotifications(displayNotifications);
         setUnreadCount(displayNotifications.filter(n => !n.isRead).length);
       },
-      15 // Fetch last 15 notifications
+      15
     );
 
     return () => unsubscribe();
@@ -114,6 +112,21 @@ export function NotificationBell() {
     }
   };
 
+  const handleDeleteNotification = async (userIdToDeleteFor: string, notificationId: string) => {
+    if (!user || userIdToDeleteFor !== user.uid) {
+        toast({ variant: "destructive", title: "Erreur", description: "Action non autorisée." });
+        return;
+    }
+    try {
+      await deleteNotification(userIdToDeleteFor, notificationId);
+      toast({ title: "Notification Supprimée", description: "La notification a été retirée de votre liste." });
+      // The onSnapshot listener should automatically update the notifications list
+    } catch (error) {
+      console.error("Error deleting notification:", error);
+      toast({ variant: "destructive", title: "Erreur de Suppression", description: (error as Error).message || "Impossible de supprimer la notification." });
+    }
+  };
+
   if (!mounted || authLoading) {
     return (
       <Button variant="ghost" size="icon" className="relative rounded-full">
@@ -144,29 +157,47 @@ export function NotificationBell() {
           )}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <div className="max-h-[300px] overflow-y-auto">
+        <div className="max-h-[300px] overflow-y-auto group"> {/* Added group class for group-hover */}
             {notifications.length === 0 ? (
             <DropdownMenuItem disabled className="p-2 text-center text-muted-foreground">Aucune nouvelle notification</DropdownMenuItem>
             ) : (
             notifications.map((notification) => (
                 <DropdownMenuItem
-                key={notification.id}
-                className={cn(
-                    "flex items-start gap-3 p-2.5 cursor-pointer focus:bg-accent/80",
-                    !notification.isRead && "bg-accent/50 hover:bg-accent/60"
-                )}
-                onClick={() => handleNotificationClick(notification)}
+                  key={notification.id}
+                  className={cn(
+                      "flex items-start gap-2 p-2.5 group/item", // Added group/item for finer control
+                      !notification.isRead && "bg-accent/50 hover:bg-accent/60 focus:bg-accent/80"
+                  )}
+                  onClick={() => handleNotificationClick(notification)}
                 >
-                <div className={cn("mt-0.5", notification.iconClass || 'text-muted-foreground')}>
-                    <notification.icon className="h-5 w-5" />
-                </div>
-                <div className="flex-1">
-                    <p className={cn("text-sm", !notification.isRead && "font-semibold")}>{notification.message}</p>
-                    <p className="text-xs text-muted-foreground">{notification.displayTime}</p>
-                </div>
-                {!notification.isRead && (
-                    <div className="w-2 h-2 rounded-full bg-primary mt-1 self-center" title="Non lue"></div>
-                )}
+                  {/* Icon */}
+                  <div className={cn("mt-0.5 flex-shrink-0", notification.iconClass || 'text-muted-foreground')}>
+                      <notification.icon className="h-5 w-5" />
+                  </div>
+                  {/* Message and Time */}
+                  <div className="flex-1 min-w-0">
+                      <p className={cn("text-sm break-words", !notification.isRead && "font-semibold")}>{notification.message}</p>
+                      <p className="text-xs text-muted-foreground">{notification.displayTime}</p>
+                  </div>
+                  {/* Unread Dot */}
+                  {!notification.isRead && (
+                      <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0 mt-1 self-center" title="Non lue"></div>
+                  )}
+                  {/* Delete Button */}
+                  <Button
+                      variant="ghost"
+                      size="icon"
+                      className="ml-1 p-0 h-5 w-5 text-muted-foreground hover:text-destructive flex-shrink-0 self-center opacity-0 group-hover/item:opacity-100 focus:opacity-100 transition-opacity duration-150"
+                      onClick={(e) => {
+                          e.stopPropagation();
+                          if (user) { // Ensure user is not null
+                            handleDeleteNotification(user.uid, notification.id);
+                          }
+                      }}
+                      title="Supprimer cette notification"
+                  >
+                      <X className="h-3.5 w-3.5" />
+                  </Button>
                 </DropdownMenuItem>
             ))
             )}
