@@ -8,16 +8,16 @@ import { Bot } from 'lucide-react';
 
 const chartData = [
   { month: 'Jan', "AI Predicted Compliance": 88 },
-  { month: 'Feb', "AI Predicted Compliance": 90 },
+  { month: 'Fév', "AI Predicted Compliance": 90 }, // Translated
   { month: 'Mar', "AI Predicted Compliance": 89 },
-  { month: 'Apr', "AI Predicted Compliance": 92 },
-  { month: 'May', "AI Predicted Compliance": 93 },
-  { month: 'Jun', "AI Predicted Compliance": 91 },
+  { month: 'Avr', "AI Predicted Compliance": 92 }, // Translated
+  { month: 'Mai', "AI Predicted Compliance": 93 },
+  { month: 'Juin', "AI Predicted Compliance": 91 }, // Translated
 ];
 
 const chartConfig = {
   compliance: {
-    label: 'AI Predicted Compliance (%)',
+    label: 'Conformité Prédite par IA (%)', // Translated
     color: 'hsl(var(--chart-1))',
   },
 } satisfies ChartConfig;
@@ -28,9 +28,9 @@ export function ComplianceTrendChart() {
       <CardHeader>
         <CardTitle className="flex items-center">
           <Bot className="mr-2 h-5 w-5 text-primary" />
-          AI Compliance Prediction Trends
+          Tendances de Prédiction de Conformité IA
         </CardTitle>
-        <CardDescription>Monthly trend of AI-predicted compliance percentages.</CardDescription>
+        <CardDescription>Tendance mensuelle des pourcentages de conformité prédits par l'IA.</CardDescription>
       </CardHeader>
       <CardContent>
         <ChartContainer config={chartConfig} className="h-80 w-full">
@@ -52,7 +52,7 @@ export function ComplianceTrendChart() {
                     indicator="line"
                     labelFormatter={(value, payload) => {
                         if (payload && payload.length > 0) {
-                            return `Month: ${payload[0].payload.month}`;
+                            return `Mois : ${payload[0].payload.month}`; // Translated
                         }
                         return value;
                     }}

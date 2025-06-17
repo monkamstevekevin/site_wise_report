@@ -18,7 +18,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { format } from 'date-fns';
+import { format, isValid, parseISO } from 'date-fns';
+import { fr } from 'date-fns/locale';
 
 interface MyProjectCardProps {
   project: Project;
@@ -31,11 +32,13 @@ const projectStatusBadgeVariant: Record<Project['status'], "default" | "secondar
 };
 
 const formatDate = (dateString?: string) => {
-  if (!dateString) return 'N/A';
+  if (!dateString) return 'N/D';
   try {
-    return format(new Date(dateString), 'PP');
+    const parsedDate = parseISO(dateString);
+    if (!isValid(parsedDate)) return 'Date invalide';
+    return format(parsedDate, 'PP', { locale: fr });
   } catch (e) {
-    return 'Invalid Date';
+    return 'Date invalide';
   }
 };
 
@@ -88,7 +91,6 @@ export function MyProjectCard({ project }: MyProjectCardProps) {
             <p className="text-sm font-medium">{formatDate(project.endDate)}</p>
           </div>
           <p className="text-xs text-muted-foreground pt-2">ID Projet: {project.id}</p>
-          {/* <p className="text-xs text-muted-foreground">Créé le: {new Date(project.createdAt).toLocaleDateString()}</p> */}
         </CardContent>
         <CardFooter className="flex flex-col sm:flex-row justify-end gap-2 pt-4">
           <Button variant="outline" size="sm" asChild className="w-full sm:w-auto rounded-lg">

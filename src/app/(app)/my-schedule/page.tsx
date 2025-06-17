@@ -10,10 +10,7 @@ import { getProjects } from '@/services/projectService';
 import { getUserById } from '@/services/userService';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-// ScheduleView component will be removed from here if this page is deleted.
-// For now, let's assume it's still here to avoid breaking its import if dashboard changes are separate.
-// If this file is deleted, then ScheduleView's import in dashboard/page.tsx will need to be updated.
-import { ScheduleView } from './components/ScheduleView'; 
+import { ScheduleView } from '@/app/(app)/dashboard/components/ScheduleView'; // Updated import path
 
 export default function MySchedulePage() {
   const { user, loading: authLoading } = useAuth();
@@ -26,7 +23,7 @@ export default function MySchedulePage() {
     const fetchData = async () => {
       if (authLoading) return;
       if (!user) {
-        setError("Please log in to view your schedule.");
+        setError("Veuillez vous connecter pour voir votre planning.");
         setIsLoading(false);
         return;
       }
@@ -42,7 +39,7 @@ export default function MySchedulePage() {
         setCurrentUserData(fetchedCurrentUser);
       } catch (err) {
         console.error("Error fetching data for My Schedule:", err);
-        setError((err as Error).message || "Failed to load schedule data.");
+        setError((err as Error).message || "Échec du chargement des données du planning.");
       } finally {
         setIsLoading(false);
       }
@@ -57,7 +54,7 @@ export default function MySchedulePage() {
   if (authLoading || (isLoading && !error)) {
     return (
       <>
-        <PageTitle title="My Schedule" icon={CalendarDays} subtitle="Loading your weekly assignments..." />
+        <PageTitle title="Mon Planning" icon={CalendarDays} subtitle="Chargement de vos assignations hebdomadaires..." />
         <Skeleton className="h-10 w-full max-w-md mb-4" /> {/* Placeholder for week navigation */}
         <div className="grid grid-cols-1 md:grid-cols-7 gap-2">
           {[...Array(7)].map((_, i) => (
@@ -74,16 +71,16 @@ export default function MySchedulePage() {
   if (error) {
     return (
       <>
-        <PageTitle title="My Schedule" icon={CalendarDays} subtitle="Could not load your schedule." />
+        <PageTitle title="Mon Planning" icon={CalendarDays} subtitle="Impossible de charger votre planning." />
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="flex items-center text-destructive">
-              <AlertTriangle className="mr-2 h-5 w-5" /> Error
+              <AlertTriangle className="mr-2 h-5 w-5" /> Erreur
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p>{error}</p>
-            {!user && <p className="mt-2">Please ensure you are logged in.</p>}
+            {!user && <p className="mt-2">Veuillez vous assurer que vous êtes connecté.</p>}
           </CardContent>
         </Card>
       </>
@@ -93,24 +90,22 @@ export default function MySchedulePage() {
   if (!user) {
     return (
       <>
-        <PageTitle title="My Schedule" icon={CalendarDays} subtitle="Log in to see your schedule." />
+        <PageTitle title="Mon Planning" icon={CalendarDays} subtitle="Connectez-vous pour voir votre planning." />
         <Card className="shadow-lg text-center py-8">
           <CardContent>
-            <p className="text-muted-foreground">You need to be logged in to view this page.</p>
+            <p className="text-muted-foreground">Vous devez être connecté pour voir cette page.</p>
           </CardContent>
         </Card>
       </>
     );
   }
 
-  // This page will be removed, so this return path might not be hit if deletion happens correctly.
-  // If ScheduleView is moved before this file is deleted, the import path for ScheduleView would need adjustment.
   return (
     <>
       <PageTitle
-        title="My Schedule"
+        title="Mon Planning"
         icon={CalendarDays}
-        subtitle="Visualize your weekly project assignments."
+        subtitle="Visualisez vos assignations de projet hebdomadaires."
       />
       {currentUserData && (
         <ScheduleView
@@ -121,7 +116,7 @@ export default function MySchedulePage() {
       {!currentUserData && !isLoading && (
          <Card className="shadow-lg text-center py-8">
             <CardContent>
-                <p className="text-muted-foreground">Could not load your user data to display schedule.</p>
+                <p className="text-muted-foreground">Impossible de charger vos données utilisateur pour afficher le planning.</p>
             </CardContent>
         </Card>
       )}

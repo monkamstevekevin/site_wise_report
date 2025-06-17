@@ -39,15 +39,18 @@ export default function LoginPage() {
     setIsLoadingEmail(true);
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      toast({ title: 'Login Successful', description: 'Redirecting to dashboard...' });
-      // router.push('/dashboard'); // AuthProvider will handle redirect
+      toast({ title: 'Connexion Réussie', description: 'Redirection vers le tableau de bord...' });
     } catch (error) {
       const authError = error as AuthError;
       console.error('Login error:', authError);
+      let errorMessage = authError.message || 'Une erreur inattendue s\'est produite.';
+      if (authError.code === 'auth/invalid-credential' || authError.code === 'auth/user-not-found' || authError.code === 'auth/wrong-password') {
+        errorMessage = 'Adresse e-mail ou mot de passe incorrect.';
+      }
       toast({
         variant: 'destructive',
-        title: 'Login Failed',
-        description: authError.message || 'An unexpected error occurred.',
+        title: 'Échec de la Connexion',
+        description: errorMessage,
       });
     } finally {
       setIsLoadingEmail(false);
@@ -74,8 +77,8 @@ export default function LoginPage() {
         <div className="flex justify-center mb-2">
             <LogIn className="h-8 w-8 text-primary" />
         </div>
-        <CardTitle className="text-2xl font-headline">Welcome Back</CardTitle>
-        <CardDescription>Log in to your SiteWise Reports account.</CardDescription>
+        <CardTitle className="text-2xl font-headline">Bon Retour</CardTitle>
+        <CardDescription>Connectez-vous à votre compte SiteWise Reports.</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleEmailLogin} className="space-y-4">
@@ -84,7 +87,7 @@ export default function LoginPage() {
             <Input
               id="email"
               type="email"
-              placeholder="you@example.com"
+              placeholder="vous@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -92,7 +95,7 @@ export default function LoginPage() {
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password">Mot de passe</Label>
             <Input
               id="password"
               type="password"
@@ -104,20 +107,20 @@ export default function LoginPage() {
             />
           </div>
           <Button type="submit" className="w-full rounded-lg" disabled={isLoading}>
-            {isLoadingEmail ? <Loader2 className="animate-spin" /> : 'Log In'}
+            {isLoadingEmail ? <Loader2 className="animate-spin" /> : 'Se Connecter'}
           </Button>
         </form>
         <Separator className="my-6" />
         <Button variant="outline" className="w-full rounded-lg" onClick={handleGoogleLogin} disabled={isLoading}>
           {isLoadingGoogle ? <Loader2 className="animate-spin" /> : <GoogleIcon />} 
-          <span className="ml-2">Sign in with Google</span>
+          <span className="ml-2">Se connecter avec Google</span>
         </Button>
       </CardContent>
       <CardFooter className="flex flex-col items-center text-sm">
         <p>
-          Don't have an account?{' '}
+          Vous n'avez pas de compte ?{' '}
           <Button variant="link" asChild className="p-0 h-auto">
-            <Link href="/auth/signup">Sign up</Link>
+            <Link href="/auth/signup">S'inscrire</Link>
           </Button>
         </p>
       </CardFooter>

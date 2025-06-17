@@ -31,36 +31,36 @@ export default function HomePage() {
         <Building className="h-24 w-24 text-primary" />
       </div>
       <h1 className="text-5xl md:text-6xl font-headline font-bold text-foreground mb-6">
-        Welcome to <span className="text-primary">SiteWise Reports</span>
+        Bienvenue sur <span className="text-primary">SiteWise Reports</span>
       </h1>
       <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mb-10">
-        Streamlining civil engineering field data collection, reporting, and validation with precision and efficiency.
+        Optimisation de la collecte de données de terrain, des rapports et de la validation en génie civil avec précision et efficacité.
       </p>
       <div className="space-x-4">
         {user ? (
           <>
             <Button asChild size="lg" className="rounded-xl">
-              <Link href="/dashboard">Go to Dashboard</Link>
+              <Link href="/dashboard">Aller au Tableau de Bord</Link>
             </Button>
             <Button asChild variant="outline" size="lg" className="rounded-xl">
-              <Link href="/reports/create">Create New Report</Link>
+              <Link href="/reports/create">Créer un Nouveau Rapport</Link>
             </Button>
           </>
         ) : (
           <>
             <Button asChild size="lg" className="rounded-xl">
               <Link href="/auth/login">
-                <LogIn className="mr-2 h-5 w-5" /> Login
+                <LogIn className="mr-2 h-5 w-5" /> Connexion
               </Link>
             </Button>
             <Button asChild variant="outline" size="lg" className="rounded-xl">
-              <Link href="/auth/signup">Sign Up</Link>
+              <Link href="/auth/signup">S'inscrire</Link>
             </Button>
           </>
         )}
       </div>
       <p className="mt-12 text-sm text-muted-foreground">
-        Ensuring quality and compliance, one report at a time.
+        Garantir la qualité et la conformité, un rapport à la fois.
       </p>
     </div>
   );

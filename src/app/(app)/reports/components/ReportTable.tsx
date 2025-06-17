@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState } from 'react'; // Added useState
+import React, { useState } from 'react';
 import {
   Table,
   TableBody,
@@ -24,16 +24,16 @@ import {
 import { Badge } from '@/components/ui/badge';
 import type { FieldReport } from '@/lib/types';
 import { format } from 'date-fns';
+import { fr } from 'date-fns/locale';
 import type { UserRole } from '@/lib/constants';
-import { useRouter } from 'next/navigation'; // Added useRouter
+import { useRouter } from 'next/navigation';
 
 // Mock user data to map technicianId to name - in a real app, this would come from a data store or context
 const mockTechnicians: Record<string, string> = {
   'USR003': 'Aisha Khan',
   'USR004': 'David Lee',
   'USR006': 'Robert Downy',
-  // Add more mappings if new technician IDs are used in mockReportsData
-  // For dynamic user IDs from Firebase Auth, this map would need to be populated from your user data source
+  'tech001': 'Tech Example', // Added mock technician
 };
 
 const reportStatusBadgeVariant: Record<FieldReport['status'], "default" | "secondary" | "outline" | "destructive"> = {
@@ -43,12 +43,12 @@ const reportStatusBadgeVariant: Record<FieldReport['status'], "default" | "secon
   REJECTED: "destructive",
 };
 
-const materialTypeDisplay: Record<string, string> = { // Allow any string for materialType
-  cement: "Cement",
-  asphalt: "Asphalt",
-  gravel: "Gravel",
-  sand: "Sand",
-  other: "Other",
+const materialTypeDisplay: Record<string, string> = {
+  cement: "Ciment",
+  asphalt: "Asphalte",
+  gravel: "Gravier",
+  sand: "Sable",
+  other: "Autre",
 };
 
 interface ReportTableProps {
@@ -56,7 +56,7 @@ interface ReportTableProps {
   onEditReport?: (report: FieldReport) => void;
   onDeleteReport?: (report: FieldReport) => void;
   onValidateReport?: (report: FieldReport) => void; 
-  onRejectReport?: (report: FieldReport) => void; // Changed to trigger dialog
+  onRejectReport?: (report: FieldReport) => void;
   currentUserId?: string;
   currentUserRole?: UserRole | null;
 }
@@ -70,10 +70,10 @@ export function ReportTable({
   currentUserId,
   currentUserRole
 }: ReportTableProps) {
-  const router = useRouter(); // Initialize router
+  const router = useRouter();
 
   const handleView = (report: FieldReport) => {
-    router.push(`/reports/view/${report.id}`); // Navigate to the view page
+    router.push(`/reports/view/${report.id}`);
   };
 
   const handleEdit = (report: FieldReport) => {
@@ -89,7 +89,7 @@ export function ReportTable({
   };
 
   const handleOpenRejectionDialog = (report: FieldReport) => {
-    onRejectReport?.(report); // This prop will now trigger the dialog opening in parent
+    onRejectReport?.(report);
   };
 
 
@@ -155,7 +155,7 @@ export function ReportTable({
                     {report.status}
                   </Badge>
                 </TableCell>
-                <TableCell>{format(new Date(report.createdAt), 'PP')}</TableCell>
+                <TableCell>{format(new Date(report.createdAt), 'PP', { locale: fr })}</TableCell>
                 <TableCell className="text-right">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>

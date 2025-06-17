@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -17,11 +17,13 @@ import {
   isWithinInterval,
   parseISO,
   isToday as isTodayDateFns,
+  isValid,
 } from 'date-fns';
-import { fr } from 'date-fns/locale'; // For French day names
+import { fr } from 'date-fns/locale'; 
 import { ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface ScheduleViewProps {
   assignments: UserAssignment[];
@@ -37,29 +39,54 @@ interface DailyProject {
 }
 
 export function ScheduleView({ assignments, allProjects }: ScheduleViewProps) {
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const [currentDate, setCurrentDate] = useState<Date | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const weekStart = useMemo(() => startOfWeek(currentDate, { weekStartsOn: 1 }), [currentDate]);
-  const weekEnd = useMemo(() => endOfWeek(currentDate, { weekStartsOn: 1 }), [currentDate]);
-  const daysInWeek = useMemo(() => eachDayOfInterval({ start: weekStart, end: weekEnd }), [weekStart, weekEnd]);
+  useEffect(() => {
+    setCurrentDate(new Date());
+    setIsLoading(false);
+  }, []);
+
+  const weekStart = useMemo(() => currentDate ? startOfWeek(currentDate, { weekStartsOn: 1 }) : null, [currentDate]);
+  const weekEnd = useMemo(() => currentDate ? endOfWeek(currentDate, { weekStartsOn: 1 }) : null, [currentDate]);
+  const daysInWeek = useMemo(() => (weekStart && weekEnd) ? eachDayOfInterval({ start: weekStart, end: weekEnd }) : [], [weekStart, weekEnd]);
 
   const projectsById = useMemo(() => {
+    if (!Array.isArray(allProjects)) return {};
     return allProjects.reduce((acc, project) => {
-      acc[project.id] = project;
+      if (project && project.id) {
+        acc[project.id] = project;
+      }
       return acc;
     }, {} as Record<string, Project>);
   }, [allProjects]);
 
   const getProjectsForDay = (day: Date): DailyProject[] => {
     const dailyProjects: DailyProject[] = [];
+    if (!Array.isArray(assignments)) return dailyProjects;
+
     assignments.forEach(assignment => {
+      if (!assignment || !assignment.projectId) return;
       const project = projectsById[assignment.projectId];
-      if (!project || project.status !== 'ACTIVE') return;
+      if (!project || project.status !== 'ACTIVE' || !project.startDate) return;
 
-      const projectStartDate = project.startDate ? parseISO(project.startDate) : null;
-      const projectEndDate = project.endDate ? parseISO(project.endDate) : null;
+      const projectStartDateStr = project.startDate;
+      const projectEndDateStr = project.endDate;
+      
+      const parsedStartDate = parseISO(projectStartDateStr);
+      if (!isValid(parsedStartDate)) return;
 
-      if (!projectStartDate) return; // Project needs a start date to be scheduled
+      const projectStartDate = parsedStartDate;
+      let projectEndDate: Date | null = null;
+      if (projectEndDateStr) {
+          const parsedEndDate = parseISO(projectEndDateStr);
+          if (isValid(parsedEndDate)) {
+              projectEndDate = parsedEndDate;
+          } else {
+            // If end date is invalid, treat as ongoing but warn
+            console.warn(`Invalid end date for project ${project.id}: ${projectEndDateStr}`);
+          }
+      }
 
       const interval = {
         start: projectStartDate,
@@ -79,11 +106,11 @@ export function ScheduleView({ assignments, allProjects }: ScheduleViewProps) {
     return dailyProjects.sort((a, b) => (a.isFullDay === b.isFullDay ? 0 : a.isFullDay ? -1 : 1));
   };
 
-  const handlePreviousWeek = () => setCurrentDate(prev => subWeeks(prev, 1));
-  const handleNextWeek = () => setCurrentDate(prev => addWeeks(prev, 1));
+  const handlePreviousWeek = () => setCurrentDate(prev => prev ? subWeeks(prev, 1) : new Date());
+  const handleNextWeek = () => setCurrentDate(prev => prev ? addWeeks(prev, 1) : new Date());
   const handleToday = () => setCurrentDate(new Date());
 
-  if (!assignments || !allProjects) {
+  if (isLoading || !currentDate || !weekStart || !weekEnd) {
       return (
         <Card className="shadow-md rounded-lg mt-6">
             <CardHeader>
@@ -91,13 +118,15 @@ export function ScheduleView({ assignments, allProjects }: ScheduleViewProps) {
                 <CardDescription>Chargement des données du planning...</CardDescription>
             </CardHeader>
             <CardContent>
-                <p className="text-muted-foreground text-center py-4">Les données d'assignation ou de projet sont en cours de chargement.</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-2 md:gap-3">
+                    {[...Array(7)].map((_, i) => <Skeleton key={i} className="h-48 rounded-lg" />)}
+                </div>
             </CardContent>
         </Card>
       );
   }
   
-  if (assignments.length === 0) {
+  if (!Array.isArray(assignments) || assignments.length === 0) {
      return (
         <Card className="shadow-md rounded-lg mt-6">
             <CardHeader>

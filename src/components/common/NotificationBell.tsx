@@ -32,8 +32,10 @@ interface DisplayNotification extends Notification {
 const getNotificationDisplayProps = (notification: Notification): { icon: LucideIcon, iconClass: string } => {
   switch (notification.type) {
     case 'report_update':
-      if (notification.message.includes('VALIDÉ')) return { icon: FileCheck2, iconClass: 'text-green-500' };
-      if (notification.message.includes('REJETÉ')) return { icon: FileX2, iconClass: 'text-red-500' };
+      // Note: Messages are generated in French in notificationService.ts now.
+      // This logic for icons can remain.
+      if (notification.message.toLowerCase().includes('validé')) return { icon: FileCheck2, iconClass: 'text-green-500' };
+      if (notification.message.toLowerCase().includes('rejeté')) return { icon: FileX2, iconClass: 'text-red-500' };
       return { icon: FileText, iconClass: 'text-orange-500' }; // Default for other report updates
     case 'project_assignment':
       return { icon: Briefcase, iconClass: 'text-purple-500' };
@@ -89,8 +91,6 @@ export function NotificationBell() {
     try {
       if (!notification.isRead) {
         await markNotificationAsRead(user.uid, notification.id);
-        // Optimistic update or rely on subscription, for now relying on subscription
-        // setUnreadCount(prev => Math.max(0, prev - 1)); // Handled by subscription update
       }
       if (notification.link) {
         router.push(notification.link);
@@ -107,9 +107,6 @@ export function NotificationBell() {
     if (!user || unreadCount === 0) return;
     try {
       await markAllNotificationsAsRead(user.uid);
-      // Optimistic update or rely on subscription
-      // setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
-      // setUnreadCount(0);
       toast({ title: "Notifications mises à jour", description: "Toutes les notifications ont été marquées comme lues." });
     } catch (error) {
       console.error("Error marking all notifications as read:", error);

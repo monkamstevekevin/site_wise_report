@@ -7,7 +7,7 @@ import { useParams } from 'next/navigation';
 import { ChatInterface } from './components/ChatInterface';
 import { useEffect, useState } from 'react';
 import type { Project } from '@/lib/types';
-import { getProjectById } from '@/services/projectService'; // Import the service
+import { getProjectById } from '@/services/projectService';
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -29,11 +29,11 @@ export default function ProjectChatPage() {
           if (fetchedProject) {
             setProject(fetchedProject);
           } else {
-            setError(`Project with ID ${projectId} not found.`);
+            setError(`Projet avec ID ${projectId} non trouvé.`);
           }
         } catch (err) {
           console.error("Error fetching project details for chat:", err);
-          setError("Failed to load project details.");
+          setError("Échec du chargement des détails du projet.");
         } finally {
           setIsLoading(false);
         }

@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { FileText, PlusCircle, Filter, Loader2, AlertTriangleIcon, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
 import { ReportTable } from './components/ReportTable';
-import { RejectionReasonDialog } from './components/RejectionReasonDialog'; // Added
+import { RejectionReasonDialog } from './components/RejectionReasonDialog';
 import type { FieldReport } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
@@ -32,20 +32,20 @@ import {
 
 
 const reportStatusFilterOptions: { value: FieldReport['status'] | 'ALL'; label: string }[] = [
-  { value: 'ALL', label: 'All Statuses' },
-  { value: 'DRAFT', label: 'Draft' },
-  { value: 'SUBMITTED', label: 'Submitted' },
-  { value: 'VALIDATED', label: 'Validated' },
-  { value: 'REJECTED', label: 'Rejected' },
+  { value: 'ALL', label: 'Tous les Statuts' },
+  { value: 'DRAFT', label: 'Brouillon' },
+  { value: 'SUBMITTED', label: 'Soumis' },
+  { value: 'VALIDATED', label: 'Validé' },
+  { value: 'REJECTED', label: 'Rejeté' },
 ];
 
 const materialTypeFilterOptions: { value: FieldReport['materialType'] | 'ALL'; label: string }[] = [
-  { value: 'ALL', label: 'All Material Types' },
-  { value: 'cement', label: 'Cement' },
-  { value: 'asphalt', label: 'Asphalt' },
-  { value: 'gravel', label: 'Gravel' },
-  { value: 'sand', label: 'Sand' },
-  { value: 'other', label: 'Other' },
+  { value: 'ALL', label: 'Tous les Types de Matériaux' },
+  { value: 'cement', label: 'Ciment' },
+  { value: 'asphalt', label: 'Asphalte' },
+  { value: 'gravel', label: 'Gravier' },
+  { value: 'sand', label: 'Sable' },
+  { value: 'other', label: 'Autre' },
 ];
 
 interface MappedUserRoleAndId {
@@ -106,38 +106,19 @@ export default function ReportsPage() {
     const { role, effectiveTechnicianId: mappedTechId } = mapFirebaseUserToAppRoleAndId(user);
     setCurrentUserRole(role);
     setEffectiveTechnicianId(mappedTechId);
-    console.log(`[ReportsPage] Logged in user: ${user.email}, Determined Role: ${role}`);
-    console.log(`[ReportsPage] ID that WILL BE USED for technician's report query (effectiveTechnicianId): ${mappedTechId}`);
-
 
     try {
       let fetchedReports: FieldReport[] = [];
       if (role === 'TECHNICIAN' && mappedTechId) {
-        console.log(`[ReportsPage] Querying Firestore for reports where technicianId == "${mappedTechId}"`);
         fetchedReports = await getReportsByTechnicianId(mappedTechId);
-        console.log(`[ReportsPage] Firestore returned ${fetchedReports.length} reports for technicianId "${mappedTechId}".`);
-        if (fetchedReports.length === 0) {
-            console.log(`[ReportsPage] No reports found in Firestore for technicianId "${mappedTechId}". Ensure a report exists with this exact technicianId in its 'technicianId' field.`);
-        } else {
-            console.log('[ReportsPage] Fetched reports details:', fetchedReports.map(r => ({id: r.id, projectId: r.projectId, techIdOnReport: r.technicianId, status: r.status})));
-        }
-
       } else if (role === 'ADMIN' || role === 'SUPERVISOR') {
-        console.log("[ReportsPage] Admin/Supervisor fetching all reports.");
         fetchedReports = await getReports();
-        console.log(`[ReportsPage] Firestore returned ${fetchedReports.length} total reports for Admin/Supervisor.`);
       } else {
-        console.log("[ReportsPage] No specific role match or missing technicianId for TECHNICIAN, fetching no reports.");
         fetchedReports = [];
       }
       setAllFetchedReports(fetchedReports);
-      
-      if (fetchedReports.length === 0 && role === 'TECHNICIAN' && mappedTechId) {
-          // This condition is now handled by the more detailed logging above.
-      }
-
     } catch (err) {
-      setReportsError((err as Error).message || "Failed to load reports.");
+      setReportsError((err as Error).message || "Échec du chargement des rapports.");
       setAllFetchedReports([]);
     } finally {
       setIsLoadingReports(false);
@@ -150,12 +131,10 @@ export default function ReportsPage() {
 
 
   const handleEditReport = (report: FieldReport) => {
-    // Permission logic is now more refined within ReportTable and EditPage itself
     router.push(`/reports/edit/${report.id}`);
   };
 
   const openDeleteDialog = (report: FieldReport) => {
-    // Permission logic is now more refined within ReportTable
     setReportToDelete(report);
     setIsDeleteDialogOpen(true);
   };
@@ -165,15 +144,15 @@ export default function ReportsPage() {
     try {
       await deleteReportService(reportToDelete.id);
       toast({
-        title: "Report Deleted",
-        description: `Report ID: ${reportToDelete.id} has been deleted.`,
+        title: "Rapport Supprimé",
+        description: `Le rapport ID: ${reportToDelete.id} a été supprimé.`,
       });
       await fetchReportsForUser(); 
     } catch (err) {
       toast({
         variant: "destructive",
-        title: "Failed to Delete Report",
-        description: (err as Error).message || "An unexpected error occurred.",
+        title: "Échec de la Suppression du Rapport",
+        description: (err as Error).message || "Une erreur inattendue s'est produite.",
       });
     } finally {
       setIsDeleteDialogOpen(false);
@@ -205,7 +184,7 @@ export default function ReportsPage() {
   };
 
   const handleConfirmRejection = async (reportId: string, reason: string) => {
-    setIsRejectionDialogOpen(false); // Close dialog immediately
+    setIsRejectionDialogOpen(false); 
     try {
       await updateReport(reportId, { status: 'REJECTED', rejectionReason: reason });
       toast({ 
@@ -220,9 +199,9 @@ export default function ReportsPage() {
       await fetchReportsForUser();
     } catch (err) {
       toast({ variant: 'destructive', title: 'Erreur de Rejet', description: (err as Error).message || "Une erreur s'est produite." });
-      setIsRejectionDialogOpen(true); // Re-open dialog on error if needed, or handle differently
+      setIsRejectionDialogOpen(true);
     } finally {
-       setReportToReject(null); // Clear the report to reject
+       setReportToReject(null); 
     }
   };
 
@@ -244,7 +223,7 @@ export default function ReportsPage() {
   if (authLoading || (user && currentUserRole === null && !isLoadingReports) ) {
     return (
       <>
-        <PageTitle title="Field Reports" icon={FileText} subtitle="Loading reports..." />
+        <PageTitle title="Rapports de Terrain" icon={FileText} subtitle="Chargement des rapports..." />
         <Skeleton className="h-24 w-full mb-6 rounded-lg" />
         <Skeleton className="h-96 w-full rounded-lg" />
       </>
@@ -254,11 +233,11 @@ export default function ReportsPage() {
   if (!user && !authLoading) {
     return (
       <>
-        <PageTitle title="Field Reports" icon={FileText} subtitle="Please log in to view reports." />
+        <PageTitle title="Rapports de Terrain" icon={FileText} subtitle="Veuillez vous connecter pour voir les rapports." />
         <div className="text-center py-10">
-          <p className="text-muted-foreground">You need to be logged in to access this page.</p>
+          <p className="text-muted-foreground">Vous devez être connecté pour accéder à cette page.</p>
           <Button asChild className="mt-4 rounded-lg">
-            <Link href="/auth/login">Login</Link>
+            <Link href="/auth/login">Connexion</Link>
           </Button>
         </div>
       </>
@@ -268,13 +247,13 @@ export default function ReportsPage() {
   return (
     <>
       <PageTitle
-        title={currentUserRole === 'TECHNICIAN' ? "My Field Reports" : "All Field Reports"}
+        title={currentUserRole === 'TECHNICIAN' ? "Mes Rapports de Terrain" : "Tous les Rapports de Terrain"}
         icon={FileText}
-        subtitle={currentUserRole === 'TECHNICIAN' ? "Manage and review your submitted field reports." : "Manage and review all submitted field reports."}
+        subtitle={currentUserRole === 'TECHNICIAN' ? "Gérez et révisez vos rapports de terrain soumis." : "Gérez et révisez tous les rapports de terrain soumis."}
         actions={
           <Button asChild className="rounded-lg">
             <Link href="/reports/create">
-              <PlusCircle className="mr-2 h-4 w-4" /> Create New Report
+              <PlusCircle className="mr-2 h-4 w-4" /> Créer un Nouveau Rapport
             </Link>
           </Button>
         }
@@ -283,21 +262,21 @@ export default function ReportsPage() {
       <div className="mb-6 p-4 bg-card rounded-lg shadow-sm border">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
           <div className="lg:col-span-2">
-            <Label htmlFor="report-search" className="mb-1 block text-sm font-medium">Search Reports</Label>
+            <Label htmlFor="report-search" className="mb-1 block text-sm font-medium">Rechercher des Rapports</Label>
             <Input
               id="report-search"
               type="text"
-              placeholder="Search by ID, Project, Supplier, Batch..."
+              placeholder="Rechercher par ID, Projet, Fournisseur, Lot..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full"
             />
           </div>
           <div>
-            <Label htmlFor="report-status-filter" className="mb-1 block text-sm font-medium">Filter by Status</Label>
+            <Label htmlFor="report-status-filter" className="mb-1 block text-sm font-medium">Filtrer par Statut</Label>
             <Select value={statusFilter} onValueChange={(value: FieldReport['status'] | 'ALL') => setStatusFilter(value)}>
               <SelectTrigger className="w-full" id="report-status-filter">
-                <SelectValue placeholder="Filter by status" />
+                <SelectValue placeholder="Filtrer par statut" />
               </SelectTrigger>
               <SelectContent>
                 {reportStatusFilterOptions.map(option => (
@@ -307,10 +286,10 @@ export default function ReportsPage() {
             </Select>
           </div>
           <div>
-            <Label htmlFor="report-material-filter" className="mb-1 block text-sm font-medium">Filter by Material</Label>
+            <Label htmlFor="report-material-filter" className="mb-1 block text-sm font-medium">Filtrer par Matériau</Label>
             <Select value={materialFilter} onValueChange={(value: FieldReport['materialType'] | 'ALL') => setMaterialFilter(value)}>
               <SelectTrigger className="w-full" id="report-material-filter">
-                <SelectValue placeholder="Filter by material" />
+                <SelectValue placeholder="Filtrer par matériau" />
               </SelectTrigger>
               <SelectContent>
                 {materialTypeFilterOptions.map(option => (
@@ -320,20 +299,20 @@ export default function ReportsPage() {
             </Select>
           </div>
           <Button variant="outline" onClick={() => { setSearchTerm(''); setStatusFilter('ALL'); setMaterialFilter('ALL'); }} className="h-10 w-full lg:w-auto rounded-lg">
-            <Filter className="mr-2 h-4 w-4" /> Clear All
+            <Filter className="mr-2 h-4 w-4" /> Tout Effacer
           </Button>
         </div>
       </div>
 
       {isLoadingReports && (
         <div className="flex items-center justify-center py-10 text-muted-foreground">
-          <Loader2 className="mr-2 h-6 w-6 animate-spin" /> Loading reports...
+          <Loader2 className="mr-2 h-6 w-6 animate-spin" /> Chargement des rapports...
         </div>
       )}
       {reportsError && !isLoadingReports && (
          <div className="text-center py-10 text-destructive bg-destructive/10 p-4 rounded-md">
             <AlertTriangleIcon className="mx-auto h-8 w-8 mb-2" />
-           <p className="font-semibold">Error Loading Reports</p>
+           <p className="font-semibold">Erreur de Chargement des Rapports</p>
            <p>{reportsError}</p>
          </div>
       )}
@@ -344,7 +323,7 @@ export default function ReportsPage() {
             onEditReport={handleEditReport}
             onDeleteReport={openDeleteDialog} 
             onValidateReport={handleValidateReport}
-            onRejectReport={handleOpenRejectionDialog} // Updated prop
+            onRejectReport={handleOpenRejectionDialog}
             currentUserId={effectiveTechnicianId || user?.uid} 
             currentUserRole={currentUserRole}
           />
@@ -356,19 +335,19 @@ export default function ReportsPage() {
           <AlertDialogHeader>
             <div className="flex items-center">
               <AlertTriangle className="h-6 w-6 mr-2 text-destructive" />
-              <AlertDialogTitle>Confirm Report Deletion</AlertDialogTitle>
+              <AlertDialogTitle>Confirmer la Suppression du Rapport</AlertDialogTitle>
             </div>
             <AlertDialogDescription>
-              Are you sure you want to delete the report ID: "{reportToDelete?.id}" for project "{reportToDelete?.projectId}"? This action is irreversible.
+              Êtes-vous sûr de vouloir supprimer le rapport ID: "{reportToDelete?.id}" pour le projet "{reportToDelete?.projectId}"? Cette action est irréversible.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setIsDeleteDialogOpen(false)}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setIsDeleteDialogOpen(false)}>Annuler</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDeleteReport}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete Report
+              Supprimer le Rapport
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -378,7 +357,7 @@ export default function ReportsPage() {
         open={isRejectionDialogOpen}
         onOpenChange={(open) => {
           setIsRejectionDialogOpen(open);
-          if (!open) setReportToReject(null); // Clear report when dialog closes
+          if (!open) setReportToReject(null);
         }}
         report={reportToReject}
         onConfirmRejection={handleConfirmRejection}

@@ -5,7 +5,8 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { AlertCircle, HardHat, CalendarDays, ChevronDown, ChevronUp } from 'lucide-react';
 import type { Project, User } from '@/lib/types';
-import { differenceInDays, format, isFuture, isPast, parseISO, isToday, startOfDay } from 'date-fns';
+import { differenceInDays, format, isFuture, isPast, parseISO, isToday, startOfDay, isValid } from 'date-fns';
+import { fr } from 'date-fns/locale';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -19,16 +20,19 @@ interface AlertsCardProps {
 const INITIAL_ALERTS_DISPLAY_COUNT = 3;
 
 const getAssignedTechniciansCount = (projectId: string, users: User[]): number => {
+  if (!Array.isArray(users)) return 0;
   return users.filter(user => 
     user.role === 'TECHNICIAN' && 
-    user.assignments?.some(a => a.projectId === projectId)
+    Array.isArray(user.assignments) && user.assignments.some(a => a.projectId === projectId)
   ).length;
 };
 
 const formatDatePretty = (dateString?: string) => {
-  if (!dateString) return 'N/A';
+  if (!dateString) return 'N/D';
   try {
-    return format(parseISO(dateString), 'MMM d, yyyy');
+    const parsedDate = parseISO(dateString);
+    if (!isValid(parsedDate)) return 'Date invalide';
+    return format(parsedDate, 'd MMM yyyy', { locale: fr });
   } catch {
     return 'Date invalide';
   }
@@ -45,61 +49,70 @@ export function AlertsCard({ projects, users }: AlertsCardProps) {
 
   const actionableProjects: ActionableProject[] = [];
 
-  projects.forEach(project => {
-    if (project.status === 'COMPLETED' || project.status === 'INACTIVE') {
-      return;
-    }
+  if (Array.isArray(projects)) {
+    projects.forEach(project => {
+      if (!project || project.status === 'COMPLETED' || project.status === 'INACTIVE') {
+        return;
+      }
 
-    const assignedTechniciansCount = getAssignedTechniciansCount(project.id, users);
-    if (assignedTechniciansCount > 0) return; // Only show alerts for projects needing technicians
+      const assignedTechniciansCount = getAssignedTechniciansCount(project.id, users);
+      if (assignedTechniciansCount > 0) return;
 
-    const startDate = project.startDate ? parseISO(project.startDate) : null;
-    const projectStartDateOnly = startDate ? startOfDay(startDate) : null;
-
-    if (projectStartDateOnly) {
-      if (isToday(projectStartDateOnly)) {
-        actionableProjects.push({
-          ...project,
-          alertReason: `Commence AUJOURD'HUI - Aucun technicien assigné.`,
-          severity: 'critical',
-        });
-      } else if (isFuture(projectStartDateOnly)) {
-        const daysFromToday = differenceInDays(projectStartDateOnly, today);
-        if (daysFromToday >= 1 && daysFromToday <= 3) {
+      const startDateStr = project.startDate;
+      let projectStartDateOnly: Date | null = null;
+      if (startDateStr) {
+        const parsed = parseISO(startDateStr);
+        if (isValid(parsed)) {
+          projectStartDateOnly = startOfDay(parsed);
+        }
+      }
+      
+      if (projectStartDateOnly) {
+        if (isToday(projectStartDateOnly)) {
           actionableProjects.push({
             ...project,
-            alertReason: `Commence dans ${daysFromToday} jour(s) - Aucun technicien assigné.`,
-            severity: 'warning',
+            alertReason: `Commence AUJOURD'HUI - Aucun technicien assigné.`,
+            severity: 'critical',
+          });
+        } else if (isFuture(projectStartDateOnly)) {
+          const daysFromToday = differenceInDays(projectStartDateOnly, today);
+          if (daysFromToday >= 1 && daysFromToday <= 3) {
+            actionableProjects.push({
+              ...project,
+              alertReason: `Commence dans ${daysFromToday} jour(s) - Aucun technicien assigné.`,
+              severity: 'warning',
+            });
+          }
+        } else if (isPast(projectStartDateOnly) && project.status === 'ACTIVE') {
+          actionableProjects.push({
+            ...project,
+            alertReason: `Projet actif - Aucun technicien assigné.`,
+            severity: 'critical',
           });
         }
-      } else if (isPast(projectStartDateOnly) && project.status === 'ACTIVE') {
-        actionableProjects.push({
-          ...project,
-          alertReason: `Projet actif - Aucun technicien assigné.`,
-          severity: 'critical',
-        });
+      } else if (project.status === 'ACTIVE') {
+          actionableProjects.push({
+              ...project,
+              alertReason: `Projet actif (date de début non spécifiée ou invalide) - Aucun technicien assigné.`,
+              severity: 'critical',
+          });
       }
-    } else if (project.status === 'ACTIVE') { // Active project with no specific start date or invalid start date
-        actionableProjects.push({
-            ...project,
-            alertReason: `Projet actif (date de début non spécifiée) - Aucun technicien assigné.`,
-            severity: 'critical',
-        });
-    }
-  });
+    });
+  }
+
 
   actionableProjects.sort((a, b) => {
     if (a.severity === 'critical' && b.severity === 'warning') return -1;
     if (a.severity === 'warning' && b.severity === 'critical') return 1;
     
-    const aIsActiveNoDate = a.status === 'ACTIVE' && !a.startDate;
-    const bIsActiveNoDate = b.status === 'ACTIVE' && !b.startDate;
+    const aIsActiveNoDate = a.status === 'ACTIVE' && (!a.startDate || !isValid(parseISO(a.startDate)));
+    const bIsActiveNoDate = b.status === 'ACTIVE' && (!b.startDate || !isValid(parseISO(b.startDate)));
 
     if (aIsActiveNoDate && !bIsActiveNoDate) return -1;
     if (!aIsActiveNoDate && bIsActiveNoDate) return 1;
 
-    const dateA = a.startDate ? parseISO(a.startDate).getTime() : Infinity;
-    const dateB = b.startDate ? parseISO(b.startDate).getTime() : Infinity;
+    const dateA = a.startDate && isValid(parseISO(a.startDate)) ? parseISO(a.startDate).getTime() : Infinity;
+    const dateB = b.startDate && isValid(parseISO(b.startDate)) ? parseISO(b.startDate).getTime() : Infinity;
     
     return dateA - dateB;
   });
@@ -206,4 +219,3 @@ export function AlertsCard({ projects, users }: AlertsCardProps) {
     </Card>
   );
 }
-

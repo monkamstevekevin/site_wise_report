@@ -25,7 +25,7 @@ export default function MyProjectsPage() {
     const fetchData = async () => {
       if (authLoading) return;
       if (!user) {
-        setError("Please log in to view your projects.");
+        setError("Veuillez vous connecter pour voir vos projets.");
         setIsLoading(false);
         return;
       }
@@ -41,7 +41,7 @@ export default function MyProjectsPage() {
         setCurrentUserData(fetchedCurrentUser);
       } catch (err) {
         console.error("Error fetching data for My Projects:", err);
-        setError((err as Error).message || "Failed to load project data.");
+        setError((err as Error).message || "Échec du chargement des données du projet.");
       } finally {
         setIsLoading(false);
       }
@@ -67,7 +67,7 @@ export default function MyProjectsPage() {
   if (authLoading || (isLoading && !error) ) { 
     return (
       <>
-        <PageTitle title="My Assigned Projects" icon={Briefcase} subtitle="Loading your projects..." />
+        <PageTitle title="Mes Projets Assignés" icon={Briefcase} subtitle="Chargement de vos projets..." />
         <div className="mb-6">
           <Skeleton className="h-10 w-full max-w-sm rounded-lg" />
         </div>
@@ -87,16 +87,16 @@ export default function MyProjectsPage() {
   if (error) {
     return (
       <>
-        <PageTitle title="My Assigned Projects" icon={Briefcase} subtitle="Could not load your projects." />
+        <PageTitle title="Mes Projets Assignés" icon={Briefcase} subtitle="Impossible de charger vos projets." />
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="flex items-center text-destructive">
-              <AlertTriangle className="mr-2 h-5 w-5" /> Error
+              <AlertTriangle className="mr-2 h-5 w-5" /> Erreur
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p>{error}</p>
-            {!user && <p className="mt-2">Please ensure you are logged in.</p>}
+            {!user && <p className="mt-2">Veuillez vous assurer que vous êtes connecté.</p>}
           </CardContent>
         </Card>
       </>
@@ -106,10 +106,10 @@ export default function MyProjectsPage() {
   if (!user) {
      return (
       <>
-        <PageTitle title="My Assigned Projects" icon={Briefcase} subtitle="Log in to see your projects." />
+        <PageTitle title="Mes Projets Assignés" icon={Briefcase} subtitle="Connectez-vous pour voir vos projets." />
          <Card className="shadow-lg text-center py-8">
             <CardContent>
-                 <p className="text-muted-foreground">You need to be logged in to view this page.</p>
+                 <p className="text-muted-foreground">Vous devez être connecté pour voir cette page.</p>
             </CardContent>
         </Card>
       </>
@@ -120,16 +120,16 @@ export default function MyProjectsPage() {
   return (
     <>
       <PageTitle
-        title="My Assigned Projects"
+        title="Mes Projets Assignés"
         icon={Briefcase}
-        subtitle="Access discussions and details for projects you are assigned to."
+        subtitle="Accédez aux discussions et détails des projets auxquels vous êtes assigné."
       />
 
       <div className="mb-6 relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
         <Input
           type="text"
-          placeholder="Search your projects by name, location, or ID..."
+          placeholder="Recherchez vos projets par nom, lieu ou ID..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="w-full max-w-lg pl-10 rounded-lg"
@@ -139,11 +139,11 @@ export default function MyProjectsPage() {
       {filteredAssignedProjects.length === 0 && !isLoading && (
          <Card className="shadow-lg text-center py-8">
              <CardHeader>
-                <CardTitle>No Projects Found</CardTitle>
+                <CardTitle>Aucun Projet Trouvé</CardTitle>
              </CardHeader>
             <CardContent>
                 <p className="text-muted-foreground">
-                    {searchTerm ? "No projects match your search." : "You are not currently assigned to any projects, or projects are still loading."}
+                    {searchTerm ? "Aucun projet ne correspond à votre recherche." : "Vous n'êtes actuellement assigné à aucun projet, ou les projets sont encore en cours de chargement."}
                 </p>
             </CardContent>
         </Card>
@@ -157,4 +157,3 @@ export default function MyProjectsPage() {
     </>
   );
 }
-

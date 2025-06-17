@@ -4,7 +4,7 @@
 import { db } from '@/lib/firebase';
 import type { FieldReport } from '@/lib/types';
 import { collection, getDocs, Timestamp, query, where, orderBy, addDoc, serverTimestamp, doc, getDoc, updateDoc, deleteDoc, type FirestoreError } from 'firebase/firestore';
-import { addNotification } from './notificationService'; // Added import
+import { addNotification } from './notificationService';
 
 /**
  * @fileOverview Report service for interacting with Firestore.
@@ -56,19 +56,13 @@ const mapDocToFieldReport = (docSnapshot: any): FieldReport => {
     attachments: Array.isArray(data.attachments) ? data.attachments : [],
     photoDataUri: data.photoDataUri || undefined,
     rejectionReason: data.rejectionReason || undefined,
-    aiIsAnomalous: data.aiIsAnomalous === undefined ? undefined : data.aiIsAnomalous, // Handle undefined specifically
+    aiIsAnomalous: data.aiIsAnomalous === undefined ? undefined : data.aiIsAnomalous,
     aiAnomalyExplanation: data.aiAnomalyExplanation || undefined,
     createdAt: formatTimestamp(data.createdAt),
     updatedAt: formatTimestamp(data.updatedAt),
   };
 };
 
-/**
- * Fetches all reports from the 'reports' collection in Firestore.
- * Ordered by creation date in descending order.
- * @returns {Promise<FieldReport[]>} A promise that resolves to an array of FieldReport objects.
- * @throws Will throw an error if fetching reports fails (excluding missing index errors).
- */
 export async function getReports(): Promise<FieldReport[]> {
   try {
     const reportsCollectionRef = collection(db, 'reports');
@@ -81,29 +75,22 @@ export async function getReports(): Promise<FieldReport[]> {
     const firestoreError = error as FirestoreError;
     if (firestoreError.code === 'failed-precondition') {
       console.warn(
-        `[Service/getReports] Firestore query for all reports (orderBy createdAt) failed due to a missing index. Firebase message: ${firestoreError.message}. Please create the required index in your Firebase console. Returning empty array for now.`
+        `[Service/getReports] La requête Firestore pour tous les rapports (triés par createdAt) a échoué en raison d'un index manquant. Message Firebase : ${firestoreError.message}. Veuillez créer l'index requis dans votre console Firebase. Retour d'un tableau vide pour l'instant.`
       );
       const match = firestoreError.message.match(/(https:\/\/[^\s]+)/);
       if (match && match[0]) {
-        console.warn(`[Service/getReports] Create Index Link: ${match[0]}`);
+        console.warn(`[Service/getReports] Lien de création d'index : ${match[0]}`);
       }
       return []; 
     }
-    console.error("[Service/getReports] Error fetching all reports: ", firestoreError.code, firestoreError.message, firestoreError);
-    throw new Error(`Failed to fetch reports from database. Firebase Error: ${firestoreError.code} - ${firestoreError.message}. Check server logs and Firestore indexes.`);
+    console.error("[Service/getReports] Erreur lors de la récupération de tous les rapports : ", firestoreError.code, firestoreError.message, firestoreError);
+    throw new Error(`Échec de la récupération des rapports depuis la base de données. Erreur Firebase : ${firestoreError.code} - ${firestoreError.message}. Vérifiez les journaux du serveur et les index Firestore.`);
   }
 }
 
-/**
- * Fetches all reports for a specific technician ID from the 'reports' collection in Firestore.
- * Ordered by creation date in descending order.
- * @param {string} technicianId The ID of the technician whose reports are to be fetched.
- * @returns {Promise<FieldReport[]>} A promise that resolves to an array of FieldReport objects.
- * @throws Will throw an error if fetching reports fails (excluding missing index errors).
- */
 export async function getReportsByTechnicianId(technicianId: string): Promise<FieldReport[]> {
   if (!technicianId) {
-    console.warn("[Service/getReportsByTechnicianId] Called without a technicianId. Returning empty array.");
+    console.warn("[Service/getReportsByTechnicianId] Appelé sans technicianId. Retour d'un tableau vide.");
     return [];
   }
   try {
@@ -124,24 +111,19 @@ export async function getReportsByTechnicianId(technicianId: string): Promise<Fi
     const firestoreError = error as FirestoreError;
      if (firestoreError.code === 'failed-precondition') {
       console.warn(
-        `[Service/getReportsByTechnicianId] Firestore query for technician "${technicianId}" reports (where technicianId and orderBy createdAt) failed due to a missing index. Firebase message: ${firestoreError.message}. Please create the required composite index in your Firebase console. Returning empty array for now.`
+        `[Service/getReportsByTechnicianId] La requête Firestore pour les rapports du technicien "${technicianId}" (où technicianId et trié par createdAt) a échoué en raison d'un index composite manquant. Message Firebase : ${firestoreError.message}. Veuillez créer l'index requis dans votre console Firebase. Retour d'un tableau vide pour l'instant.`
       );
       const match = firestoreError.message.match(/(https:\/\/[^\s]+)/);
       if (match && match[0]) {
-        console.warn(`[Service/getReportsByTechnicianId] Create Index Link: ${match[0]}`);
+        console.warn(`[Service/getReportsByTechnicianId] Lien de création d'index : ${match[0]}`);
       }
       return []; 
     }
-    console.error(`[Service/getReportsByTechnicianId] Error fetching reports for technician ${technicianId}: `, firestoreError.code, firestoreError.message, firestoreError);
-    throw new Error(`Failed to fetch reports for technician ${technicianId}. Firebase Error: ${firestoreError.code} - ${firestoreError.message}. Check server logs and Firestore indexes.`);
+    console.error(`[Service/getReportsByTechnicianId] Erreur lors de la récupération des rapports pour le technicien ${technicianId}: `, firestoreError.code, firestoreError.message, firestoreError);
+    throw new Error(`Échec de la récupération des rapports pour le technicien ${technicianId}. Erreur Firebase : ${firestoreError.code} - ${firestoreError.message}. Vérifiez les journaux du serveur et les index Firestore.`);
   }
 }
 
-/**
- * Fetches a single report by its ID from Firestore.
- * @param {string} reportId The ID of the report to fetch.
- * @returns {Promise<FieldReport | null>} A promise that resolves to the FieldReport object or null if not found.
- */
 export async function getReportById(reportId: string): Promise<FieldReport | null> {
   try {
     const reportDocRef = doc(db, 'reports', reportId);
@@ -154,18 +136,12 @@ export async function getReportById(reportId: string): Promise<FieldReport | nul
     }
   } catch (error) {
     const firestoreError = error as FirestoreError;
-    console.error(`[Service/getReportById] Error fetching report by ID ${reportId}: `, firestoreError.code, firestoreError.message, firestoreError);
-    throw new Error(`Failed to fetch report ${reportId} from database. Firebase Error: ${firestoreError.code} - ${firestoreError.message}.`);
+    console.error(`[Service/getReportById] Erreur lors de la récupération du rapport par ID ${reportId}: `, firestoreError.code, firestoreError.message, firestoreError);
+    throw new Error(`Échec de la récupération du rapport ${reportId} depuis la base de données. Erreur Firebase : ${firestoreError.code} - ${firestoreError.message}.`);
   }
 }
 
 
-/**
- * Adds a new report to the 'reports' collection in Firestore.
- * @param reportData The data for the new report, excluding id, createdAt, and updatedAt.
- * @returns {Promise<string>} A promise that resolves to the ID of the newly created report.
- * @throws Will throw an error if adding the report fails.
- */
 export async function addReport(
   reportData: Omit<FieldReport, 'id' | 'createdAt' | 'updatedAt'>
 ): Promise<string> {
@@ -174,7 +150,6 @@ export async function addReport(
     const reportPayload = {
       ...reportData,
       rejectionReason: reportData.rejectionReason || null, 
-      // aiIsAnomalous and aiAnomalyExplanation are passed directly from reportData
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
@@ -182,18 +157,11 @@ export async function addReport(
     return docRef.id;
   } catch (error) {
     const firestoreError = error as FirestoreError;
-    console.error("[Service/addReport] Error adding report: ", firestoreError.code, firestoreError.message, firestoreError);
-    throw new Error(`Failed to add report to database. Firebase Error: ${firestoreError.code} - ${firestoreError.message}.`);
+    console.error("[Service/addReport] Erreur lors de l'ajout du rapport : ", firestoreError.code, firestoreError.message, firestoreError);
+    throw new Error(`Échec de l'ajout du rapport à la base de données. Erreur Firebase : ${firestoreError.code} - ${firestoreError.message}.`);
   }
 }
 
-/**
- * Updates an existing report in Firestore.
- * @param {string} reportId The ID of the report to update.
- * @param {Partial<Omit<FieldReport, 'id' | 'createdAt' | 'updatedAt' | 'technicianId' | 'projectId'>>} reportData The data to update. `technicianId` and `projectId` are not updatable here.
- * @returns {Promise<void>} A promise that resolves when the report is successfully updated.
- * @throws Will throw an error if updating the report fails.
- */
 export async function updateReport(
   reportId: string,
   reportData: Partial<Omit<FieldReport, 'id' | 'createdAt' | 'updatedAt' | 'technicianId' | 'projectId'>>
@@ -201,10 +169,9 @@ export async function updateReport(
   try {
     const reportDocRef = doc(db, 'reports', reportId);
     
-    // Fetch the current report data to get technicianId and projectId for notifications
     const currentReportSnap = await getDoc(reportDocRef);
     if (!currentReportSnap.exists()) {
-      throw new Error(`Report with ID ${reportId} not found.`);
+      throw new Error(`Rapport avec ID ${reportId} non trouvé.`);
     }
     const currentReportData = currentReportSnap.data() as FieldReport;
     const technicianId = currentReportData.technicianId;
@@ -234,47 +201,39 @@ export async function updateReport(
       updatedAt: serverTimestamp(),
     });
 
-    // Send notifications after successful update
     if (technicianId && reportData.status) {
       if (reportData.status === 'VALIDATED') {
         await addNotification(technicianId, {
           type: 'report_update',
-          message: `Your report #${reportId.substring(0,6)}... for project PJT-${projectId.substring(0,4)}... has been VALIDATED.`,
+          message: `Votre rapport #${reportId.substring(0,6)}... pour le projet PJT-${projectId.substring(0,4)}... a été VALIDÉ.`,
           targetId: reportId,
           link: `/reports/view/${reportId}`,
         });
       } else if (reportData.status === 'REJECTED') {
-        const reason = reportData.rejectionReason || "No specific reason provided.";
+        const reason = reportData.rejectionReason || "Aucune raison spécifique fournie.";
         await addNotification(technicianId, {
           type: 'report_update',
-          message: `Your report #${reportId.substring(0,6)}... for project PJT-${projectId.substring(0,4)}... has been REJECTED. Reason: ${reason}`,
+          message: `Votre rapport #${reportId.substring(0,6)}... pour le projet PJT-${projectId.substring(0,4)}... a été REJETÉ. Raison : ${reason}`,
           targetId: reportId,
-          link: `/reports/edit/${reportId}`, // Link to edit page for rejected reports
+          link: `/reports/edit/${reportId}`,
         });
       }
     }
 
   } catch (error) {
     const firestoreError = error as FirestoreError;
-    console.error(`[Service/updateReport] Error updating report ${reportId}: `, firestoreError.code, firestoreError.message, firestoreError);
-    throw new Error(`Failed to update report ${reportId} in database. Firebase Error: ${firestoreError.code} - ${firestoreError.message}.`);
+    console.error(`[Service/updateReport] Erreur lors de la mise à jour du rapport ${reportId}: `, firestoreError.code, firestoreError.message, firestoreError);
+    throw new Error(`Échec de la mise à jour du rapport ${reportId} dans la base de données. Erreur Firebase : ${firestoreError.code} - ${firestoreError.message}.`);
   }
 }
 
-/**
- * Deletes a report from Firestore.
- * @param {string} reportId The ID of the report to delete.
- * @returns {Promise<void>} A promise that resolves when the report is successfully deleted.
- * @throws Will throw an error if deleting the report fails.
- */
 export async function deleteReport(reportId: string): Promise<void> {
   try {
     const reportDocRef = doc(db, 'reports', reportId);
     await deleteDoc(reportDocRef);
   } catch (error) {
     const firestoreError = error as FirestoreError;
-    console.error(`[Service/deleteReport] Error deleting report ${reportId}: `, firestoreError.code, firestoreError.message, firestoreError);
-    throw new Error(`Failed to delete report ${reportId} from database. Firebase Error: ${firestoreError.code} - ${firestoreError.message}.`);
+    console.error(`[Service/deleteReport] Erreur lors de la suppression du rapport ${reportId}: `, firestoreError.code, firestoreError.message, firestoreError);
+    throw new Error(`Échec de la suppression du rapport ${reportId} de la base de données. Erreur Firebase : ${firestoreError.code} - ${firestoreError.message}.`);
   }
 }
-

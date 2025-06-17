@@ -1,3 +1,4 @@
+
 // src/ai/flows/compliance-prediction.ts
 'use server';
 
@@ -10,16 +11,16 @@
  */
 
 import {ai} from '@/ai/genkit';
-import { z } from 'zod'; // Corrected import
+import { z } from 'zod';
 
 const CompliancePredictionInputSchema = z.object({
   historicalData: z
     .string()
-    .describe('Historical compliance data, including dates, materials, and compliance status.'),
+    .describe('Données historiques de conformité, incluant dates, matériaux, et statut de conformité.'),
   currentConditions: z
     .string()
-    .describe('Current project conditions, such as weather, staffing levels, and material availability.'),
-  validationRules: z.string().describe('The rules and standards for material compliance.'),
+    .describe('Conditions actuelles du projet, telles que la météo, les niveaux de personnel, et la disponibilité des matériaux.'),
+  validationRules: z.string().describe('Les règles et standards pour la conformité des matériaux.'),
 });
 export type CompliancePredictionInput = z.infer<typeof CompliancePredictionInputSchema>;
 
@@ -27,10 +28,10 @@ const CompliancePredictionOutputSchema = z.object({
   predictedCompliancePercentage: z
     .number()
     .describe(
-      'The predicted compliance percentage (0-100) based on historical data and current conditions.'
+      'Le pourcentage de conformité prédit (0-100) basé sur les données historiques et les conditions actuelles.'
     ),
-  reasons: z.string().describe('The reasons and factors influencing the predicted compliance percentage.'),
-  suggestedActions: z.string().describe('Suggested actions to improve compliance.'),
+  reasons: z.string().describe('Les raisons et facteurs influençant le pourcentage de conformité prédit.'),
+  suggestedActions: z.string().describe('Actions suggérées pour améliorer la conformité.'),
 });
 
 export type CompliancePredictionOutput = z.infer<typeof CompliancePredictionOutputSchema>;
@@ -45,18 +46,18 @@ const compliancePredictionPrompt = ai.definePrompt({
   name: 'compliancePredictionPrompt',
   input: {schema: CompliancePredictionInputSchema},
   output: {schema: CompliancePredictionOutputSchema},
-  prompt: `You are an AI assistant designed to predict compliance percentages for civil engineering projects.
+  prompt: `Vous êtes un assistant IA conçu pour prédire les pourcentages de conformité pour les projets de génie civil.
 
-  Based on the historical compliance data, current project conditions, and material validation rules,
-  predict the overall compliance percentage for the project.
+  Basé sur les données historiques de conformité, les conditions actuelles du projet, et les règles de validation des matériaux,
+  prédisez le pourcentage de conformité global pour le projet. La réponse doit être en FRANÇAIS.
 
-  Historical Data: {{{historicalData}}}
-Current Conditions: {{{currentConditions}}}
-Validation Rules: {{{validationRules}}}
+  Données Historiques : {{{historicalData}}}
+Conditions Actuelles : {{{currentConditions}}}
+Règles de Validation : {{{validationRules}}}
 
-  Provide a predicted compliance percentage, explain the reasons behind the prediction,
-  and suggest actions to improve compliance.
-  Format the predictedCompliancePercentage as a number between 0 and 100.
+  Fournissez un pourcentage de conformité prédit, expliquez les raisons derrière la prédiction,
+  et suggérez des actions pour améliorer la conformité.
+  Formatez le predictedCompliancePercentage comme un nombre entre 0 et 100.
   `,
 });
 

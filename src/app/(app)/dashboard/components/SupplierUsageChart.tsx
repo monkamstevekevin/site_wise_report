@@ -7,7 +7,7 @@ import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent, ChartLe
 import { Users2 } from 'lucide-react';
 
 interface SupplierData {
-  name: string;
+  name: string; // Expect already translated name from page.tsx if applicable (e.g., "Other Suppliers")
   reports: number;
   fill: string;
 }
@@ -16,13 +16,10 @@ interface SupplierUsageChartProps {
   data: SupplierData[];
 }
 
-// This chartConfig remains as a general setup or fallback,
-// actual colors and labels are driven by the dynamic data.
 const chartConfig = {
   reports: {
-    label: 'Reports',
+    label: 'Rapports',
   },
-  // Dynamic keys for suppliers will be handled by the data itself
 } satisfies ChartConfig;
 
 export function SupplierUsageChart({ data }: SupplierUsageChartProps) {
@@ -32,12 +29,12 @@ export function SupplierUsageChart({ data }: SupplierUsageChartProps) {
         <CardHeader>
           <CardTitle className="flex items-center">
             <Users2 className="mr-2 h-5 w-5 text-primary" />
-            Supplier Usage
+            Utilisation des Fournisseurs
           </CardTitle>
-          <CardDescription>Distribution of reports based on material suppliers.</CardDescription>
+          <CardDescription>Distribution des rapports en fonction des fournisseurs de matériaux.</CardDescription>
         </CardHeader>
         <CardContent className="h-80 flex items-center justify-center">
-          <p className="text-muted-foreground">No supplier usage data available.</p>
+          <p className="text-muted-foreground">Aucune donnée d'utilisation des fournisseurs disponible.</p>
         </CardContent>
       </Card>
     );
@@ -48,9 +45,9 @@ export function SupplierUsageChart({ data }: SupplierUsageChartProps) {
       <CardHeader>
         <CardTitle className="flex items-center">
           <Users2 className="mr-2 h-5 w-5 text-primary" />
-          Supplier Usage
+          Utilisation des Fournisseurs
         </CardTitle>
-        <CardDescription>Distribution of reports based on material suppliers.</CardDescription>
+        <CardDescription>Distribution des rapports en fonction des fournisseurs de matériaux.</CardDescription>
       </CardHeader>
       <CardContent>
         <ChartContainer config={chartConfig} className="h-80 w-full">
@@ -59,7 +56,7 @@ export function SupplierUsageChart({ data }: SupplierUsageChartProps) {
               <Tooltip
                 cursor={false}
                 content={<ChartTooltipContent 
-                            formatter={(value, name, props) => [`${value} reports`, props.payload.name]}
+                            formatter={(value, name, props) => [`${value} rapports`, props.payload.name]}
                             hideLabel 
                         />}
               />
@@ -72,7 +69,6 @@ export function SupplierUsageChart({ data }: SupplierUsageChartProps) {
                 outerRadius={100}
                 innerRadius={60}
                 labelLine={false}
-                // label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} // Optional: enable for direct labels
               >
                 {data.map((entry, index) => (
                   <Cell key={`cell-${index}-${entry.name}`} fill={entry.fill} />
@@ -92,5 +88,3 @@ export function SupplierUsageChart({ data }: SupplierUsageChartProps) {
     </Card>
   );
 }
-
-    

@@ -34,7 +34,7 @@ export default function CreateReportPage() {
     photoFile?: File | null | undefined
   ): Promise<{ success: boolean; reportId?: string; anomalyAssessment?: AnomalyAssessment }> => {
     if (!user) {
-      toast({ variant: 'destructive', title: 'Error', description: 'You must be logged in to create a report.' });
+      toast({ variant: 'destructive', title: 'Erreur', description: 'Vous devez être connecté pour créer un rapport.' });
       return { success: false };
     }
     
@@ -46,8 +46,8 @@ export default function CreateReportPage() {
       try {
         photoDataUriInSubmit = await readFileAsDataURL(photoFile);
       } catch (error) {
-        console.error("Error reading photo file for new report:", error);
-        toast({ variant: 'destructive', title: 'Photo Error', description: 'Could not process the photo.' });
+        console.error("Erreur de lecture du fichier photo pour le nouveau rapport:", error);
+        toast({ variant: 'destructive', title: 'Erreur Photo', description: 'Impossible de traiter la photo.' });
         return { success: false };
       }
     }
@@ -60,15 +60,11 @@ export default function CreateReportPage() {
         createdAt: new Date().toISOString(), 
         updatedAt: new Date().toISOString(), 
         status: status,
-        // aiIsAnomalous and aiAnomalyExplanation will be populated by detectReportAnomaly
     };
     
     const assessment = await detectReportAnomaly(tempReportForAI);
 
     if (status === 'SUBMITTED' && assessment.isAnomalous) {
-      // Save the anomaly assessment even if submission is blocked
-      // This is useful if we later want to show admins reports that failed AI check
-      // For now, we just return it to the form to display
       return { success: false, anomalyAssessment: assessment };
     }
 
@@ -85,8 +81,7 @@ export default function CreateReportPage() {
       const newReportId = await addReport(reportDataToSave);
       return { success: true, reportId: newReportId, anomalyAssessment: assessment };
     } catch (error) {
-      console.error('Error creating report:', error);
-      // Pass the assessment along so the form can display it even if save fails
+      console.error('Erreur de création du rapport:', error);
       return { success: false, anomalyAssessment: assessment }; 
     }
   };
@@ -95,13 +90,13 @@ export default function CreateReportPage() {
   return (
     <>
       <PageTitle 
-        title="Create New Field Report" 
+        title="Créer un Nouveau Rapport de Terrain" 
         icon={FileText}
-        subtitle="Fill in the details below to submit a new field report and get AI-powered anomaly detection."
+        subtitle="Remplissez les détails ci-dessous pour soumettre un nouveau rapport de terrain et obtenir une détection d'anomalie assistée par IA."
         actions={
           <Button variant="outline" asChild className="rounded-lg">
             <Link href="/reports">
-               <ArrowLeft className="mr-2 h-4 w-4" /> Cancel & Back to Reports
+               <ArrowLeft className="mr-2 h-4 w-4" /> Annuler & Retour aux Rapports
             </Link>
           </Button>
         }

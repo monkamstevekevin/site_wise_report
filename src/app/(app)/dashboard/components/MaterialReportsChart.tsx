@@ -7,7 +7,7 @@ import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent, ChartLe
 import { GanttChartSquare } from 'lucide-react';
 
 interface MaterialReportData {
-  material: string;
+  material: string; // Expect already translated material name from page.tsx
   reports: number;
   fill: string;
 }
@@ -16,20 +16,11 @@ interface MaterialReportsChartProps {
   data: MaterialReportData[];
 }
 
-// This chartConfig is now mainly for Legend labels and general setup,
-// as colors are driven by the 'fill' property in the incoming data.
 const chartConfig = {
   reports: {
-    label: 'Reports',
+    label: 'Rapports',
   },
-  // The keys here (cement, asphalt, etc.) should match the 'material' names
-  // from the data if we want the legend to pick them up automatically.
-  // However, the legend can also be built dynamically or use nameKey from data.
-  Cement: { label: 'Cement', color: 'hsl(var(--chart-1))' },
-  Asphalt: { label: 'Asphalt', color: 'hsl(var(--chart-2))' },
-  Gravel: { label: 'Gravel', color: 'hsl(var(--chart-3))' },
-  Sand: { label: 'Sand', color: 'hsl(var(--chart-4))' },
-  Other: { label: 'Other', color: 'hsl(var(--chart-5))' },
+  // Material names will come from the data and legend will use nameKey="material"
 } satisfies ChartConfig;
 
 export function MaterialReportsChart({ data }: MaterialReportsChartProps) {
@@ -39,12 +30,12 @@ export function MaterialReportsChart({ data }: MaterialReportsChartProps) {
         <CardHeader>
           <CardTitle className="flex items-center">
             <GanttChartSquare className="mr-2 h-5 w-5 text-primary" />
-            Reports by Material Type
+            Rapports par Type de Matériau
           </CardTitle>
-          <CardDescription>Breakdown of submitted reports by material category.</CardDescription>
+          <CardDescription>Répartition des rapports soumis par catégorie de matériau.</CardDescription>
         </CardHeader>
         <CardContent className="h-80 flex items-center justify-center">
-          <p className="text-muted-foreground">No material report data available.</p>
+          <p className="text-muted-foreground">Aucune donnée de rapport de matériau disponible.</p>
         </CardContent>
       </Card>
     );
@@ -55,9 +46,9 @@ export function MaterialReportsChart({ data }: MaterialReportsChartProps) {
       <CardHeader>
         <CardTitle className="flex items-center">
           <GanttChartSquare className="mr-2 h-5 w-5 text-primary" />
-          Reports by Material Type
+          Rapports par Type de Matériau
         </CardTitle>
-        <CardDescription>Breakdown of submitted reports by material category.</CardDescription>
+        <CardDescription>Répartition des rapports soumis par catégorie de matériau.</CardDescription>
       </CardHeader>
       <CardContent>
         <ChartContainer config={chartConfig} className="h-80 w-full">
@@ -69,8 +60,8 @@ export function MaterialReportsChart({ data }: MaterialReportsChartProps) {
               <Tooltip
                 cursor={false}
                 content={<ChartTooltipContent 
-                            formatter={(value, name, props) => [`${value} reports`, props.payload.material]} 
-                            hideLabel
+                            formatter={(value, name, props) => [`${value} rapports`, props.payload.material]} 
+                            hideLabel 
                         />}
               />
               <Bar dataKey="reports" radius={5} />
@@ -82,5 +73,3 @@ export function MaterialReportsChart({ data }: MaterialReportsChartProps) {
     </Card>
   );
 }
-
-    

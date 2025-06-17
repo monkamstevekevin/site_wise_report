@@ -12,8 +12,8 @@ import { cn } from '@/lib/utils';
 import Image from 'next/image';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card } from '@/components/ui/card';
-import { addChatMessage } from '@/services/chatService'; // For Server Action
-import { getChatMessagesSubscription } from '@/lib/chatClientService'; // For client-side subscription
+import { addChatMessage } from '@/services/chatService';
+import { getChatMessagesSubscription } from '@/lib/chatClientService';
 import { useToast } from '@/hooks/use-toast';
 
 
@@ -27,7 +27,7 @@ export function ChatInterface({ projectId }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [imageFile, setImageFile] = useState<File | null>(null); // We'll keep this for UI but not persist image yet
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(true);
 
@@ -62,9 +62,9 @@ export function ChatInterface({ projectId }: ChatInterfaceProps) {
   }, [messages]);
 
   const handleSendMessage = async () => {
-    if (!user || (!newMessage.trim() && !imageFile /* For now, we only send text */)) return;
-    if (!newMessage.trim()) { // Only send if there's text
-        toast({ variant: "destructive", title: "Empty Message", description: "Cannot send an empty message."});
+    if (!user || (!newMessage.trim() && !imageFile )) return;
+    if (!newMessage.trim()) {
+        toast({ variant: "destructive", title: "Message Vide", description: "Impossible d'envoyer un message vide."});
         return;
     }
 
@@ -76,21 +76,15 @@ export function ChatInterface({ projectId }: ChatInterfaceProps) {
       senderName: user.displayName || user.email || 'Utilisateur Actuel',
       senderAvatar: user.photoURL || undefined,
       text: newMessage.trim(),
-      imageUrl: null, // Not persisting images yet
+      imageUrl: null,
     };
     
     try {
       await addChatMessage(projectId, messagePayload);
       setNewMessage('');
-      // Image preview reset is handled if we were persisting images
-      // setImageFile(null);
-      // setImagePreview(null);
-      // if (fileInputRef.current) {
-      //     fileInputRef.current.value = '';
-      // }
     } catch (error) {
       console.error("Error sending message:", error);
-      toast({ variant: "destructive", title: "Failed to Send", description: (error as Error).message });
+      toast({ variant: "destructive", title: "Échec de l'Envoi", description: (error as Error).message });
     } finally {
       setIsSending(false);
     }
@@ -99,13 +93,13 @@ export function ChatInterface({ projectId }: ChatInterfaceProps) {
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      setImageFile(file); // Keep for UI preview
+      setImageFile(file); 
       const reader = new FileReader();
       reader.onloadend = () => {
         setImagePreview(reader.result as string);
       };
       reader.readAsDataURL(file);
-      toast({ title: "Image Selected", description: "Image preview shown. Image sending is not yet implemented.", duration: 5000});
+      toast({ title: "Image Sélectionnée", description: "Aperçu de l'image affiché. L'envoi d'images n'est pas encore implémenté.", duration: 5000});
     }
   };
 
@@ -151,24 +145,13 @@ export function ChatInterface({ projectId }: ChatInterfaceProps) {
             </Avatar>
             <div
               className={cn(
-                'p-3 rounded-xl shadow break-words', // Added break-words
+                'p-3 rounded-xl shadow break-words',
                 msg.isOwnMessage
                   ? 'bg-primary text-primary-foreground rounded-br-none'
                   : 'bg-card text-card-foreground rounded-bl-none'
               )}
             >
               <p className="text-xs font-semibold mb-0.5">{msg.isOwnMessage ? 'Vous' : msg.senderName}</p>
-              {/* Image display from imageUrl if it were persisted */}
-              {/* {msg.imageUrl && (
-                <Image
-                  src={msg.imageUrl} // This would be a Firebase Storage URL
-                  alt="Image envoyée"
-                  width={200}
-                  height={150}
-                  className="rounded-md my-1 object-cover"
-                  data-ai-hint="chat image"
-                />
-              )} */}
               {msg.text && <p className="text-sm whitespace-pre-wrap">{msg.text}</p>}
               <p className="text-xs opacity-70 mt-1 text-right">
                 {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

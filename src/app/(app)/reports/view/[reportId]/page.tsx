@@ -14,6 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
+import { fr } from 'date-fns/locale';
 import Image from 'next/image'; 
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { cn } from '@/lib/utils'; 
@@ -30,18 +31,18 @@ const reportStatusBadgeVariant: Record<FieldReport['status'], "default" | "secon
 };
 
 const materialTypeDisplay: Record<string, string> = {
-  cement: "Cement",
-  asphalt: "Asphalt",
-  gravel: "Gravel",
-  sand: "Sand",
-  other: "Other",
+  cement: "Ciment",
+  asphalt: "Asphalte",
+  gravel: "Gravier",
+  sand: "Sable",
+  other: "Autre",
 };
 
 const samplingMethodDisplay: Record<string, string> = {
-  grab: "Grab Sample",
-  composite: "Composite Sample",
-  core: "Core Sample",
-  other: "Other Method",
+  grab: "Échantillon Instantané",
+  composite: "Échantillon Composite",
+  core: "Carottage",
+  other: "Autre Méthode",
 };
 
 const DetailItem: React.FC<{ icon: React.ElementType, label: string, value?: string | number | null | boolean, children?: React.ReactNode, valueClass?: string }> = ({ icon: Icon, label, value, children, valueClass }) => (
@@ -52,22 +53,18 @@ const DetailItem: React.FC<{ icon: React.ElementType, label: string, value?: str
       {children ? (
         <div className={cn("text-base font-medium text-foreground", valueClass)}>{children}</div>
       ) : (
-        <p className={cn("text-base font-medium text-foreground", valueClass)}>{value === true ? 'Yes' : value === false ? 'No' : (value ?? 'N/A')}</p>
+        <p className={cn("text-base font-medium text-foreground", valueClass)}>{value === true ? 'Oui' : value === false ? 'Non' : (value ?? 'N/D')}</p>
       )}
     </div>
   </div>
 );
 
-// Helper to map Firebase user to app's UserRole type
-// Consider moving this to a shared utility if used in more places
 const mapFirebaseUserToAppRole = (firebaseUser: any): UserRole => {
   if (!firebaseUser || !firebaseUser.email) return 'TECHNICIAN'; 
   if (firebaseUser.email === 'janesteve237@gmail.com') return 'ADMIN';
-  if (firebaseUser.email?.includes('admin@example.com')) return 'ADMIN';
-  if (firebaseUser.email?.includes('supervisor@example.com')) return 'SUPERVISOR';
-  // For the MOCK_TECHNICIAN_EMAIL, their specific role is technician.
+  if (firebaseUser.email.includes('admin@example.com')) return 'ADMIN';
+  if (firebaseUser.email.includes('supervisor@example.com')) return 'SUPERVISOR';
   if (firebaseUser.email === MOCK_TECHNICIAN_EMAIL) return 'TECHNICIAN';
-  // Default for other authenticated users if no specific mapping
   return 'TECHNICIAN'; 
 };
 
@@ -105,7 +102,7 @@ export default function ViewReportPage() {
           setErrorLoadingReport(`Rapport avec ID ${reportId} non trouvé.`);
         }
       } catch (err) {
-        console.error("Error fetching report for viewing:", err);
+        console.error("Erreur de récupération du rapport pour visualisation:", err);
         setErrorLoadingReport("Échec du chargement des détails du rapport.");
       } finally {
         setIsLoadingReport(false);
@@ -127,7 +124,7 @@ export default function ViewReportPage() {
     try {
       await updateReport(report.id, { status: 'VALIDATED' });
       toast({ title: 'Rapport Validé', description: `Le rapport ID: ${report.id} a été marqué comme VALIDÉ.` });
-      router.push('/reports'); // Redirect to reports list
+      router.push('/reports');
     } catch (err) {
       toast({ variant: 'destructive', title: 'Erreur de Validation', description: (err as Error).message || "Une erreur s'est produite." });
       setIsProcessingAction(false);
@@ -149,7 +146,7 @@ export default function ViewReportPage() {
           </div>
         )
       });
-      router.push('/reports'); // Redirect to reports list
+      router.push('/reports');
     } catch (err) {
       toast({ variant: 'destructive', title: 'Erreur de Rejet', description: (err as Error).message || "Une erreur s'est produite." });
       setIsProcessingAction(false);
@@ -281,8 +278,8 @@ export default function ViewReportPage() {
              <DetailItem icon={BarChart3} label="Volume" value={`${report.volume} m³`} />
              <DetailItem icon={Scale} label="Densité" value={`${report.density} kg/m³`} />
              <DetailItem icon={Droplets} label="Humidité" value={`${report.humidity} %`} />
-             <DetailItem icon={CalendarDays} label="Créé le" value={format(new Date(report.createdAt), 'PPpp')} />
-             <DetailItem icon={CalendarClock} label="Mis à jour le" value={format(new Date(report.updatedAt), 'PPpp')} />
+             <DetailItem icon={CalendarDays} label="Créé le" value={format(new Date(report.createdAt), 'PPpp', { locale: fr })} />
+             <DetailItem icon={CalendarClock} label="Mis à jour le" value={format(new Date(report.updatedAt), 'PPpp', { locale: fr })} />
           </CardContent>
         </Card>
 

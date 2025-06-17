@@ -37,21 +37,26 @@ export default function SignupPage() {
   const handleEmailSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (password !== confirmPassword) {
-      toast({ variant: 'destructive', title: 'Signup Failed', description: 'Passwords do not match.' });
+      toast({ variant: 'destructive', title: 'Échec de l\'Inscription', description: 'Les mots de passe ne correspondent pas.' });
       return;
     }
     setIsLoadingEmail(true);
     try {
       await createUserWithEmailAndPassword(auth, email, password);
-      toast({ title: 'Signup Successful', description: 'Redirecting to dashboard...' });
-      // router.push('/dashboard'); // AuthProvider will handle redirect
+      toast({ title: 'Inscription Réussie', description: 'Redirection vers le tableau de bord...' });
     } catch (error) {
       const authError = error as AuthError;
       console.error('Signup error:', authError);
+      let errorMessage = authError.message || 'Une erreur inattendue s\'est produite.';
+      if (authError.code === 'auth/email-already-in-use') {
+        errorMessage = 'Cette adresse e-mail est déjà utilisée par un autre compte.';
+      } else if (authError.code === 'auth/weak-password') {
+        errorMessage = 'Le mot de passe doit comporter au moins 6 caractères.';
+      }
       toast({
         variant: 'destructive',
-        title: 'Signup Failed',
-        description: authError.message || 'An unexpected error occurred.',
+        title: 'Échec de l\'Inscription',
+        description: errorMessage,
       });
     } finally {
       setIsLoadingEmail(false);
@@ -62,9 +67,8 @@ export default function SignupPage() {
     setIsLoadingGoogle(true);
     try {
         await signInWithGoogle();
-        // Toast and redirect are handled by AuthContext or onAuthStateChanged
     } catch (error) {
-        // Error is already handled and toasted by signInWithGoogle in AuthContext
+        // Error handled by signInWithGoogle
     } finally {
         setIsLoadingGoogle(false);
     }
@@ -78,8 +82,8 @@ export default function SignupPage() {
          <div className="flex justify-center mb-2">
             <UserPlus className="h-8 w-8 text-primary" />
         </div>
-        <CardTitle className="text-2xl font-headline">Create Account</CardTitle>
-        <CardDescription>Sign up to start using SiteWise Reports.</CardDescription>
+        <CardTitle className="text-2xl font-headline">Créer un Compte</CardTitle>
+        <CardDescription>Inscrivez-vous pour commencer à utiliser SiteWise Reports.</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleEmailSignup} className="space-y-4">
@@ -88,7 +92,7 @@ export default function SignupPage() {
             <Input
               id="email"
               type="email"
-              placeholder="you@example.com"
+              placeholder="vous@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -96,11 +100,11 @@ export default function SignupPage() {
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password">Mot de passe</Label>
             <Input
               id="password"
               type="password"
-              placeholder="•••••••• (min. 6 characters)"
+              placeholder="•••••••• (min. 6 caractères)"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -108,7 +112,7 @@ export default function SignupPage() {
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="confirmPassword">Confirm Password</Label>
+            <Label htmlFor="confirmPassword">Confirmer le mot de passe</Label>
             <Input
               id="confirmPassword"
               type="password"
@@ -120,20 +124,20 @@ export default function SignupPage() {
             />
           </div>
           <Button type="submit" className="w-full rounded-lg" disabled={isLoading}>
-            {isLoadingEmail ? <Loader2 className="animate-spin" /> : 'Sign Up with Email'}
+            {isLoadingEmail ? <Loader2 className="animate-spin" /> : 'S\'inscrire avec l\'Email'}
           </Button>
         </form>
         <Separator className="my-6" />
         <Button variant="outline" className="w-full rounded-lg" onClick={handleGoogleSignup} disabled={isLoading}>
           {isLoadingGoogle ? <Loader2 className="animate-spin" /> : <GoogleIcon />}
-           <span className="ml-2">Sign up with Google</span>
+           <span className="ml-2">S'inscrire avec Google</span>
         </Button>
       </CardContent>
       <CardFooter className="flex flex-col items-center text-sm">
         <p>
-          Already have an account?{' '}
+          Vous avez déjà un compte ?{' '}
           <Button variant="link" asChild className="p-0 h-auto">
-            <Link href="/auth/login">Log in</Link>
+            <Link href="/auth/login">Se connecter</Link>
           </Button>
         </p>
       </CardFooter>

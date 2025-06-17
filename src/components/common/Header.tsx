@@ -70,24 +70,24 @@ export function Header() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel>
-                <p className="font-medium">{user.displayName || 'User'}</p>
+                <p className="font-medium">{user.displayName || 'Utilisateur'}</p>
                 <p className="text-xs text-muted-foreground">{user.email}</p>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
                 <Link href="/profile">
                   <UserCircle className="mr-2 h-4 w-4" />
-                  <span>Profile</span>
+                  <span>Profil</span>
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem disabled> {/* Replace with actual link or functionality */}
                 <Settings className="mr-2 h-4 w-4" />
-                <span>Settings</span>
+                <span>Paramètres</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleLogout}>
                 <LogOut className="mr-2 h-4 w-4" />
-                <span>Log out</span>
+                <span>Déconnexion</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -95,7 +95,7 @@ export function Header() {
           <Button asChild variant="outline" className="rounded-lg">
             <Link href="/auth/login">
               <LogInIcon className="mr-2 h-4 w-4" />
-              Login
+              Connexion
             </Link>
           </Button>
         )}

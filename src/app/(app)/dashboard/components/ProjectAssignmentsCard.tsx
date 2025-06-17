@@ -14,7 +14,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import type { Project, User, UserAssignment } from '@/lib/types';
 import { HardHat, AlertTriangle } from 'lucide-react';
-import { differenceInDays, format, isFuture, isPast, parseISO } from 'date-fns';
+import { differenceInDays, format, isFuture, isPast, parseISO, isValid } from 'date-fns';
+import { fr } from 'date-fns/locale';
 import { useRouter } from 'next/navigation'; 
 import { cn } from '@/lib/utils';
 
@@ -24,9 +25,10 @@ interface ProjectAssignmentsCardProps {
 }
 
 const getAssignedTechniciansCount = (projectId: string, users: User[]): number => {
+  if (!Array.isArray(users)) return 0;
   return users.filter(user => 
     user.role === 'TECHNICIAN' && 
-    user.assignments?.some(a => a.projectId === projectId)
+    Array.isArray(user.assignments) && user.assignments.some(a => a.projectId === projectId)
   ).length;
 };
 
@@ -34,19 +36,24 @@ const projectStatusVariant = (project: Project): "default" | "secondary" | "outl
   if (project.status === 'COMPLETED') return 'secondary';
   if (project.status === 'INACTIVE') return 'outline';
   
-  const startDate = project.startDate ? parseISO(project.startDate) : null;
-  if (startDate && isFuture(startDate)) return 'default';
-  if (startDate && isPast(startDate) && project.status === 'ACTIVE') return 'default'; 
-  
+  if (project.startDate) {
+    const parsedDate = parseISO(project.startDate);
+    if (isValid(parsedDate)) {
+        if (isFuture(parsedDate)) return 'default';
+        if (isPast(parsedDate) && project.status === 'ACTIVE') return 'default'; 
+    }
+  }
   return 'outline';
 };
 
 const formatDatePretty = (dateString?: string) => {
-  if (!dateString) return 'N/A';
+  if (!dateString) return 'N/D';
   try {
-    return format(parseISO(dateString), 'MMM d, yyyy');
+    const parsedDate = parseISO(dateString);
+    if (!isValid(parsedDate)) return 'Date invalide';
+    return format(parsedDate, 'd MMM yyyy', { locale: fr });
   } catch {
-    return 'Invalid Date';
+    return 'Date invalide';
   }
 };
 
@@ -54,7 +61,7 @@ export function ProjectAssignmentsCard({ projects, users }: ProjectAssignmentsCa
   const now = new Date();
   const router = useRouter(); 
 
-  if (projects.length === 0) {
+  if (!Array.isArray(projects) || projects.length === 0) {
     return (
       <Card className="shadow-lg rounded-lg lg:col-span-2">
         <CardHeader>
@@ -96,7 +103,13 @@ export function ProjectAssignmentsCard({ projects, users }: ProjectAssignmentsCa
             <TableBody>
               {projects.map(project => {
                 const assignedTechniciansCount = getAssignedTechniciansCount(project.id, users);
-                const daysUntilStart = project.startDate ? differenceInDays(parseISO(project.startDate), now) : null;
+                let daysUntilStart: number | null = null;
+                if (project.startDate) {
+                    const parsedDate = parseISO(project.startDate);
+                    if (isValid(parsedDate)) {
+                        daysUntilStart = differenceInDays(parsedDate, now);
+                    }
+                }
                 
                 let alertNeeded = false;
                 if (project.status === 'ACTIVE' && assignedTechniciansCount === 0) {
@@ -131,7 +144,7 @@ export function ProjectAssignmentsCard({ projects, users }: ProjectAssignmentsCa
                     <TableCell className="text-center">
                       {alertNeeded && (
                         <Badge variant="destructive" className="text-xs">
-                          <AlertTriangle className="mr-1 h-3 w-3" /> Needs Assignment
+                          <AlertTriangle className="mr-1 h-3 w-3" /> Assignation Requise
                         </Badge>
                       )}
                     </TableCell>
@@ -147,4 +160,3 @@ export function ProjectAssignmentsCard({ projects, users }: ProjectAssignmentsCa
 }
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-

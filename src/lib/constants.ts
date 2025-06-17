@@ -12,20 +12,20 @@ export interface NavItem {
 }
 
 export const ALL_NAV_ITEMS: NavItem[] = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['ADMIN', 'SUPERVISOR', 'TECHNICIAN'] },
-  { href: '/reports', label: 'Field Reports', icon: FileText, roles: ['ADMIN', 'SUPERVISOR', 'TECHNICIAN'] },
-  { href: '/reports/create', label: 'Create Report', icon: FileText, roles: ['ADMIN', 'SUPERVISOR', 'TECHNICIAN'] },
-  { href: '/my-projects', label: 'My Projects', icon: Briefcase, roles: ['TECHNICIAN', 'SUPERVISOR'] },
-  // { href: '/my-schedule', label: 'My Schedule', icon: CalendarDays, roles: ['TECHNICIAN', 'SUPERVISOR'] }, // Removed
+  { href: '/dashboard', label: 'Tableau de Bord', icon: LayoutDashboard, roles: ['ADMIN', 'SUPERVISOR', 'TECHNICIAN'] },
+  { href: '/reports', label: 'Rapports de Terrain', icon: FileText, roles: ['ADMIN', 'SUPERVISOR', 'TECHNICIAN'] },
+  { href: '/reports/create', label: 'Créer un Rapport', icon: FileText, roles: ['ADMIN', 'SUPERVISOR', 'TECHNICIAN'] },
+  { href: '/my-projects', label: 'Mes Projets', icon: Briefcase, roles: ['TECHNICIAN', 'SUPERVISOR'] },
+  // { href: '/my-schedule', label: 'Mon Planning', icon: CalendarDays, roles: ['TECHNICIAN', 'SUPERVISOR'] }, // Removed
   {
     href: '/admin',
-    label: 'Admin Panel',
+    label: 'Panneau Admin',
     icon: Settings,
     roles: ['ADMIN'],
     children: [
-      { href: '/admin/users', label: 'User Management', icon: Users, roles: ['ADMIN'] },
-      { href: '/admin/projects', label: 'Project Management', icon: HardHat, roles: ['ADMIN'] },
-      { href: '/admin/materials', label: 'Material Management', icon: TestTube2, roles: ['ADMIN'] },
+      { href: '/admin/users', label: 'Gestion Utilisateurs', icon: Users, roles: ['ADMIN'] },
+      { href: '/admin/projects', label: 'Gestion Projets', icon: HardHat, roles: ['ADMIN'] },
+      { href: '/admin/materials', label: 'Gestion Matériaux', icon: TestTube2, roles: ['ADMIN'] },
     ]
   },
 ];

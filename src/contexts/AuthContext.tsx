@@ -42,14 +42,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await firebaseSignOut(auth);
       setUser(null);
-      toast({ title: 'Logged Out', description: 'You have been successfully logged out.' });
+      toast({ title: 'Déconnexion Réussie', description: 'Vous avez été déconnecté avec succès.' });
       if (!pathname.startsWith('/auth')) {
         router.push('/auth/login');
       }
     } catch (error) {
       console.error('Error signing out:', error);
       const authError = error as AuthError;
-      toast({ variant: 'destructive', title: 'Logout Error', description: authError.message || 'Could not log out.' });
+      toast({ variant: 'destructive', title: 'Erreur de Déconnexion', description: authError.message || 'Impossible de se déconnecter.' });
     }
   };
 
@@ -58,14 +58,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
-      toast({ title: 'Sign In Successful', description: 'Welcome!' });
+      toast({ title: 'Connexion Réussie', description: 'Bienvenue !' });
     } catch (error) {
       const authError = error as AuthError;
       console.error('Google Sign-In error:', authError);
+      let errorMessage = authError.message || 'Une erreur inattendue s\'est produite lors de la connexion Google.';
+      if (authError.code === 'auth/unauthorized-domain') {
+        errorMessage = `Domaine non autorisé pour la connexion Google. Domaine actuel : ${typeof window !== 'undefined' ? window.location.origin : 'Inconnu'}. Veuillez l'ajouter dans votre console Firebase.`
+      }
       toast({
         variant: 'destructive',
-        title: 'Google Sign-In Failed',
-        description: authError.message || 'An unexpected error occurred during Google Sign-In.',
+        title: 'Échec de la Connexion Google',
+        description: errorMessage,
       });
     } finally {
       setLoading(false);
@@ -74,81 +78,66 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const updateUserProfile = async (data: { displayName?: string; photoURL?: string | null }): Promise<string | null> => {
     if (!auth.currentUser) {
-      throw new Error("User not authenticated.");
+      throw new Error("Utilisateur non authentifié.");
     }
     const currentUserAuth = auth.currentUser;
-    let finalPhotoURLForAuthAndFirestore: string | null = currentUserAuth.photoURL; // Start with current photoURL
+    let finalPhotoURLForAuthAndFirestore: string | null = currentUserAuth.photoURL;
     const updatesForAuth: { displayName?: string; photoURL?: string } = {};
     const updatesForFirestore: { name?: string; avatarUrl?: string | null } = {};
 
-    // Handle displayName update
     if (data.displayName !== undefined && data.displayName !== (currentUserAuth.displayName || '')) {
       updatesForAuth.displayName = data.displayName;
       updatesForFirestore.name = data.displayName;
     }
 
-    // Handle photoURL update
-    if (data.photoURL !== undefined) { // If photoURL is part of the update data
-      if (data.photoURL === null || data.photoURL === '') { // User wants to clear the photo
+    if (data.photoURL !== undefined) {
+      if (data.photoURL === null || data.photoURL === '') {
         if (currentUserAuth.photoURL) {
-            await deleteProfileImage(currentUserAuth.photoURL); // Delete old image from storage
+            await deleteProfileImage(currentUserAuth.photoURL);
         }
         finalPhotoURLForAuthAndFirestore = null;
-      } else if (data.photoURL.startsWith('data:image')) { // New image (data URI) provided
+      } else if (data.photoURL.startsWith('data:image')) {
         try {
-          // Upload new image to Firebase Storage, delete old one if it existed
           finalPhotoURLForAuthAndFirestore = await uploadProfileImage(currentUserAuth.uid, data.photoURL, currentUserAuth.photoURL);
         } catch (uploadError) {
-          console.error("Error uploading new profile image:", uploadError);
-          toast({ variant: 'destructive', title: 'Image Upload Failed', description: (uploadError as Error).message });
-          throw uploadError; // Propagate error
+          console.error("Erreur de téléversement de la nouvelle image de profil:", uploadError);
+          toast({ variant: 'destructive', title: 'Échec du Téléversement de l\'Image', description: (uploadError as Error).message });
+          throw uploadError;
         }
-      } else { // External HTTP/HTTPS URL provided
-        if (currentUserAuth.photoURL && currentUserAuth.photoURL !== data.photoURL) {
-            // If the old URL was a Firebase Storage URL, consider deleting it.
-            // For simplicity here, we're not, assuming external URLs aren't ours to manage.
-            // await deleteProfileImage(currentUserAuth.photoURL); // Potentially delete if old was a storage URL
-        }
+      } else {
         finalPhotoURLForAuthAndFirestore = data.photoURL;
       }
     }
     
-    // Prepare updates for Firebase Auth (photoURL should be string or undefined)
     if (finalPhotoURLForAuthAndFirestore !== currentUserAuth.photoURL) {
         updatesForAuth.photoURL = finalPhotoURLForAuthAndFirestore || undefined;
     }
-    // Prepare updates for Firestore (avatarUrl can be string or null)
-    if (finalPhotoURLForAuthAndFirestore !== (updatesForFirestore.avatarUrl !== undefined ? updatesForFirestore.avatarUrl : (await updateUserInFirestore(currentUserAuth.uid, {}) as any)?.avatarUrl)) { // A bit complex check, simplified: if it changed
+    if (finalPhotoURLForAuthAndFirestore !== (updatesForFirestore.avatarUrl !== undefined ? updatesForFirestore.avatarUrl : (await updateUserInFirestore(currentUserAuth.uid, {}) as any)?.avatarUrl)) {
         updatesForFirestore.avatarUrl = finalPhotoURLForAuthAndFirestore;
     }
 
-
     try {
-      // Update Firebase Authentication profile
       if (Object.keys(updatesForAuth).length > 0) {
         await updateProfile(currentUserAuth, updatesForAuth);
       }
-
-      // Update Firestore user document
       if (Object.keys(updatesForFirestore).length > 0) {
          await updateUserInFirestore(currentUserAuth.uid, updatesForFirestore);
       }
       
-      // Update context user state - create a new object to trigger re-renders
-      const updatedUserContextData = { ...auth.currentUser } as FirebaseUser; // Get fresh auth.currentUser state
+      const updatedUserContextData = { ...auth.currentUser } as FirebaseUser;
       setUser(updatedUserContextData);
 
-      return updatedUserContextData.photoURL; // Return the definitive photoURL from Auth
+      return updatedUserContextData.photoURL;
 
     } catch (error) {
       const authError = error as AuthError;
-      console.error("Error updating user profile in Auth/Firestore:", authError);
+      console.error("Erreur de mise à jour du profil utilisateur dans Auth/Firestore:", authError);
       toast({
           variant: 'destructive',
-          title: 'Profile Update Error',
-          description: authError.message || "Failed to update profile.",
+          title: 'Erreur de Mise à Jour du Profil',
+          description: authError.message || "Échec de la mise à jour du profil.",
       });
-      throw new Error(authError.message || "Failed to update profile.");
+      throw new Error(authError.message || "Échec de la mise à jour du profil.");
     }
   };
   
@@ -160,7 +149,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error('useAuth doit être utilisé au sein d\'un AuthProvider');
   }
   return context;
 }

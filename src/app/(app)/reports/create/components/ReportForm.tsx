@@ -7,7 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label'; // Not strictly needed if using FormLabel
+import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -28,18 +28,18 @@ const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 
 const reportFormSchema = z.object({
-  projectId: z.string().min(1, 'Project ID is required'),
+  projectId: z.string().min(1, 'L\'ID du projet est requis'),
   materialType: z.enum(['cement', 'asphalt', 'gravel', 'sand', 'other'], {
-    required_error: 'Material type is required.',
+    required_error: 'Le type de matériau est requis.',
   }),
-  temperature: z.coerce.number().min(-50, "Too low").max(200, "Too high"),
-  volume: z.coerce.number().positive('Volume must be positive'),
-  density: z.coerce.number().positive('Density must be positive'),
+  temperature: z.coerce.number().min(-50, "Trop bas").max(200, "Trop élevé"),
+  volume: z.coerce.number().positive('Le volume doit être positif'),
+  density: z.coerce.number().positive('La densité doit être positive'),
   humidity: z.coerce.number().min(0, "Min 0%").max(100, "Max 100%"),
-  batchNumber: z.string().min(1, 'Batch number is required'),
-  supplier: z.string().min(1, 'Supplier is required'),
+  batchNumber: z.string().min(1, 'Le numéro de lot est requis'),
+  supplier: z.string().min(1, 'Le fournisseur est requis'),
   samplingMethod: z.enum(['grab', 'composite', 'core', 'other'], {
-    required_error: 'Sampling method is required.',
+    required_error: 'La méthode d\'échantillonnage est requise.',
   }),
   notes: z.string().optional(),
   photo: z
@@ -47,28 +47,26 @@ const reportFormSchema = z.object({
     .optional()
     .refine(
       (files) => !files || files.length === 0 || files?.[0]?.size <= MAX_FILE_SIZE_BYTES,
-      `Max image size is ${MAX_FILE_SIZE_MB}MB.`
+      `La taille maximale de l'image est de ${MAX_FILE_SIZE_MB}Mo.`
     )
     .refine(
       (files) => !files || files.length === 0 || ACCEPTED_IMAGE_TYPES.includes(files?.[0]?.type),
-      "Only .jpg, .jpeg, .png and .webp formats are supported."
+      "Seuls les formats .jpg, .jpeg, .png et .webp sont pris en charge."
     ),
-  attachmentUrls: z.string().optional().describe('Comma-separated URLs for other attachments like documents'),
+  attachmentUrls: z.string().optional().describe('URLs séparées par des virgules pour d\'autres pièces jointes comme des documents'),
 });
 
 export type ReportFormData = z.infer<typeof reportFormSchema>;
 
-export type ReportSubmitPayload = Omit<FieldReport, 'id' | 'createdAt' | 'updatedAt' | 'technicianId' | 'photoDataUri'> & {
-  // photoDataUri is derived from photoFile by the parent
-};
+export type ReportSubmitPayload = Omit<FieldReport, 'id' | 'createdAt' | 'updatedAt' | 'technicianId' | 'photoDataUri'> & {};
 
 const initialReportFormValues: ReportFormData = {
   projectId: '',
   materialType: undefined as unknown as ReportFormData['materialType'],
-  temperature: '' as unknown as number, // Controlled input: init with string
-  volume: '' as unknown as number,       // Controlled input: init with string
-  density: '' as unknown as number,      // Controlled input: init with string
-  humidity: '' as unknown as number,     // Controlled input: init with string
+  temperature: '' as unknown as number,
+  volume: '' as unknown as number,
+  density: '' as unknown as number,
+  humidity: '' as unknown as number,
   batchNumber: '',
   supplier: '',
   samplingMethod: undefined as unknown as ReportFormData['samplingMethod'],
@@ -78,18 +76,18 @@ const initialReportFormValues: ReportFormData = {
 };
 
 const materialTypeOptions: { value: MaterialType; label: string }[] = [
-  { value: 'cement', label: 'Cement' },
-  { value: 'asphalt', label: 'Asphalt' },
-  { value: 'gravel', label: 'Gravel' },
-  { value: 'sand', label: 'Sand' },
-  { value: 'other', label: 'Other' },
+  { value: 'cement', label: 'Ciment' },
+  { value: 'asphalt', label: 'Asphalte' },
+  { value: 'gravel', label: 'Gravier' },
+  { value: 'sand', label: 'Sable' },
+  { value: 'other', label: 'Autre' },
 ];
 
 const samplingMethodOptions: { value: SamplingMethod; label: string }[] = [
-  { value: 'grab', label: 'Grab Sample' },
-  { value: 'composite', label: 'Composite Sample' },
-  { value: 'core', label: 'Core Sample' },
-  { value: 'other', label: 'Other Method' },
+  { value: 'grab', label: 'Échantillon Instantané' },
+  { value: 'composite', label: 'Échantillon Composite' },
+  { value: 'core', label: 'Carottage' },
+  { value: 'other', label: 'Autre Méthode' },
 ];
 
 interface ReportFormProps {
@@ -132,10 +130,10 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
       setIsLoadingProjectsData(true);
       try {
         const allFetchedProjects = await getProjects();
-        const userProfile = await getUserById(user.uid);
-        const currentUserAssignedIds = userProfile?.assignedProjectIds || [];
+        const userProfile = await getUserById(user.uid); // Assuming getUserById returns User with assignments
+        const currentUserAssignments = userProfile?.assignments || [];
         
-        const userProjects = allFetchedProjects.filter(p => currentUserAssignedIds.includes(p.id));
+        const userProjects = allFetchedProjects.filter(p => currentUserAssignments.some(a => a.projectId === p.id));
         setAssignedProjectsList(userProjects);
         
         if (!isEditMode && userProjects.length > 0 && !form.getValues('projectId')) {
@@ -145,8 +143,8 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
         }
 
       } catch (error) {
-        console.error("Failed to fetch projects for report form:", error);
-        toast({ variant: "destructive", title: "Error", description: "Could not load projects for selection." });
+        console.error("Échec de la récupération des projets pour le formulaire de rapport:", error);
+        toast({ variant: "destructive", title: "Erreur", description: "Impossible de charger les projets pour la sélection." });
         setAssignedProjectsList([]);
         if (!isEditMode) form.setValue('projectId', '');
       } finally {
@@ -188,7 +186,7 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
             form.setValue('projectId', '');
         }
     }
-  }, [reportToEdit, isEditMode, form, assignedProjectsList]); // Added assignedProjectsList dependency
+  }, [reportToEdit, isEditMode, form, assignedProjectsList]);
 
   const handlePhotoInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -213,7 +211,7 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
 
   const handleSubmitClick = async (data: ReportFormData, status: 'DRAFT' | 'SUBMITTED') => {
     if (!user) {
-      toast({ variant: 'destructive', title: 'Authentication Error', description: 'You must be logged in.' });
+      toast({ variant: 'destructive', title: 'Erreur d\'Authentification', description: 'Vous devez être connecté.' });
       return;
     }
     setIsSubmittingForm(true);
@@ -242,26 +240,22 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
         photoFileArg = null; 
     }
 
-    toast({ title: 'Processing Report...', description: 'AI checking for anomalies...' });
+    toast({ title: 'Traitement du Rapport...', description: 'Vérification des anomalies par l\'IA...' });
     
     const { success, reportId, anomalyAssessment } = await onSubmitReport(reportPayload, status, photoFileArg);
     setCurrentAnomalyResult(anomalyAssessment || null);
 
     if (success) {
-      const actionVerb = isEditMode ? "updated" : "created";
-      const anomalyMessage = anomalyAssessment?.isAnomalous ? `Report ${actionVerb} and AI analysis complete.` : `Report ${actionVerb}. No anomalies detected.`;
+      const actionVerb = isEditMode ? "mis à jour" : "créé";
+      const anomalyMessage = anomalyAssessment?.isAnomalous ? `Rapport ${actionVerb} et analyse IA terminée.` : `Rapport ${actionVerb}. Aucune anomalie détectée.`;
       
       toast({
         variant: anomalyAssessment?.isAnomalous && status === 'SUBMITTED' ? 'default' : (anomalyAssessment?.isAnomalous ? 'destructive' : 'default'),
-        title: isEditMode ? 'Report Updated' : 'Report Created',
-        description: `${reportId ? `ID: ${reportId}. ` : ''}${anomalyMessage} ${status === 'DRAFT' && anomalyAssessment?.isAnomalous ? 'Anomaly detected in draft.' : ''}`,
+        title: isEditMode ? 'Rapport Mis à Jour' : 'Rapport Créé',
+        description: `${reportId ? `ID: ${reportId}. ` : ''}${anomalyMessage} ${status === 'DRAFT' && anomalyAssessment?.isAnomalous ? 'Anomalie détectée dans le brouillon.' : ''}`,
         duration: 7000,
       });
 
-      // Reset form logic:
-      // - In create mode, always reset.
-      // - In edit mode, reset only if it was a DRAFT submission.
-      // - If it was a SUBMITTED action in edit mode, the parent page handles navigation, so don't reset here.
       if (!isEditMode || status === 'DRAFT') {
         form.reset(initialReportFormValues);
         setPhotoPreviewUrl(null);
@@ -275,10 +269,10 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
     } else {
       toast({ 
         variant: 'destructive', 
-        title: status === 'SUBMITTED' && anomalyAssessment?.isAnomalous ? 'Submission Prevented by AI' : 'Error', 
+        title: status === 'SUBMITTED' && anomalyAssessment?.isAnomalous ? 'Soumission Empêchée par l\'IA' : 'Erreur', 
         description: anomalyAssessment?.isAnomalous 
           ? anomalyAssessment.explanation 
-          : `Failed to ${isEditMode ? 'update' : 'create'} report.`,
+          : `Échec de ${isEditMode ? 'la mise à jour' : 'la création'} du rapport.`,
         duration: 10000 
       });
     }
@@ -293,8 +287,8 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
       return (
         <Card className="shadow-xl">
           <CardHeader>
-            <CardTitle>{isEditMode ? "Edit Field Report" : "Submit Field Report"}</CardTitle>
-            <CardDescription>Loading form data...</CardDescription>
+            <CardTitle>{isEditMode ? "Modifier le Rapport de Terrain" : "Soumettre un Rapport de Terrain"}</CardTitle>
+            <CardDescription>Chargement des données du formulaire...</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -314,10 +308,10 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
   return (
     <Card className="shadow-xl">
       <CardHeader>
-        <CardTitle>{isEditMode ? "Edit Field Report" : "Submit Field Report"}</CardTitle>
+        <CardTitle>{isEditMode ? "Modifier le Rapport de Terrain" : "Soumettre un Rapport de Terrain"}</CardTitle>
         <CardDescription>
-          {isEditMode ? `Editing report ID: ${reportToEdit?.id}. ` : ""}
-          Enter the details for the material test report. All fields are required unless marked optional.
+          {isEditMode ? `Modification du rapport ID: ${reportToEdit?.id}. ` : ""}
+          Entrez les détails du rapport de test des matériaux. Tous les champs sont requis sauf indication contraire.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -329,7 +323,7 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
                 name="projectId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Project (Assigned to you)</FormLabel>
+                    <FormLabel>Projet (auquel vous êtes assigné)</FormLabel>
                     <Select 
                       onValueChange={field.onChange} 
                       value={field.value || ""} 
@@ -337,11 +331,11 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
                     >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder={assignedProjectsList.length === 0 ? "No projects assigned or loadable" : "Select an assigned project"} />
+                          <SelectValue placeholder={assignedProjectsList.length === 0 ? "Aucun projet assigné ou chargeable" : "Sélectionner un projet assigné"} />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {assignedProjectsList.length === 0 && <SelectItem value="-" disabled>{user ? "No projects assigned to you" : "Login to see projects"}</SelectItem>}
+                        {assignedProjectsList.length === 0 && <SelectItem value="-" disabled>{user ? "Aucun projet ne vous est assigné" : "Connectez-vous pour voir les projets"}</SelectItem>}
                         {assignedProjectsList.map(project => (
                           <SelectItem key={project.id} value={project.id}>{project.name} ({project.id})</SelectItem>
                         ))}
@@ -356,9 +350,9 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
                 name="batchNumber"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Batch Number</FormLabel>
+                    <FormLabel>Numéro de Lot</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., BATCH-XYZ-123" {...field} disabled={isSubmittingForm} />
+                      <Input placeholder="Ex: LOT-XYZ-123" {...field} disabled={isSubmittingForm} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -369,11 +363,11 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
                 name="materialType"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Material Type</FormLabel>
+                    <FormLabel>Type de Matériau</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value} disabled={isSubmittingForm}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select material type" />
+                          <SelectValue placeholder="Sélectionner le type de matériau" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
@@ -391,9 +385,9 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
                 name="supplier"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Supplier</FormLabel>
+                    <FormLabel>Fournisseur</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., Acme Materials Co." {...field} disabled={isSubmittingForm} />
+                      <Input placeholder="Ex: Matériaux Acme Ltée." {...field} disabled={isSubmittingForm} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -404,9 +398,9 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
                 name="temperature"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Temperature (°C)</FormLabel>
+                    <FormLabel>Température (°C)</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.1" placeholder="e.g., 25.5" {...field} disabled={isSubmittingForm} />
+                      <Input type="number" step="0.1" placeholder="Ex: 25.5" {...field} disabled={isSubmittingForm} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -419,7 +413,7 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
                   <FormItem>
                     <FormLabel>Volume (m³)</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.01" placeholder="e.g., 10.25" {...field} disabled={isSubmittingForm} />
+                      <Input type="number" step="0.01" placeholder="Ex: 10.25" {...field} disabled={isSubmittingForm} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -430,9 +424,9 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
                 name="density"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Density (kg/m³)</FormLabel>
+                    <FormLabel>Densité (kg/m³)</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.1" placeholder="e.g., 1500.0" {...field} disabled={isSubmittingForm} />
+                      <Input type="number" step="0.1" placeholder="Ex: 1500.0" {...field} disabled={isSubmittingForm} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -443,9 +437,9 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
                 name="humidity"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Humidity (%)</FormLabel>
+                    <FormLabel>Humidité (%)</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.1" placeholder="e.g., 60.5" {...field} disabled={isSubmittingForm} />
+                      <Input type="number" step="0.1" placeholder="Ex: 60.5" {...field} disabled={isSubmittingForm} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -456,11 +450,11 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
                 name="samplingMethod"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Sampling Method</FormLabel>
+                    <FormLabel>Méthode d'Échantillonnage</FormLabel>
                      <Select onValueChange={field.onChange} value={field.value} disabled={isSubmittingForm}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select sampling method" />
+                          <SelectValue placeholder="Sélectionner la méthode d'échantillonnage" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
@@ -479,7 +473,7 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
                 name="photo"
                 render={({ field }) => ( 
                   <FormItem>
-                    <FormLabel>Upload Photo (Optional)</FormLabel>
+                    <FormLabel>Télécharger une Photo (Optionnel)</FormLabel>
                     <FormControl>
                       <Input
                         type="file"
@@ -492,13 +486,13 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
                       />
                     </FormControl>
                     <FormDescription className="flex items-center">
-                      <Camera className="mr-2 h-4 w-4" /> Max {MAX_FILE_SIZE_MB}MB. JPG, PNG, WEBP.
+                      <Camera className="mr-2 h-4 w-4" /> Max {MAX_FILE_SIZE_MB}Mo. JPG, PNG, WEBP.
                     </FormDescription>
                     <FormMessage />
                     {photoPreviewUrl && (
                       <div className="mt-2 relative w-fit">
-                        <Image src={photoPreviewUrl} alt="Photo preview" width={200} height={200} className="rounded-md object-cover max-h-48 w-auto" data-ai-hint="material sample" />
-                         <Button variant="destructive" size="sm" className="absolute -top-2 -right-2 h-6 w-6 p-0 rounded-full" onClick={removePhotoPreview} type="button" disabled={isSubmittingForm} title="Remove photo">
+                        <Image src={photoPreviewUrl} alt="Aperçu de la photo" width={200} height={200} className="rounded-md object-cover max-h-48 w-auto" data-ai-hint="material sample" />
+                         <Button variant="destructive" size="sm" className="absolute -top-2 -right-2 h-6 w-6 p-0 rounded-full" onClick={removePhotoPreview} type="button" disabled={isSubmittingForm} title="Retirer la photo">
                             <X className="h-3 w-3"/>
                          </Button>
                       </div>
@@ -511,9 +505,9 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
                 name="notes"
                 render={({ field }) => (
                   <FormItem className="md:col-span-2">
-                    <FormLabel>Notes (Optional)</FormLabel>
+                    <FormLabel>Notes (Optionnel)</FormLabel>
                     <FormControl>
-                      <Textarea placeholder="Any additional observations or comments..." {...field} disabled={isSubmittingForm} />
+                      <Textarea placeholder="Toute observation ou commentaire supplémentaire..." {...field} disabled={isSubmittingForm} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -524,12 +518,12 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
                 name="attachmentUrls"
                 render={({ field }) => (
                   <FormItem className="md:col-span-2">
-                    <FormLabel>Other Attachment URLs (Optional, e.g., PDFs)</FormLabel>
+                    <FormLabel>Autres URLs de Pièces Jointes (Optionnel, ex: PDF)</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., https://example.com/doc.pdf" {...field} disabled={isSubmittingForm} />
+                      <Input placeholder="Ex: https://example.com/doc.pdf" {...field} disabled={isSubmittingForm} />
                     </FormControl>
                     <FormDescription className="flex items-center">
-                      <Paperclip className="mr-2 h-4 w-4" /> Comma-separated URLs for any attached documents, specs, etc.
+                      <Paperclip className="mr-2 h-4 w-4" /> URLs séparées par des virgules pour tout document joint, spécifications, etc.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -546,9 +540,9 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
                     disabled={isSubmittingForm || !user || (assignedProjectsList.length === 0 && !isEditMode) || pageLoading}
                 >
                 {isSubmittingForm && submitActionType === 'DRAFT' ? (
-                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</>
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sauvegarde...</>
                 ) : (
-                    <><Save className="mr-2 h-4 w-4" /> {isEditMode ? "Save Draft Changes" : "Save as Draft"}</>
+                    <><Save className="mr-2 h-4 w-4" /> {isEditMode ? "Enregistrer les Modifications du Brouillon" : "Enregistrer comme Brouillon"}</>
                 )}
                 </Button>
                 <Button 
@@ -558,9 +552,9 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
                     disabled={isSubmittingForm || !user || (assignedProjectsList.length === 0 && !isEditMode) || pageLoading}
                 >
                 {isSubmittingForm && submitActionType === 'SUBMITTED' ? (
-                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting...</>
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Soumission...</>
                 ) : (
-                    <><Send className="mr-2 h-4 w-4" /> {isEditMode ? "Submit Updated Report" : "Submit for Validation"}</>
+                    <><Send className="mr-2 h-4 w-4" /> {isEditMode ? "Soumettre le Rapport Modifié" : "Soumettre pour Validation"}</>
                 )}
                 </Button>
             </div>
@@ -571,7 +565,7 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
           <Alert variant={currentAnomalyResult.isAnomalous ? "destructive" : "default"} className="mt-6">
              {currentAnomalyResult.isAnomalous ? <AlertTriangleIcon className="h-4 w-4" /> : <Sparkles className="h-4 w-4 text-green-500" />}
             <AlertTitle className={currentAnomalyResult.isAnomalous ? "" : "text-green-700 dark:text-green-400"}>
-              {currentAnomalyResult.isAnomalous ? 'AI Anomaly Detection Result: Potential Anomaly Found' : 'AI Anomaly Detection Result: No Anomaly Detected'}
+              {currentAnomalyResult.isAnomalous ? 'Résultat Détection Anomalie IA : Anomalie Potentielle Trouvée' : 'Résultat Détection Anomalie IA : Aucune Anomalie Détectée'}
             </AlertTitle>
             <AlertDescription className="whitespace-pre-wrap">
               {currentAnomalyResult.explanation}
@@ -582,4 +576,3 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
     </Card>
   );
 }
-

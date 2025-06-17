@@ -10,21 +10,21 @@
  */
 
 import {ai} from '@/ai/genkit';
-import { z } from 'zod'; // Corrected import
+import { z } from 'zod';
 
 const AssignmentNotificationInputSchema = z.object({
-  userName: z.string().describe("The name of the user being assigned the project."),
-  projectName: z.string().describe("The name of the project being assigned."),
-  projectLocation: z.string().describe("The location/address of the project."),
-  assignerName: z.string().describe("The name of the admin or supervisor assigning the project."),
-  appName: z.string().default("SiteWise Reports").describe("The name of the application."),
-  appUrl: z.string().describe("The base URL of the application for links.")
+  userName: z.string().describe("Le nom de l'utilisateur assigné au projet."),
+  projectName: z.string().describe("Le nom du projet assigné."),
+  projectLocation: z.string().describe("L'emplacement/adresse du projet."),
+  assignerName: z.string().describe("Le nom de l'administrateur ou du superviseur qui assigne le projet."),
+  appName: z.string().default("SiteWise Reports").describe("Le nom de l'application."),
+  appUrl: z.string().describe("L'URL de base de l'application pour les liens.")
 });
 export type AssignmentNotificationInput = z.infer<typeof AssignmentNotificationInputSchema>;
 
 const AssignmentNotificationOutputSchema = z.object({
-  emailSubject: z.string().describe("A concise subject line for the notification email, including the project name."),
-  emailBody: z.string().describe("The full HTML body of the email, including a greeting, project details, a call to action link, and closing remarks."),
+  emailSubject: z.string().describe("Un sujet concis pour l'e-mail de notification, incluant le nom du projet."),
+  emailBody: z.string().describe("Le corps HTML complet de l'e-mail, incluant une salutation, les détails du projet, un lien d'appel à l'action, et des remarques de clôture."),
 });
 export type AssignmentNotificationOutput = z.infer<typeof AssignmentNotificationOutputSchema>;
 
@@ -38,31 +38,32 @@ const assignmentNotificationPrompt = ai.definePrompt({
   name: 'assignmentNotificationEmailPrompt',
   input: {schema: AssignmentNotificationInputSchema},
   output: {schema: AssignmentNotificationOutputSchema},
-  prompt: `You are an assistant responsible for generating the content for a project assignment notification email for the application "{{appName}}".
-The user "{{userName}}" has been assigned to the project "{{projectName}}" (located at "{{projectLocation}}") by "{{assignerName}}".
-The application URL is {{appUrl}}.
+  prompt: `Vous êtes un assistant chargé de générer le contenu d'un e-mail de notification d'assignation de projet pour l'application "{{appName}}".
+L'utilisateur "{{userName}}" a été assigné au projet "{{projectName}}" (situé à "{{projectLocation}}") par "{{assignerName}}".
+L'URL de l'application est {{appUrl}}.
 
-Generate the following for the email:
-1.  emailSubject: A clear and concise subject line indicating a new project assignment and mentioning the project name.
-2.  emailBody: The full HTML body of the email. It should include:
-    - A polite greeting to {{userName}}.
-    - An introduction stating they've been assigned to {{projectName}} by {{assignerName}}.
-    - The project name and location clearly displayed.
-    - A call to action, like a button or link, with text like "View Project Details in {{appName}}" or "Access {{appName}}", linking to {{appUrl}}/my-projects or a relevant project page.
-    - A friendly closing remark.
-    - Basic HTML structure (e.g., paragraphs <p>, line breaks <br>, bold <strong>, links <a>). Ensure the link is functional using {{appUrl}}.
+Générez ce qui suit pour l'e-mail (EN FRANÇAIS) :
+1.  emailSubject: Un sujet clair et concis indiquant une nouvelle assignation de projet et mentionnant le nom du projet.
+2.  emailBody: Le corps HTML complet de l'e-mail. Il doit inclure :
+    - Une salutation polie à {{userName}}.
+    - Une introduction indiquant qu'il/elle a été assigné(e) à {{projectName}} par {{assignerName}}.
+    - Le nom et l'emplacement du projet clairement affichés.
+    - Un appel à l'action, comme un bouton ou un lien, avec un texte comme "Voir les détails du projet dans {{appName}}" ou "Accéder à {{appName}}", pointant vers {{appUrl}}/my-projects ou une page de projet pertinente.
+    - Une formule de politesse.
+    - Une structure HTML de base (par ex., paragraphes <p>, sauts de ligne <br>, gras <strong>, liens <a>). Assurez-vous que le lien est fonctionnel en utilisant {{appUrl}}.
 
-Example email body structure:
-<p>Hello {{userName}},</p>
-<p>You've been assigned to a new project by {{assignerName}}:</p>
-<p><strong>Project:</strong> {{projectName}}</p>
-<p><strong>Location:</strong> {{projectLocation}}</p>
-<p>You can find more details by logging into {{appName}}.</p>
-<p><a href="{{appUrl}}/my-projects" target="_blank">View Project Details in {{appName}}</a></p>
-<p>Best regards,<br>The {{appName}} Team</p>
+Exemple de structure du corps de l'e-mail :
+<p>Bonjour {{userName}},</p>
+<p>Vous avez été assigné(e) à un nouveau projet par {{assignerName}} :</p>
+<p><strong>Projet :</strong> {{projectName}}</p>
+<p><strong>Lieu :</strong> {{projectLocation}}</p>
+<p>Vous pouvez trouver plus de détails en vous connectant à {{appName}}.</p>
+<p><a href="{{appUrl}}/my-projects" target="_blank">Voir les détails du projet dans {{appName}}</a></p>
+<p>Cordialement,<br>L'équipe {{appName}}</p>
 
-Ensure the tone is professional and encouraging.
-The final output for emailBody should be a single string containing valid HTML.
+Assurez-vous que le ton est professionnel et encourageant.
+La sortie finale pour emailBody doit être une seule chaîne contenant du HTML valide.
+La langue de sortie doit être le FRANÇAIS.
 `,
 });
 

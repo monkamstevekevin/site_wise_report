@@ -37,7 +37,7 @@ export async function addNotification(
   notificationData: NewNotificationPayload
 ): Promise<string> {
   if (!userId) {
-    throw new Error('User ID is required to add a notification.');
+    throw new Error('L\'ID utilisateur est requis pour ajouter une notification.');
   }
   try {
     const notificationsCollectionRef = collection(db, 'users', userId, 'notifications');
@@ -49,8 +49,8 @@ export async function addNotification(
     return docRef.id;
   } catch (error) {
     const firestoreError = error as FirestoreError;
-    console.error(`Error adding notification for user ${userId}: `, firestoreError);
-    throw new Error(`Failed to add notification. Firebase Error: ${firestoreError.code} - ${firestoreError.message}.`);
+    console.error(`Erreur lors de l'ajout de la notification pour l'utilisateur ${userId}: `, firestoreError);
+    throw new Error(`Échec de l'ajout de la notification. Erreur Firebase : ${firestoreError.code} - ${firestoreError.message}.`);
   }
 }
 
@@ -63,7 +63,7 @@ export async function addNotification(
  */
 export async function markNotificationAsRead(userId: string, notificationId: string): Promise<void> {
   if (!userId || !notificationId) {
-    throw new Error('User ID and Notification ID are required.');
+    throw new Error('L\'ID utilisateur et l\'ID de notification sont requis.');
   }
   try {
     const notificationDocRef = doc(db, 'users', userId, 'notifications', notificationId);
@@ -72,8 +72,8 @@ export async function markNotificationAsRead(userId: string, notificationId: str
     });
   } catch (error) {
     const firestoreError = error as FirestoreError;
-    console.error(`Error marking notification ${notificationId} as read for user ${userId}: `, firestoreError);
-    throw new Error(`Failed to mark notification as read. Firebase Error: ${firestoreError.code} - ${firestoreError.message}.`);
+    console.error(`Erreur lors de la mise à jour de la notification ${notificationId} comme lue pour l'utilisateur ${userId}: `, firestoreError);
+    throw new Error(`Échec de la mise à jour de la notification comme lue. Erreur Firebase : ${firestoreError.code} - ${firestoreError.message}.`);
   }
 }
 
@@ -85,7 +85,7 @@ export async function markNotificationAsRead(userId: string, notificationId: str
  */
 export async function markAllNotificationsAsRead(userId: string): Promise<void> {
   if (!userId) {
-    throw new Error('User ID is required.');
+    throw new Error('L\'ID utilisateur est requis.');
   }
   try {
     const notificationsCollectionRef = collection(db, 'users', userId, 'notifications');
@@ -103,7 +103,7 @@ export async function markAllNotificationsAsRead(userId: string): Promise<void> 
     await batch.commit();
   } catch (error) {
     const firestoreError = error as FirestoreError;
-    console.error(`Error marking all notifications as read for user ${userId}: `, firestoreError);
-    throw new Error(`Failed to mark all notifications as read. Firebase Error: ${firestoreError.code} - ${firestoreError.message}.`);
+    console.error(`Erreur lors de la mise à jour de toutes les notifications comme lues pour l'utilisateur ${userId}: `, firestoreError);
+    throw new Error(`Échec de la mise à jour de toutes les notifications comme lues. Erreur Firebase : ${firestoreError.code} - ${firestoreError.message}.`);
   }
 }

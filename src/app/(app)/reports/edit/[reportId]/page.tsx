@@ -7,7 +7,7 @@ import { PageTitle } from '@/components/common/PageTitle';
 import { FileText, ArrowLeft, Loader2, AlertTriangleIcon, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { ReportForm, type ReportSubmitPayload } from '@/app/(app)/reports/create/components/ReportForm'; // Reusing the form
+import { ReportForm, type ReportSubmitPayload } from '@/app/(app)/reports/create/components/ReportForm';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { getReportById, updateReport } from '@/services/reportService';
@@ -78,7 +78,7 @@ export default function EditReportPage() {
           }
         })
         .catch(err => {
-          console.error("Error fetching report for editing:", err);
+          console.error("Erreur de récupération du rapport pour modification:", err);
           setErrorLoadingReport("Échec du chargement des données du rapport pour modification.");
         })
         .finally(() => setIsLoadingReport(false));
@@ -107,7 +107,7 @@ export default function EditReportPage() {
       try {
         finalPhotoDataUri = await readFileAsDataURL(photoFile);
       } catch (error) {
-        console.error("Error reading photo file for update:", error);
+        console.error("Erreur de lecture du fichier photo pour mise à jour:", error);
         toast({ variant: 'destructive', title: 'Erreur Photo', description: 'Impossible de traiter la nouvelle photo.' });
         return { success: false };
       }
@@ -119,13 +119,10 @@ export default function EditReportPage() {
         photoDataUri: finalPhotoDataUri,
         status: status, 
         updatedAt: new Date().toISOString(),
-        // aiIsAnomalous and aiAnomalyExplanation will be populated by detectReportAnomaly
     };
     const assessment = await detectReportAnomaly(tempReportForAI);
 
     if (status === 'SUBMITTED' && assessment.isAnomalous) {
-       // Even if submission is blocked, we might want to save the AI assessment
-      // For now, just return to the form
       return { success: false, anomalyAssessment: assessment };
     }
 
@@ -152,7 +149,7 @@ export default function EditReportPage() {
       }
       return { success: true, reportId: reportToEdit.id, anomalyAssessment: assessment };
     } catch (error) {
-      console.error('Error updating report:', error);
+      console.error('Erreur de mise à jour du rapport:', error);
       return { success: false, anomalyAssessment: assessment };
     }
   };

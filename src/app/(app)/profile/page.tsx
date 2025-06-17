@@ -21,8 +21,8 @@ import Image from 'next/image';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 
 const profileFormSchema = z.object({
-  displayName: z.string().min(1, 'Display name is required').max(50, 'Display name is too long'),
-  photoURL: z.string().optional(), // Can be data URI, http/s URL, or empty
+  displayName: z.string().min(1, 'Le nom d\'affichage est requis').max(50, 'Le nom d\'affichage est trop long'),
+  photoURL: z.string().optional(),
 });
 
 type ProfileFormData = z.infer<typeof profileFormSchema>;
@@ -53,7 +53,6 @@ export default function ProfilePage() {
     },
   });
 
-  // Effect to initialize form when user data is available or when not editing
   useEffect(() => {
     if (user && !isEditing) {
       const currentPhoto = user.photoURL || '';
@@ -65,7 +64,6 @@ export default function ProfilePage() {
     }
   }, [user, form, isEditing]);
   
-  // Effect to initialize form when entering edit mode
   const initializeFormForEditing = () => {
     if (user) {
       const currentPhoto = user.photoURL || '';
@@ -82,11 +80,11 @@ export default function ProfilePage() {
     const file = event.target.files?.[0];
     if (file) {
       if (file.size > MAX_FILE_SIZE_BYTES) {
-        toast({ variant: 'destructive', title: 'File too large', description: `Max image size is ${MAX_FILE_SIZE_MB}MB.` });
+        toast({ variant: 'destructive', title: 'Fichier trop volumineux', description: `La taille maximale de l'image est de ${MAX_FILE_SIZE_MB}Mo.` });
         return;
       }
       if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
-        toast({ variant: 'destructive', title: 'Invalid file type', description: 'Only .jpg, .jpeg, .png, and .webp are supported.' });
+        toast({ variant: 'destructive', title: 'Type de fichier invalide', description: 'Seuls les formats .jpg, .jpeg, .png et .webp sont pris en charge.' });
         return;
       }
       const reader = new FileReader();
@@ -110,18 +108,18 @@ export default function ProfilePage() {
           videoRef.current.srcObject = stream;
         }
       } catch (error) {
-        console.error('Error accessing camera:', error);
+        console.error('Erreur d\'accès à la caméra:', error);
         setHasCameraPermission(false);
         toast({
           variant: 'destructive',
-          title: 'Camera Access Denied',
-          description: 'Please enable camera permissions in your browser settings.',
+          title: 'Accès Caméra Refusé',
+          description: 'Veuillez activer les permissions de la caméra dans les paramètres de votre navigateur.',
         });
         setShowCameraDialog(false);
       }
     } else {
       setHasCameraPermission(false);
-      toast({ variant: 'destructive', title: 'Camera Not Supported', description: 'Your browser does not support camera access.' });
+      toast({ variant: 'destructive', title: 'Caméra Non Supportée', description: 'Votre navigateur ne supporte pas l\'accès à la caméra.' });
       setShowCameraDialog(false);
     }
   };
@@ -156,39 +154,35 @@ export default function ProfilePage() {
   const onSubmit = async (data: ProfileFormData) => {
     setIsSubmitting(true);
     if (!user) {
-      toast({ variant: 'destructive', title: 'Error', description: 'User not found.' });
+      toast({ variant: 'destructive', title: 'Erreur', description: 'Utilisateur non trouvé.' });
       setIsSubmitting(false);
       return;
     }
 
     try {
-      // data.photoURL here can be a data URI, an external URL, or an empty string/null
       const finalSavedPhotoURL = await updateUserProfile({ 
         displayName: data.displayName, 
         photoURL: data.photoURL 
       });
       
       toast({
-        title: 'Profile Updated',
-        description: 'Your profile information has been successfully updated.',
+        title: 'Profil Mis à Jour',
+        description: 'Vos informations de profil ont été mises à jour avec succès.',
       });
       
-      // Reset form with the definitive data from context (which should reflect storage URL)
-      // updateUserProfile in AuthContext updates the user object which triggers re-render and useEffect.
-      // We also explicitly reset the form here with the final URL for good measure.
       form.reset({
         displayName: data.displayName, 
-        photoURL: finalSavedPhotoURL || '', // Use the URL returned by updateUserProfile
+        photoURL: finalSavedPhotoURL || '',
       });
       setPhotoPreview(finalSavedPhotoURL || '');
       setIsEditing(false);
 
     } catch (error) {
-      console.error('Error updating profile:', error);
+      console.error('Erreur de mise à jour du profil:', error);
       toast({
         variant: 'destructive',
-        title: 'Update Failed',
-        description: (error as Error).message || 'Could not update profile.',
+        title: 'Échec de la Mise à Jour',
+        description: (error as Error).message || 'Impossible de mettre à jour le profil.',
       });
     } finally {
       setIsSubmitting(false);
@@ -203,7 +197,7 @@ export default function ProfilePage() {
   if (authLoading) {
     return (
       <div className="space-y-6">
-        <PageTitle title="My Profile" icon={UserCircle} subtitle="View and manage your profile details." />
+        <PageTitle title="Mon Profil" icon={UserCircle} subtitle="Afficher et gérer les détails de votre profil." />
         <Card className="shadow-lg">
           <CardHeader>
             <div className="flex items-center space-x-4">
@@ -230,23 +224,23 @@ export default function ProfilePage() {
 
   if (!user) {
     return (
-      <PageTitle title="My Profile" icon={UserCircle} subtitle="Please log in to view your profile." />
+      <PageTitle title="Mon Profil" icon={UserCircle} subtitle="Veuillez vous connecter pour voir votre profil." />
     );
   }
 
   return (
     <>
       <PageTitle 
-        title="My Profile" 
+        title="Mon Profil" 
         icon={UserCircle}
-        subtitle="View and manage your profile details."
+        subtitle="Afficher et gérer les détails de votre profil."
         actions={
           !isEditing && (
             <Button onClick={() => {
               setIsEditing(true);
               initializeFormForEditing();
             }} className="rounded-lg">
-              <Edit3 className="mr-2 h-4 w-4" /> Edit Profile
+              <Edit3 className="mr-2 h-4 w-4" /> Modifier le Profil
             </Button>
           )
         }
@@ -256,11 +250,11 @@ export default function ProfilePage() {
         <CardHeader>
           <div className="flex flex-col sm:flex-row items-center sm:items-start space-y-4 sm:space-y-0 sm:space-x-6">
             <Avatar className="h-24 w-24 sm:h-32 sm:w-32 border-2 border-primary shadow-md">
-              <AvatarImage src={currentAvatarSrc} alt={form.watch('displayName') || user.displayName || 'User'} data-ai-hint="user avatar" />
+              <AvatarImage src={currentAvatarSrc} alt={form.watch('displayName') || user.displayName || 'Utilisateur'} data-ai-hint="user avatar" />
               <AvatarFallback className="text-3xl sm:text-4xl">{user.email?.[0]?.toUpperCase() || 'U'}</AvatarFallback>
             </Avatar>
             <div className="text-center sm:text-left">
-              <CardTitle className="text-2xl sm:text-3xl">{isEditing ? form.watch('displayName') : (user.displayName || 'User Name')}</CardTitle>
+              <CardTitle className="text-2xl sm:text-3xl">{isEditing ? form.watch('displayName') : (user.displayName || 'Nom d\'utilisateur')}</CardTitle>
               <CardDescription className="text-base">{user.email}</CardDescription>
               <CardDescription className="text-sm mt-1">UID: {user.uid}</CardDescription>
             </div>
@@ -275,9 +269,9 @@ export default function ProfilePage() {
                   name="displayName"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Display Name</FormLabel>
+                      <FormLabel>Nom d'affichage</FormLabel>
                       <FormControl>
-                        <Input placeholder="Your full name" {...field} disabled={isSubmitting} />
+                        <Input placeholder="Votre nom complet" {...field} disabled={isSubmitting} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -285,10 +279,10 @@ export default function ProfilePage() {
                 />
                 
                 <div className="space-y-2">
-                    <FormLabel>Profile Photo</FormLabel>
+                    <FormLabel>Photo de Profil</FormLabel>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isSubmitting}>
-                            <Upload className="mr-2 h-4 w-4" /> Upload Photo
+                            <Upload className="mr-2 h-4 w-4" /> Télécharger une Photo
                         </Button>
                         <input
                             type="file"
@@ -298,7 +292,7 @@ export default function ProfilePage() {
                             className="hidden"
                         />
                         <Button type="button" variant="outline" onClick={openCamera} disabled={isSubmitting}>
-                            <CameraIcon className="mr-2 h-4 w-4" /> Take Photo
+                            <CameraIcon className="mr-2 h-4 w-4" /> Prendre une Photo
                         </Button>
                     </div>
                 </div>
@@ -308,10 +302,10 @@ export default function ProfilePage() {
                   name="photoURL"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Photo URL (or leave empty to clear)</FormLabel>
+                      <FormLabel>URL de la Photo (ou laisser vide pour effacer)</FormLabel>
                       <FormControl>
                         <Input 
-                          placeholder="Paste an image URL or leave empty to clear. Will show Storage URL after upload." 
+                          placeholder="Collez une URL d'image ou laissez vide pour effacer. Affichera l'URL de stockage après téléversement." 
                           {...field} 
                           value={field.value || ''} 
                           disabled={isSubmitting} 
@@ -322,7 +316,7 @@ export default function ProfilePage() {
                         />
                       </FormControl>
                       <FormDescription>
-                        After uploading or taking a photo, its data will appear here temporarily. After saving, if successful, a Firebase Storage URL will appear here.
+                        Après avoir téléchargé ou pris une photo, ses données apparaîtront ici temporairement. Après sauvegarde, si réussie, une URL Firebase Storage apparaîtra ici.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -330,16 +324,16 @@ export default function ProfilePage() {
                 />
                 {photoPreview && (
                   <div className="space-y-2">
-                    <Label>Current Photo Preview:</Label>
+                    <Label>Aperçu de la photo actuelle :</Label>
                     <div className="relative w-fit border p-2 rounded-md">
-                      <Image src={photoPreview} alt="Profile preview" width={150} height={150} className="rounded-md object-cover max-h-48 w-auto" data-ai-hint="profile preview" />
+                      <Image src={photoPreview} alt="Aperçu du profil" width={150} height={150} className="rounded-md object-cover max-h-48 w-auto" data-ai-hint="profile preview" />
                        <Button variant="ghost" size="icon" className="absolute -top-3 -right-3 h-7 w-7 bg-background rounded-full text-destructive hover:bg-destructive/10" 
                          onClick={() => { 
                             setPhotoPreview(null); 
                             form.setValue('photoURL', ''); 
                             if(fileInputRef.current) fileInputRef.current.value = ''; 
                          }} 
-                         title="Clear photo selection" type="button" disabled={isSubmitting}>
+                         title="Effacer la sélection de photo" type="button" disabled={isSubmitting}>
                           <XCircle className="h-5 w-5"/>
                        </Button>
                     </div>
@@ -349,7 +343,6 @@ export default function ProfilePage() {
                 <div className="flex space-x-2 justify-end pt-4">
                   <Button type="button" variant="outline" onClick={() => {
                     setIsEditing(false); 
-                    // Re-initialize form from user context when canceling
                     if (user) {
                         const currentPhoto = user.photoURL || '';
                         form.reset({ displayName: user.displayName || '', photoURL: currentPhoto });
@@ -357,10 +350,10 @@ export default function ProfilePage() {
                     }
                     if (fileInputRef.current) fileInputRef.current.value = '';
                   }} disabled={isSubmitting}>
-                    Cancel
+                    Annuler
                   </Button>
                   <Button type="submit" disabled={isSubmitting} className="rounded-lg">
-                    {isSubmitting ? <Loader2 className="animate-spin" /> : <Save className="mr-2 h-4 w-4" />} Save Changes
+                    {isSubmitting ? <Loader2 className="animate-spin" /> : <Save className="mr-2 h-4 w-4" />} Enregistrer les Modifications
                   </Button>
                 </div>
               </form>
@@ -368,19 +361,19 @@ export default function ProfilePage() {
           ) : (
             <div className="space-y-4 py-4">
               <div>
-                <Label className="text-sm text-muted-foreground">Display Name</Label>
-                <p className="text-lg">{user.displayName || 'Not set'}</p>
+                <Label className="text-sm text-muted-foreground">Nom d'affichage</Label>
+                <p className="text-lg">{user.displayName || 'Non défini'}</p>
               </div>
               <div>
                 <Label className="text-sm text-muted-foreground">Photo URL</Label>
                 {user.photoURL ? (
                   (user.photoURL.startsWith('data:image') || user.photoURL.startsWith('http')) ? (
-                     <Image src={user.photoURL} alt="Profile" width={100} height={100} className="rounded-md mt-1" data-ai-hint="profile image" />
+                     <Image src={user.photoURL} alt="Profil" width={100} height={100} className="rounded-md mt-1" data-ai-hint="profile image" />
                   ) : (
                      <p className="text-lg break-all">{user.photoURL}</p>
                   )
                 ) : (
-                  <p className="text-lg">Not set</p>
+                  <p className="text-lg">Non définie</p>
                 )}
               </div>
             </div>
@@ -397,21 +390,21 @@ export default function ProfilePage() {
       }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Take a Profile Photo</DialogTitle>
+            <DialogTitle>Prendre une Photo de Profil</DialogTitle>
           </DialogHeader>
           {hasCameraPermission === false && (
              <Alert variant="destructive">
                 <CameraIcon className="h-4 w-4" />
-                <AlertTitle>Camera Access Denied</AlertTitle>
+                <AlertTitle>Accès Caméra Refusé</AlertTitle>
                 <AlertDescription>
-                    Please enable camera permissions in your browser settings to use this feature. You may need to reload the page after granting permission.
+                    Veuillez activer les permissions de la caméra dans les paramètres de votre navigateur pour utiliser cette fonctionnalité. Vous devrez peut-être recharger la page après avoir accordé la permission.
                 </AlertDescription>
             </Alert>
           )}
            {hasCameraPermission === null && (
              <div className="flex items-center justify-center h-40">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <p className="ml-2">Requesting camera access...</p>
+                <p className="ml-2">Demande d'accès à la caméra...</p>
             </div>
           )}
           {hasCameraPermission && (
@@ -428,11 +421,11 @@ export default function ProfilePage() {
                         setCameraStream(null);
                     }
                 }}>
-                Cancel
+                Annuler
                 </Button>
             </DialogClose>
             <Button onClick={handleCapturePhoto} disabled={!hasCameraPermission || !cameraStream} className="rounded-lg">
-              <CameraIcon className="mr-2 h-4 w-4" /> Capture
+              <CameraIcon className="mr-2 h-4 w-4" /> Capturer
             </Button>
           </DialogFooter>
         </DialogContent>
