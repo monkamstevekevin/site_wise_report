@@ -23,9 +23,9 @@ import type { Material, MaterialType, MaterialValidationRules } from '@/lib/type
 import { Loader2, PlusCircle, Save, Thermometer, BarChart } from 'lucide-react';
 
 const materialFormSchema = z.object({
-  name: z.string().min(1, 'Material name is required').max(100, 'Material name is too long'),
+  name: z.string().min(1, 'Le nom du matériau est requis').max(100, 'Le nom du matériau est trop long'),
   type: z.enum(['cement', 'asphalt', 'gravel', 'sand', 'other'], {
-    required_error: 'Material type is required.',
+    required_error: 'Le type de matériau est requis.',
   }),
   minDensity: z.coerce.number().optional(),
   maxDensity: z.coerce.number().optional(),
@@ -35,31 +35,30 @@ const materialFormSchema = z.object({
   if (minDensity !== undefined && maxDensity !== undefined && minDensity > maxDensity) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: 'Min density cannot be greater than max density.',
+      message: 'La densité min ne peut pas être supérieure à la densité max.',
       path: ['minDensity'],
     });
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: 'Max density cannot be less than min density.',
+      message: 'La densité max ne peut pas être inférieure à la densité min.',
       path: ['maxDensity'],
     });
   }
   if (minTemperature !== undefined && maxTemperature !== undefined && minTemperature > maxTemperature) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: 'Min temperature cannot be greater than max temperature.',
+      message: 'La température min ne peut pas être supérieure à la température max.',
       path: ['minTemperature'],
     });
      ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: 'Max temperature cannot be less than min temperature.',
+      message: 'La température max ne peut pas être inférieure à la température min.',
       path: ['maxTemperature'],
     });
   }
 });
 
 export type MaterialFormData = z.infer<typeof materialFormSchema>;
-// This will be the type submitted to the service, including the nested validationRules
 export type MaterialSubmitData = {
   name: string;
   type: MaterialType;
@@ -68,7 +67,7 @@ export type MaterialSubmitData = {
 
 
 interface MaterialFormDialogProps {
-  children: React.ReactNode; // Trigger button
+  children: React.ReactNode;
   materialToEdit?: Material;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -76,11 +75,11 @@ interface MaterialFormDialogProps {
 }
 
 const materialTypeOptions: { value: MaterialType; label: string }[] = [
-  { value: 'cement', label: 'Cement' },
-  { value: 'asphalt', label: 'Asphalt' },
-  { value: 'gravel', label: 'Gravel' },
-  { value: 'sand', label: 'Sand' },
-  { value: 'other', label: 'Other' },
+  { value: 'cement', label: 'Ciment' },
+  { value: 'asphalt', label: 'Asphalte' },
+  { value: 'gravel', label: 'Gravier' },
+  { value: 'sand', label: 'Sable' },
+  { value: 'other', label: 'Autre' },
 ];
 
 export function MaterialFormDialog({ children, materialToEdit, open, onOpenChange, onFormSubmit }: MaterialFormDialogProps) {
@@ -122,14 +121,12 @@ export function MaterialFormDialog({ children, materialToEdit, open, onOpenChang
         ...(data.maxTemperature !== undefined && { maxTemperature: data.maxTemperature }),
       },
     };
-    // Remove validationRules if it's empty
     if (Object.keys(submitData.validationRules || {}).length === 0) {
         delete submitData.validationRules;
     }
 
     await onFormSubmit(submitData, materialToEdit?.id);
     setIsSubmitting(false);
-    // Dialog closing and form reset is handled by onOpenChange or useEffect in parent
   };
 
   return (
@@ -149,9 +146,9 @@ export function MaterialFormDialog({ children, materialToEdit, open, onOpenChang
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{materialToEdit ? 'Edit Material' : 'Add New Material'}</DialogTitle>
+          <DialogTitle>{materialToEdit ? 'Modifier le Matériau' : 'Ajouter un Nouveau Matériau'}</DialogTitle>
           <DialogDescription>
-            {materialToEdit ? "Modify the material's details below." : "Enter the details for the new material and its validation rules."}
+            {materialToEdit ? "Modifiez les détails du matériau ci-dessous." : "Entrez les détails du nouveau matériau et ses règles de validation."}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -161,9 +158,9 @@ export function MaterialFormDialog({ children, materialToEdit, open, onOpenChang
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Material Name</FormLabel>
+                  <FormLabel>Nom du Matériau</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., High-Strength Concrete C40" {...field} />
+                    <Input placeholder="Ex: Béton Haute Résistance C40" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -174,11 +171,11 @@ export function MaterialFormDialog({ children, materialToEdit, open, onOpenChang
               name="type"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Material Type</FormLabel>
+                  <FormLabel>Type de Matériau</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select material type" />
+                        <SelectValue placeholder="Sélectionner le type de matériau" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -193,16 +190,16 @@ export function MaterialFormDialog({ children, materialToEdit, open, onOpenChang
             />
             
             <div className="space-y-2 pt-2">
-                <h3 className="text-sm font-medium text-muted-foreground flex items-center"><BarChart className="mr-2 h-4 w-4" />Density Rules (kg/m³, Optional)</h3>
+                <h3 className="text-sm font-medium text-muted-foreground flex items-center"><BarChart className="mr-2 h-4 w-4" />Règles de Densité (kg/m³, Optionnel)</h3>
                 <div className="grid grid-cols-2 gap-4">
                 <FormField
                     control={form.control}
                     name="minDensity"
                     render={({ field }) => (
                     <FormItem>
-                        <FormLabel>Min Density</FormLabel>
+                        <FormLabel>Densité Min</FormLabel>
                         <FormControl>
-                        <Input type="number" placeholder="e.g., 1400" {...field} onChange={e => field.onChange(e.target.value === '' ? undefined : +e.target.value)} />
+                        <Input type="number" placeholder="Ex: 1400" {...field} onChange={e => field.onChange(e.target.value === '' ? undefined : +e.target.value)} />
                         </FormControl>
                         <FormMessage />
                     </FormItem>
@@ -213,9 +210,9 @@ export function MaterialFormDialog({ children, materialToEdit, open, onOpenChang
                     name="maxDensity"
                     render={({ field }) => (
                     <FormItem>
-                        <FormLabel>Max Density</FormLabel>
+                        <FormLabel>Densité Max</FormLabel>
                         <FormControl>
-                        <Input type="number" placeholder="e.g., 1600" {...field} onChange={e => field.onChange(e.target.value === '' ? undefined : +e.target.value)} />
+                        <Input type="number" placeholder="Ex: 1600" {...field} onChange={e => field.onChange(e.target.value === '' ? undefined : +e.target.value)} />
                         </FormControl>
                         <FormMessage />
                     </FormItem>
@@ -225,16 +222,16 @@ export function MaterialFormDialog({ children, materialToEdit, open, onOpenChang
             </div>
 
             <div className="space-y-2 pt-2">
-                <h3 className="text-sm font-medium text-muted-foreground flex items-center"><Thermometer className="mr-2 h-4 w-4" />Temperature Rules (°C, Optional)</h3>
+                <h3 className="text-sm font-medium text-muted-foreground flex items-center"><Thermometer className="mr-2 h-4 w-4" />Règles de Température (°C, Optionnel)</h3>
                  <div className="grid grid-cols-2 gap-4">
                 <FormField
                     control={form.control}
                     name="minTemperature"
                     render={({ field }) => (
                     <FormItem>
-                        <FormLabel>Min Temperature</FormLabel>
+                        <FormLabel>Température Min</FormLabel>
                         <FormControl>
-                        <Input type="number" placeholder="e.g., 5" {...field} onChange={e => field.onChange(e.target.value === '' ? undefined : +e.target.value)} />
+                        <Input type="number" placeholder="Ex: 5" {...field} onChange={e => field.onChange(e.target.value === '' ? undefined : +e.target.value)} />
                         </FormControl>
                         <FormMessage />
                     </FormItem>
@@ -245,9 +242,9 @@ export function MaterialFormDialog({ children, materialToEdit, open, onOpenChang
                     name="maxTemperature"
                     render={({ field }) => (
                     <FormItem>
-                        <FormLabel>Max Temperature</FormLabel>
+                        <FormLabel>Température Max</FormLabel>
                         <FormControl>
-                        <Input type="number" placeholder="e.g., 30" {...field} onChange={e => field.onChange(e.target.value === '' ? undefined : +e.target.value)} />
+                        <Input type="number" placeholder="Ex: 30" {...field} onChange={e => field.onChange(e.target.value === '' ? undefined : +e.target.value)} />
                         </FormControl>
                         <FormMessage />
                     </FormItem>
@@ -259,12 +256,12 @@ export function MaterialFormDialog({ children, materialToEdit, open, onOpenChang
             <DialogFooter className="pt-4">
               <DialogClose asChild>
                 <Button type="button" variant="outline" disabled={isSubmitting}>
-                  Cancel
+                  Annuler
                 </Button>
               </DialogClose>
               <Button type="submit" disabled={isSubmitting} className="rounded-lg">
                 {isSubmitting ? <Loader2 className="animate-spin" /> : (materialToEdit ? <Save className="mr-2 h-4 w-4"/> : <PlusCircle className="mr-2 h-4 w-4" />)}
-                {materialToEdit ? 'Save Changes' : 'Add Material'}
+                {materialToEdit ? 'Enregistrer les Modifications' : 'Ajouter le Matériau'}
               </Button>
             </DialogFooter>
           </form>

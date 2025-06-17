@@ -45,8 +45,8 @@ const getAssignmentsSummary = (assignments: UserAssignment[] | undefined): strin
   
   let summary = `${assignments.length} projet(s)`;
   const details: string[] = [];
-  if (fullTimeCount > 0) details.push(`${fullTimeCount} TPl`); // TPl for Temps Plein
-  if (partTimeCount > 0) details.push(`${partTimeCount} TPa`); // TPa for Temps Partiel
+  if (fullTimeCount > 0) details.push(`${fullTimeCount} TPl`);
+  if (partTimeCount > 0) details.push(`${partTimeCount} TPa`);
   
   if (details.length > 0) {
     summary += ` (${details.join(', ')})`;
@@ -73,21 +73,21 @@ export function UserTable({ users, onEditUser, onDeleteUser, onAssignProjects }:
 
 
   if (users.length === 0) {
-    return <p className="text-muted-foreground text-center py-8">No users match the current filters.</p>;
+    return <p className="text-muted-foreground text-center py-8">Aucun utilisateur ne correspond aux filtres actuels.</p>;
   }
 
   return (
     <div className="rounded-lg border shadow-sm overflow-hidden bg-card">
       <Table>
-        <TableCaption>A list of {users.length > 5 ? `${users.length} users` : 'users'} in the system.</TableCaption>
+        <TableCaption>Une liste de {users.length > 5 ? `${users.length} utilisateurs` : 'utilisateurs'} dans le système.</TableCaption>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-[80px]">User ID</TableHead>
-            <TableHead>Name</TableHead>
+            <TableHead className="w-[80px]">ID Utilisateur</TableHead>
+            <TableHead>Nom</TableHead>
             <TableHead>Email</TableHead>
-            <TableHead>Role</TableHead>
-            <TableHead>Assigned Projects</TableHead>
-            <TableHead>Created At</TableHead>
+            <TableHead>Rôle</TableHead>
+            <TableHead>Projets Assignés</TableHead>
+            <TableHead>Créé le</TableHead>
             <TableHead className="text-right w-[100px]">Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -111,25 +111,25 @@ export function UserTable({ users, onEditUser, onDeleteUser, onAssignProjects }:
               <TableCell className="text-xs">
                 {getAssignmentsSummary(user.assignments)}
               </TableCell>
-              <TableCell>{new Date(user.createdAt).toLocaleDateString()}</TableCell>
+              <TableCell>{new Date(user.createdAt).toLocaleDateString('fr-FR')}</TableCell>
               <TableCell className="text-right">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" className="h-8 w-8 p-0">
-                      <span className="sr-only">Open menu</span>
+                      <span className="sr-only">Ouvrir le menu</span>
                       <MoreVertical className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={() => handleEdit(user)}>
-                      <Edit className="mr-2 h-4 w-4" /> Edit User
+                      <Edit className="mr-2 h-4 w-4" /> Modifier l'Utilisateur
                     </DropdownMenuItem>
                      <DropdownMenuItem onClick={() => onAssignProjects(user)}>
-                      <Briefcase className="mr-2 h-4 w-4" /> Assign Projects
+                      <Briefcase className="mr-2 h-4 w-4" /> Assigner des Projets
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={() => handleDelete(user)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
-                      <Trash2 className="mr-2 h-4 w-4" /> Delete User
+                      <Trash2 className="mr-2 h-4 w-4" /> Supprimer l'Utilisateur
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -141,3 +141,4 @@ export function UserTable({ users, onEditUser, onDeleteUser, onAssignProjects }:
     </div>
   );
 }
+

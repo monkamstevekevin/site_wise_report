@@ -47,7 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         router.push('/auth/login');
       }
     } catch (error) {
-      console.error('Error signing out:', error);
+      console.error('Erreur de déconnexion:', error);
       const authError = error as AuthError;
       toast({ variant: 'destructive', title: 'Erreur de Déconnexion', description: authError.message || 'Impossible de se déconnecter.' });
     }
@@ -61,7 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       toast({ title: 'Connexion Réussie', description: 'Bienvenue !' });
     } catch (error) {
       const authError = error as AuthError;
-      console.error('Google Sign-In error:', authError);
+      console.error('Erreur de connexion Google:', authError);
       let errorMessage = authError.message || 'Une erreur inattendue s\'est produite lors de la connexion Google.';
       if (authError.code === 'auth/unauthorized-domain') {
         errorMessage = `Domaine non autorisé pour la connexion Google. Domaine actuel : ${typeof window !== 'undefined' ? window.location.origin : 'Inconnu'}. Veuillez l'ajouter dans votre console Firebase.`
@@ -153,3 +153,4 @@ export function useAuth() {
   }
   return context;
 }
+

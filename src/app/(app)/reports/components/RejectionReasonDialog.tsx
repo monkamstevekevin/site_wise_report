@@ -61,7 +61,7 @@ export function RejectionReasonDialog({
     try {
       await onConfirmRejection(report.id, data.reason);
     } catch (error) {
-      console.error("RejectionReasonDialog submission error:", error);
+      console.error("Erreur de soumission RejectionReasonDialog:", error);
     }
   };
 
@@ -113,3 +113,4 @@ export function RejectionReasonDialog({
     </Dialog>
   );
 }
+

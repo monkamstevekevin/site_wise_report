@@ -6,26 +6,26 @@ import { PageTitle } from '@/components/common/PageTitle';
 import { HardHat, PlusCircle, Filter, Loader2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ProjectTable } from './components/ProjectTable';
-import { ProjectFormDialog, type ProjectFormData } from './components/ProjectFormDialog'; // Import ProjectFormData
-import type { Project, Material } from '@/lib/types'; // Import Material
+import { ProjectFormDialog, type ProjectFormData } from './components/ProjectFormDialog';
+import type { Project, Material } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { getProjects, addProject, updateProject, deleteProject } from '@/services/projectService';
-import { getMaterials } from '@/services/materialService'; // Import getMaterials
-import type { ProjectSubmitData } from '@/services/projectService'; // Import correct ProjectSubmitData
+import { getMaterials } from '@/services/materialService';
+import type { ProjectSubmitData } from '@/services/projectService';
 
 const projectStatusFilterOptions: { value: Project['status'] | 'ALL'; label: string }[] = [
-  { value: 'ALL', label: 'All Statuses' },
-  { value: 'ACTIVE', label: 'Active' },
-  { value: 'INACTIVE', label: 'Inactive' },
-  { value: 'COMPLETED', label: 'Completed' },
+  { value: 'ALL', label: 'Tous les Statuts' },
+  { value: 'ACTIVE', label: 'Actif' },
+  { value: 'INACTIVE', label: 'Inactif' },
+  { value: 'COMPLETED', label: 'Terminé' },
 ];
 
 export default function ProjectManagementPage() {
   const [projects, setProjects] = useState<Project[]>([]);
-  const [allMaterials, setAllMaterials] = useState<Material[]>([]); // State for all materials
+  const [allMaterials, setAllMaterials] = useState<Material[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,12 +42,12 @@ export default function ProjectManagementPage() {
     try {
       const [fetchedProjects, fetchedMaterials] = await Promise.all([
         getProjects(),
-        getMaterials() // Fetch all materials
+        getMaterials()
       ]);
       setProjects(fetchedProjects);
       setAllMaterials(fetchedMaterials);
     } catch (err) {
-      setError((err as Error).message || "Failed to load project data or materials. Please try again later.");
+      setError((err as Error).message || "Échec du chargement des données du projet ou des matériaux. Veuillez réessayer plus tard.");
       console.error(err);
     } finally {
       setIsLoading(false);
@@ -72,15 +72,15 @@ export default function ProjectManagementPage() {
     try {
       await deleteProject(projectId);
       toast({
-        title: "Project Deleted",
-        description: `Project (ID: ${projectId}) has been successfully deleted.`,
+        title: "Projet Supprimé",
+        description: `Le projet (ID: ${projectId}) a été supprimé avec succès.`,
       });
-      await fetchData(); // Refresh the list
+      await fetchData(); 
     } catch (err) {
       toast({
         variant: "destructive",
-        title: "Failed to Delete Project",
-        description: (err as Error).message || "An unexpected error occurred.",
+        title: "Échec de la Suppression du Projet",
+        description: (err as Error).message || "Une erreur inattendue s'est produite.",
       });
     }
   };
@@ -88,7 +88,6 @@ export default function ProjectManagementPage() {
   const handleProjectFormSubmit = async (formData: ProjectFormData, id?: string) => {
     setIsProjectFormOpen(false); 
 
-    // Convert ProjectFormData to ProjectSubmitData expected by the service
     const submitData: ProjectSubmitData = {
       name: formData.name,
       location: formData.location,
@@ -104,35 +103,35 @@ export default function ProjectManagementPage() {
       try {
         await updateProject(id, submitData);
         toast({
-          title: "Project Updated Successfully",
-          description: `Project "${submitData.name}" has been updated.`,
+          title: "Projet Mis à Jour avec Succès",
+          description: `Le projet "${submitData.name}" a été mis à jour.`,
         });
       } catch (err) {
         toast({
           variant: "destructive",
-          title: "Failed to Update Project",
-          description: (err as Error).message || "An unexpected error occurred.",
+          title: "Échec de la Mise à Jour du Projet",
+          description: (err as Error).message || "Une erreur inattendue s'est produite.",
         });
-        setIsProjectFormOpen(true); // Re-open on error
+        setIsProjectFormOpen(true); 
       }
     } else {
       try {
         const newProjectId = await addProject(submitData);
         toast({
-          title: "Project Added Successfully",
-          description: `Project "${submitData.name}" (ID: ${newProjectId}) has been added.`,
+          title: "Projet Ajouté avec Succès",
+          description: `Le projet "${submitData.name}" (ID: ${newProjectId}) a été ajouté.`,
         });
       } catch (err) {
         toast({
           variant: "destructive",
-          title: "Failed to Add Project",
-          description: (err as Error).message || "An unexpected error occurred.",
+          title: "Échec de l'Ajout du Projet",
+          description: (err as Error).message || "Une erreur inattendue s'est produite.",
         });
-        setIsProjectFormOpen(true); // Re-open on error
+        setIsProjectFormOpen(true); 
       }
     }
     
-    await fetchData(); // Refresh projects and materials
+    await fetchData(); 
     setEditingProject(undefined); 
   };
 
@@ -149,9 +148,9 @@ export default function ProjectManagementPage() {
   return (
     <>
       <PageTitle
-        title="Project Management"
+        title="Gestion des Projets"
         icon={HardHat}
-        subtitle="Manage all construction projects and their details."
+        subtitle="Gérez tous les projets de construction et leurs détails."
         actions={
           <ProjectFormDialog
             open={isProjectFormOpen}
@@ -161,10 +160,10 @@ export default function ProjectManagementPage() {
             }}
             projectToEdit={editingProject}
             onFormSubmit={handleProjectFormSubmit}
-            allMaterials={allMaterials} // Pass all materials to the dialog
+            allMaterials={allMaterials}
           >
             <Button className="rounded-lg" onClick={handleAddNewProject}>
-              <PlusCircle className="mr-2 h-4 w-4" /> Add New Project
+              <PlusCircle className="mr-2 h-4 w-4" /> Ajouter un Nouveau Projet
             </Button>
           </ProjectFormDialog>
         }
@@ -173,21 +172,21 @@ export default function ProjectManagementPage() {
       <div className="mb-6 p-4 bg-card rounded-lg shadow-sm border">
         <div className="flex flex-col md:flex-row gap-4 items-end">
           <div className="flex-grow">
-            <Label htmlFor="project-search" className="mb-1 block text-sm font-medium">Search Projects</Label>
+            <Label htmlFor="project-search" className="mb-1 block text-sm font-medium">Rechercher des Projets</Label>
             <Input
               id="project-search"
               type="text"
-              placeholder="Search by name or location..."
+              placeholder="Rechercher par nom ou localisation..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full"
             />
           </div>
           <div>
-            <Label htmlFor="status-filter" className="mb-1 block text-sm font-medium">Filter by Status</Label>
+            <Label htmlFor="status-filter" className="mb-1 block text-sm font-medium">Filtrer par Statut</Label>
             <Select value={statusFilter} onValueChange={(value: Project['status'] | 'ALL') => setStatusFilter(value)}>
               <SelectTrigger className="w-full md:w-[180px]" id="status-filter">
-                <SelectValue placeholder="Filter by status" />
+                <SelectValue placeholder="Filtrer par statut" />
               </SelectTrigger>
               <SelectContent>
                 {projectStatusFilterOptions.map(option => (
@@ -197,20 +196,20 @@ export default function ProjectManagementPage() {
             </Select>
           </div>
            <Button variant="outline" onClick={() => { setSearchTerm(''); setStatusFilter('ALL');}} className="h-10">
-            <Filter className="mr-2 h-4 w-4" /> Clear Filters
+            <Filter className="mr-2 h-4 w-4" /> Effacer les Filtres
           </Button>
         </div>
       </div>
 
       {isLoading && (
         <div className="flex items-center justify-center py-10 text-muted-foreground">
-          <Loader2 className="mr-2 h-6 w-6 animate-spin" /> Loading projects and materials...
+          <Loader2 className="mr-2 h-6 w-6 animate-spin" /> Chargement des projets et matériaux...
         </div>
       )}
       {error && (
          <div className="text-center py-10 text-destructive bg-destructive/10 p-4 rounded-md">
             <AlertTriangle className="mx-auto h-8 w-8 mb-2" />
-           <p className="font-semibold">Error</p>
+           <p className="font-semibold">Erreur</p>
            <p>{error}</p>
          </div>
       )}
@@ -218,7 +217,7 @@ export default function ProjectManagementPage() {
         <div className="bg-card p-0 md:p-6 rounded-lg shadow-md">
           <ProjectTable
             projects={filteredProjects}
-            allMaterials={allMaterials} // Pass all materials to the table
+            allMaterials={allMaterials}
             onEditProject={handleEditProject} 
             onDeleteProject={handleDeleteProject}
           />
@@ -227,3 +226,4 @@ export default function ProjectManagementPage() {
     </>
   );
 }
+

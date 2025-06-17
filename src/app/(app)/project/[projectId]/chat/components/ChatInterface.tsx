@@ -83,7 +83,7 @@ export function ChatInterface({ projectId }: ChatInterfaceProps) {
       await addChatMessage(projectId, messagePayload);
       setNewMessage('');
     } catch (error) {
-      console.error("Error sending message:", error);
+      console.error("Erreur d'envoi du message:", error);
       toast({ variant: "destructive", title: "Échec de l'Envoi", description: (error as Error).message });
     } finally {
       setIsSending(false);
@@ -200,3 +200,4 @@ export function ChatInterface({ projectId }: ChatInterfaceProps) {
     </Card>
   );
 }
+

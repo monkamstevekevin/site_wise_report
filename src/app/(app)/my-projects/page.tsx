@@ -40,7 +40,7 @@ export default function MyProjectsPage() {
         setAllProjects(fetchedProjects);
         setCurrentUserData(fetchedCurrentUser);
       } catch (err) {
-        console.error("Error fetching data for My Projects:", err);
+        console.error("Erreur lors de la récupération des données pour Mes Projets:", err);
         setError((err as Error).message || "Échec du chargement des données du projet.");
       } finally {
         setIsLoading(false);
@@ -157,3 +157,4 @@ export default function MyProjectsPage() {
     </>
   );
 }
+

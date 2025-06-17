@@ -25,7 +25,7 @@ import type { Material } from '@/lib/types';
 interface MaterialTableProps {
   materials: Material[];
   onEditMaterial?: (material: Material) => void;
-  onDeleteMaterial?: (material: Material) => void; // Pass full material for context in dialog
+  onDeleteMaterial?: (material: Material) => void;
 }
 
 const materialTypeBadgeVariant: Record<Material['type'], "default" | "secondary" | "outline" | "destructive"> = {
@@ -40,19 +40,19 @@ const formatValidationRules = (rules?: Material['validationRules']): string => {
   if (!rules || Object.keys(rules).length === 0) return 'N/A';
   const parts: string[] = [];
   if (rules.minDensity !== undefined && rules.maxDensity !== undefined) {
-    parts.push(`Density: ${rules.minDensity}-${rules.maxDensity} kg/m³`);
+    parts.push(`Densité: ${rules.minDensity}-${rules.maxDensity} kg/m³`);
   } else if (rules.minDensity !== undefined) {
-    parts.push(`Min Density: ${rules.minDensity} kg/m³`);
+    parts.push(`Densité Min: ${rules.minDensity} kg/m³`);
   } else if (rules.maxDensity !== undefined) {
-    parts.push(`Max Density: ${rules.maxDensity} kg/m³`);
+    parts.push(`Densité Max: ${rules.maxDensity} kg/m³`);
   }
 
   if (rules.minTemperature !== undefined && rules.maxTemperature !== undefined) {
     parts.push(`Temp: ${rules.minTemperature}-${rules.maxTemperature} °C`);
   } else if (rules.minTemperature !== undefined) {
-    parts.push(`Min Temp: ${rules.minTemperature} °C`);
+    parts.push(`Temp Min: ${rules.minTemperature} °C`);
   } else if (rules.maxTemperature !== undefined) {
-    parts.push(`Max Temp: ${rules.maxTemperature} °C`);
+    parts.push(`Temp Max: ${rules.maxTemperature} °C`);
   }
   return parts.join(', ') || 'N/A';
 };
@@ -68,20 +68,20 @@ export function MaterialTable({ materials, onEditMaterial, onDeleteMaterial }: M
   };
 
   if (materials.length === 0) {
-    return <p className="text-muted-foreground text-center py-8">No materials match the current filters.</p>;
+    return <p className="text-muted-foreground text-center py-8">Aucun matériau ne correspond aux filtres actuels.</p>;
   }
 
   return (
     <div className="rounded-lg border shadow-sm overflow-hidden bg-card">
       <Table>
-        {materials.length > 5 && <TableCaption>A list of {materials.length} materials in the system.</TableCaption>}
+        {materials.length > 5 && <TableCaption>Une liste de {materials.length} matériaux dans le système.</TableCaption>}
         <TableHeader>
           <TableRow>
-            <TableHead className="w-[100px]">Material ID</TableHead>
-            <TableHead>Name</TableHead>
+            <TableHead className="w-[100px]">ID Matériau</TableHead>
+            <TableHead>Nom</TableHead>
             <TableHead>Type</TableHead>
-            <TableHead>Validation Rules</TableHead>
-            <TableHead>Created At</TableHead>
+            <TableHead>Règles de Validation</TableHead>
+            <TableHead>Créé le</TableHead>
             <TableHead className="text-right w-[100px]">Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -94,21 +94,21 @@ export function MaterialTable({ materials, onEditMaterial, onDeleteMaterial }: M
                 <Badge variant={materialTypeBadgeVariant[material.type] || 'outline'}>{material.type}</Badge>
               </TableCell>
               <TableCell className="text-xs">{formatValidationRules(material.validationRules)}</TableCell>
-              <TableCell>{new Date(material.createdAt).toLocaleDateString()}</TableCell>
+              <TableCell>{new Date(material.createdAt).toLocaleDateString('fr-FR')}</TableCell>
               <TableCell className="text-right">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" className="h-8 w-8 p-0">
-                      <span className="sr-only">Open menu</span>
+                      <span className="sr-only">Ouvrir le menu</span>
                       <MoreVertical className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={() => handleEdit(material)}>
-                       <Edit className="mr-2 h-4 w-4" /> Edit
+                       <Edit className="mr-2 h-4 w-4" /> Modifier
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleDelete(material)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
-                      <Trash2 className="mr-2 h-4 w-4" /> Delete
+                      <Trash2 className="mr-2 h-4 w-4" /> Supprimer
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -120,3 +120,4 @@ export function MaterialTable({ materials, onEditMaterial, onDeleteMaterial }: M
     </div>
   );
 }
+

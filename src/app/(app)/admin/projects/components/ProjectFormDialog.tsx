@@ -21,29 +21,30 @@ import {
   DialogTrigger,
   DialogClose,
 } from '@/components/ui/dialog';
-import type { Project, Material } from '@/lib/types'; // Import Material
+import type { Project, Material } from '@/lib/types';
 import { Loader2, PlusCircle, Save, CalendarIcon, TestTube2 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { format, parseISO } from 'date-fns';
+import { fr } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 const projectFormSchema = z.object({
-  name: z.string().min(1, 'Project name is required').max(100, 'Project name is too long'),
-  location: z.string().min(1, 'Location is required').max(100, 'Location is too long'),
-  description: z.string().max(500, 'Description is too long').optional().default(''),
+  name: z.string().min(1, 'Le nom du projet est requis').max(100, 'Le nom du projet est trop long'),
+  location: z.string().min(1, 'La localisation est requise').max(100, 'La localisation est trop longue'),
+  description: z.string().max(500, 'La description est trop longue').optional().default(''),
   status: z.enum(['ACTIVE', 'INACTIVE', 'COMPLETED'], {
-    required_error: 'Project status is required.',
+    required_error: 'Le statut du projet est requis.',
   }),
   startDate: z.date().optional(),
   endDate: z.date().optional(),
-  assignedMaterialIds: z.array(z.string()).optional().default([]), // Changed from assignedMaterialTypes
+  assignedMaterialIds: z.array(z.string()).optional().default([]),
 }).superRefine(({ startDate, endDate }, ctx) => {
   if (startDate && endDate && endDate < startDate) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: 'End date cannot be before the start date.',
+      message: 'La date de fin ne peut pas être antérieure à la date de début.',
       path: ['endDate'],
     });
   }
@@ -51,28 +52,19 @@ const projectFormSchema = z.object({
 
 export type ProjectFormData = z.infer<typeof projectFormSchema>;
 
-// This type is used by the service, ensure it matches what the service expects
-// The service itself now defines a compatible ProjectSubmitData based on this.
-// export type ProjectSubmitData = Omit<ProjectFormData, 'startDate' | 'endDate'> & {
-//   startDate?: string;
-//   endDate?: string;
-//   assignedMaterialIds?: string[]; // Changed
-// };
-// For now, we will rely on the service's definition of ProjectSubmitData.
-
 interface ProjectFormDialogProps {
-  children: React.ReactNode; // Trigger button
+  children: React.ReactNode;
   projectToEdit?: Project;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
-  onFormSubmit: (data: ProjectFormData, id?: string) => Promise<void>; // Changed to ProjectFormData
-  allMaterials: Material[]; // Add prop for all available materials
+  onFormSubmit: (data: ProjectFormData, id?: string) => Promise<void>;
+  allMaterials: Material[];
 }
 
 const projectStatusOptions: { value: Project['status']; label: string }[] = [
-  { value: 'ACTIVE', label: 'Active' },
-  { value: 'INACTIVE', label: 'Inactive' },
-  { value: 'COMPLETED', label: 'Completed' },
+  { value: 'ACTIVE', label: 'Actif' },
+  { value: 'INACTIVE', label: 'Inactif' },
+  { value: 'COMPLETED', label: 'Terminé' },
 ];
 
 
@@ -87,7 +79,7 @@ export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange,
       status: 'ACTIVE',
       startDate: undefined,
       endDate: undefined,
-      assignedMaterialIds: [], // Changed
+      assignedMaterialIds: [],
     }
   });
 
@@ -101,23 +93,16 @@ export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange,
           status: projectToEdit.status || 'ACTIVE',
           startDate: projectToEdit.startDate ? parseISO(projectToEdit.startDate) : undefined,
           endDate: projectToEdit.endDate ? parseISO(projectToEdit.endDate) : undefined,
-          assignedMaterialIds: projectToEdit.assignedMaterialIds || [], // Changed
+          assignedMaterialIds: projectToEdit.assignedMaterialIds || [],
         });
       } else {
-        form.reset({ name: '', location: '', description: '', status: 'ACTIVE', startDate: undefined, endDate: undefined, assignedMaterialIds: [] }); // Changed
+        form.reset({ name: '', location: '', description: '', status: 'ACTIVE', startDate: undefined, endDate: undefined, assignedMaterialIds: [] });
       }
     }
   }, [projectToEdit, form, open]);
 
   const onSubmit = async (data: ProjectFormData) => {
     setIsSubmitting(true);
-    // The data passed to onFormSubmit is now directly ProjectFormData
-    // The service will handle converting dates to ISO strings if necessary.
-    // The service now also expects ProjectSubmitData as defined in projectService.ts
-    // We need to ensure the onFormSubmit prop in the parent page expects ProjectFormData and transforms it if needed
-    // For simplicity, let's assume the parent page `ProjectManagementPage` will now handle the transformation of dates.
-    // Or, the `onFormSubmit` prop could be typed to accept `ProjectFormData` and the parent handles the conversion.
-    // For now, the onFormSubmit in ProjectManagementPage will do the conversion from ProjectFormData.
     await onFormSubmit(data, projectToEdit?.id);
     setIsSubmitting(false);
   };
@@ -133,16 +118,16 @@ export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange,
             status: projectToEdit.status,
             startDate: projectToEdit.startDate ? parseISO(projectToEdit.startDate) : undefined,
             endDate: projectToEdit.endDate ? parseISO(projectToEdit.endDate) : undefined,
-            assignedMaterialIds: projectToEdit.assignedMaterialIds || [], // Changed
-        } : { name: '', location: '', description: '', status: 'ACTIVE', startDate: undefined, endDate: undefined, assignedMaterialIds: [] }); // Changed
+            assignedMaterialIds: projectToEdit.assignedMaterialIds || [],
+        } : { name: '', location: '', description: '', status: 'ACTIVE', startDate: undefined, endDate: undefined, assignedMaterialIds: [] });
       }
     }}>
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{projectToEdit ? 'Edit Project' : 'Add New Project'}</DialogTitle>
+          <DialogTitle>{projectToEdit ? 'Modifier le Projet' : 'Ajouter un Nouveau Projet'}</DialogTitle>
           <DialogDescription>
-            {projectToEdit ? "Modify the project's details below." : "Enter the details for the new project."}
+            {projectToEdit ? "Modifiez les détails du projet ci-dessous." : "Entrez les détails du nouveau projet."}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -152,9 +137,9 @@ export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange,
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Project Name</FormLabel>
+                  <FormLabel>Nom du Projet</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., Downtown Tower Renovation" {...field} />
+                    <Input placeholder="Ex: Rénovation Tour Centre-Ville" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -165,9 +150,9 @@ export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange,
               name="location"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Location</FormLabel>
+                  <FormLabel>Localisation</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., Springfield, IL" {...field} />
+                    <Input placeholder="Ex: Springfield, IL" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -178,7 +163,7 @@ export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange,
               name="startDate"
               render={({ field }) => (
                 <FormItem className="flex flex-col">
-                  <FormLabel>Start Date (Optional)</FormLabel>
+                  <FormLabel>Date de Début (Optionnel)</FormLabel>
                   <Popover>
                     <PopoverTrigger asChild>
                       <FormControl>
@@ -190,9 +175,9 @@ export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange,
                           )}
                         >
                           {field.value ? (
-                            format(field.value, "PPP")
+                            format(field.value, "PPP", { locale: fr })
                           ) : (
-                            <span>Pick a date</span>
+                            <span>Choisir une date</span>
                           )}
                           <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                         </Button>
@@ -207,11 +192,12 @@ export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange,
                           (form.getValues("endDate") ? date > form.getValues("endDate")! : false) || date < new Date("1900-01-01")
                         }
                         initialFocus
+                        locale={fr}
                       />
                     </PopoverContent>
                   </Popover>
                   <FormDescription>
-                    When the project is scheduled to begin.
+                    Quand le projet est prévu pour commencer.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -222,7 +208,7 @@ export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange,
               name="endDate"
               render={({ field }) => (
                 <FormItem className="flex flex-col">
-                  <FormLabel>End Date (Optional)</FormLabel>
+                  <FormLabel>Date de Fin (Optionnel)</FormLabel>
                   <Popover>
                     <PopoverTrigger asChild>
                       <FormControl>
@@ -234,9 +220,9 @@ export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange,
                           )}
                         >
                           {field.value ? (
-                            format(field.value, "PPP")
+                            format(field.value, "PPP", { locale: fr })
                           ) : (
-                            <span>Pick a date</span>
+                            <span>Choisir une date</span>
                           )}
                           <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                         </Button>
@@ -251,11 +237,12 @@ export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange,
                           (form.getValues("startDate") ? date < form.getValues("startDate")! : false)
                         }
                         initialFocus
+                        locale={fr}
                       />
                     </PopoverContent>
                   </Popover>
                   <FormDescription>
-                    When the project is scheduled to be completed.
+                    Quand le projet est prévu pour être terminé.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -266,9 +253,9 @@ export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange,
               name="description"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Description (Optional)</FormLabel>
+                  <FormLabel>Description (Optionnel)</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="Brief overview of the project..." {...field} value={field.value || ''} rows={3} />
+                    <Textarea placeholder="Bref aperçu du projet..." {...field} value={field.value || ''} rows={3} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -276,16 +263,16 @@ export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange,
             />
             <FormField
               control={form.control}
-              name="assignedMaterialIds" // Changed
+              name="assignedMaterialIds"
               render={() => (
                 <FormItem>
                   <div className="mb-4">
                     <FormLabel className="text-base flex items-center">
                         <TestTube2 className="mr-2 h-4 w-4 text-muted-foreground" />
-                        Assign Materials to Project (Optional)
+                        Assigner des Matériaux au Projet (Optionnel)
                     </FormLabel>
                     <FormDescription>
-                      Select which specific materials (from Material Management) are expected to be tested for this project.
+                      Sélectionnez quels matériaux spécifiques (de la Gestion des Matériaux) sont prévus pour être testés pour ce projet.
                     </FormDescription>
                   </div>
                   {allMaterials.length > 0 ? (
@@ -295,7 +282,7 @@ export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange,
                         <FormField
                           key={material.id}
                           control={form.control}
-                          name="assignedMaterialIds" // Changed
+                          name="assignedMaterialIds"
                           render={({ field }) => {
                             return (
                               <FormItem
@@ -328,7 +315,7 @@ export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange,
                       </div>
                     </ScrollArea>
                   ) : (
-                    <p className="text-sm text-muted-foreground">No materials defined in Material Management. Add materials first to assign them here.</p>
+                    <p className="text-sm text-muted-foreground">Aucun matériau défini dans la Gestion des Matériaux. Ajoutez des matériaux d'abord pour les assigner ici.</p>
                   )}
                   <FormMessage />
                 </FormItem>
@@ -339,11 +326,11 @@ export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange,
               name="status"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Status</FormLabel>
+                  <FormLabel>Statut</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value || 'ACTIVE'} defaultValue={field.value || 'ACTIVE'}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select project status" />
+                        <SelectValue placeholder="Sélectionner le statut du projet" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -359,12 +346,12 @@ export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange,
             <DialogFooter>
               <DialogClose asChild>
                 <Button type="button" variant="outline" disabled={isSubmitting}>
-                  Cancel
+                  Annuler
                 </Button>
               </DialogClose>
-              <Button type="submit" disabled={isSubmitting || allMaterials.length === 0 && !projectToEdit} className="rounded-lg"> {/* Disable submit if no materials and creating new project */}
+              <Button type="submit" disabled={isSubmitting || allMaterials.length === 0 && !projectToEdit} className="rounded-lg">
                 {isSubmitting ? <Loader2 className="animate-spin" /> : (projectToEdit ? <Save className="mr-2 h-4 w-4"/> : <PlusCircle className="mr-2 h-4 w-4" />)}
-                {projectToEdit ? 'Save Changes' : 'Add Project'}
+                {projectToEdit ? 'Enregistrer les Modifications' : 'Ajouter le Projet'}
               </Button>
             </DialogFooter>
           </form>
@@ -373,3 +360,4 @@ export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange,
     </Dialog>
   );
 }
+

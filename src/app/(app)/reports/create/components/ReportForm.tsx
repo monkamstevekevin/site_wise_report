@@ -130,7 +130,7 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
       setIsLoadingProjectsData(true);
       try {
         const allFetchedProjects = await getProjects();
-        const userProfile = await getUserById(user.uid); // Assuming getUserById returns User with assignments
+        const userProfile = await getUserById(user.uid);
         const currentUserAssignments = userProfile?.assignments || [];
         
         const userProjects = allFetchedProjects.filter(p => currentUserAssignments.some(a => a.projectId === p.id));
@@ -240,7 +240,7 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
         photoFileArg = null; 
     }
 
-    toast({ title: 'Traitement du Rapport...', description: 'Vérification des anomalies par l\'IA...' });
+    toast({ title: 'Traitement du Rapport...', description: 'Vérification des anomalies par l\'IA en cours...' });
     
     const { success, reportId, anomalyAssessment } = await onSubmitReport(reportPayload, status, photoFileArg);
     setCurrentAnomalyResult(anomalyAssessment || null);
@@ -576,3 +576,4 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
     </Card>
   );
 }
+

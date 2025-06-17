@@ -18,6 +18,7 @@ import type { User, Project, UserAssignment } from '@/lib/types';
 import { Loader2, Save, CalendarDays } from 'lucide-react';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { format } from 'date-fns';
+import { fr } from 'date-fns/locale';
 
 interface AssignProjectsDialogProps {
   open: boolean;
@@ -31,11 +32,11 @@ type AssignmentType = UserAssignment['assignmentType'];
 type TempAssignment = { projectId: string; assignmentType: AssignmentType | 'NOT_ASSIGNED' };
 
 const formatDate = (dateString?: string) => {
-  if (!dateString) return 'N/A';
+  if (!dateString) return 'N/D';
   try {
-    return format(new Date(dateString), 'PP');
+    return format(new Date(dateString), 'PP', { locale: fr });
   } catch (e) {
-    return 'Invalid Date';
+    return 'Date invalide';
   }
 };
 
@@ -51,9 +52,6 @@ export function AssignProjectsDialog({
 
   useEffect(() => {
     if (user && open) {
-      // Initialize tempAssignments:
-      // For each project, find if the user has an assignment for it.
-      // If yes, use that assignmentType. Otherwise, set to 'NOT_ASSIGNED'.
       const initialAssignments = allProjects.map(project => {
         const existingAssignment = user.assignments?.find(a => a.projectId === project.id);
         return {
@@ -63,7 +61,7 @@ export function AssignProjectsDialog({
       });
       setTempAssignments(initialAssignments);
     } else if (!open) {
-      setTempAssignments([]); // Reset when dialog closes
+      setTempAssignments([]);
     }
   }, [user, allProjects, open]);
 
@@ -77,16 +75,15 @@ export function AssignProjectsDialog({
     if (!user) return;
     setIsSubmitting(true);
     try {
-      // Filter out 'NOT_ASSIGNED' and map to UserAssignment[]
       const finalAssignments: UserAssignment[] = tempAssignments
         .filter(a => a.assignmentType !== 'NOT_ASSIGNED')
         .map(a => ({
           projectId: a.projectId,
-          assignmentType: a.assignmentType as AssignmentType, // Cast because we filtered 'NOT_ASSIGNED'
+          assignmentType: a.assignmentType as AssignmentType,
         }));
       await onAssignProjects(user.id, finalAssignments);
     } catch (error) {
-      console.error("AssignProjectsDialog submission error:", error);
+      console.error("Erreur de soumission AssignProjectsDialog:", error);
     } finally {
       setIsSubmitting(false);
     }
@@ -98,14 +95,14 @@ export function AssignProjectsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Assign Projects & Type to {user.name}</DialogTitle>
+          <DialogTitle>Assigner des Projets & Type à {user.name}</DialogTitle>
           <DialogDescription>
-            Select projects and specify the assignment type (Part-time or Full-time).
+            Sélectionnez les projets et spécifiez le type d'assignation (Temps Partiel ou Temps Plein).
           </DialogDescription>
         </DialogHeader>
         <ScrollArea className="h-80 pr-2">
           <div className="space-y-4 py-4">
-            {allProjects.length === 0 && <p className="text-muted-foreground text-center">No projects available to assign.</p>}
+            {allProjects.length === 0 && <p className="text-muted-foreground text-center">Aucun projet disponible à assigner.</p>}
             {allProjects.map(project => {
               const currentAssignment = tempAssignments.find(a => a.projectId === project.id);
               return (
@@ -114,7 +111,7 @@ export function AssignProjectsDialog({
                     <p className="font-semibold text-foreground">{project.name}</p>
                     <p className="text-xs text-muted-foreground">
                       <CalendarDays className="inline-block mr-1 h-3 w-3" />
-                       {formatDate(project.startDate)} - {formatDate(project.endDate)} (Status: {project.status})
+                       {formatDate(project.startDate)} - {formatDate(project.endDate)} (Statut: {project.status})
                     </p>
                   </div>
                   <RadioGroup
@@ -125,15 +122,15 @@ export function AssignProjectsDialog({
                   >
                     <div className="flex items-center space-x-1.5">
                       <RadioGroupItem value="NOT_ASSIGNED" id={`none-${project.id}`} />
-                      <Label htmlFor={`none-${project.id}`} className="text-xs font-normal">Not Assigned</Label>
+                      <Label htmlFor={`none-${project.id}`} className="text-xs font-normal">Non Assigné</Label>
                     </div>
                     <div className="flex items-center space-x-1.5">
                       <RadioGroupItem value="PART_TIME" id={`part-${project.id}`} />
-                      <Label htmlFor={`part-${project.id}`} className="text-xs font-normal">Part-time</Label>
+                      <Label htmlFor={`part-${project.id}`} className="text-xs font-normal">Temps Partiel</Label>
                     </div>
                     <div className="flex items-center space-x-1.5">
                       <RadioGroupItem value="FULL_TIME" id={`full-${project.id}`} />
-                      <Label htmlFor={`full-${project.id}`} className="text-xs font-normal">Full-time</Label>
+                      <Label htmlFor={`full-${project.id}`} className="text-xs font-normal">Temps Plein</Label>
                     </div>
                   </RadioGroup>
                 </div>
@@ -144,15 +141,16 @@ export function AssignProjectsDialog({
         <DialogFooter>
           <DialogClose asChild>
             <Button type="button" variant="outline" disabled={isSubmitting}>
-              Cancel
+              Annuler
             </Button>
           </DialogClose>
           <Button onClick={handleSubmit} disabled={isSubmitting || allProjects.length === 0} className="rounded-lg">
             {isSubmitting ? <Loader2 className="animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-            Save Assignments
+            Enregistrer les Assignations
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
+

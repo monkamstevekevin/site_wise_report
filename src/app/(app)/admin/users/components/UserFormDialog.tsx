@@ -7,7 +7,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-// import { Label } from '@/components/ui/label'; // No longer directly used for form fields
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import {
@@ -24,34 +23,30 @@ import { useToast } from '@/hooks/use-toast';
 import type { UserRole } from '@/lib/types';
 import { Loader2, UserPlus, Save } from 'lucide-react';
 
-// Ajustement du schéma Zod pour le mot de passe
 const userFormSchema = z.object({
-  displayName: z.string().min(1, 'Name is required').max(100, 'Name is too long'),
-  email: z.string().email('Invalid email address'),
+  displayName: z.string().min(1, 'Le nom est requis').max(100, 'Le nom est trop long'),
+  email: z.string().email('Adresse e-mail invalide'),
   role: z.enum(['ADMIN', 'SUPERVISOR', 'TECHNICIAN'], {
-    required_error: 'Role is required.',
+    required_error: 'Le rôle est requis.',
   }),
-  // Permet une chaîne vide OU une chaîne d'au moins 6 caractères, OU undefined
   password: z.union([
-    z.string().length(0, { message: "Password should not be an empty string if provided." }), // Disallow "" if not optional, but allow optional
-    z.string().min(6, 'Password must be at least 6 characters')
+    z.string().length(0, { message: "Le mot de passe ne doit pas être une chaîne vide s'il est fourni." }),
+    z.string().min(6, 'Le mot de passe doit comporter au moins 6 caractères')
   ]).optional(),
   confirmPassword: z.string().optional(),
 }).superRefine(({ confirmPassword, password, ...rest }, ctx) => {
-  // Cette superRefine s'appliquera si un mot de passe est effectivement fourni et n'est pas une chaîne vide.
-  // La validation de l'obligation du mot de passe pour la création se fera dans onSubmit.
   if (password && password.length > 0) {
     if (confirmPassword !== password) {
       ctx.addIssue({
         code: "custom",
-        message: "Passwords do not match",
+        message: "Les mots de passe ne correspondent pas",
         path: ["confirmPassword"],
       });
     }
-    if (!confirmPassword) { // Si un mot de passe est fourni, la confirmation l'est aussi.
+    if (!confirmPassword) { 
         ctx.addIssue({
             code: "custom",
-            message: "Please confirm your password",
+            message: "Veuillez confirmer votre mot de passe",
             path: ["confirmPassword"],
         });
     }
@@ -62,17 +57,17 @@ const userFormSchema = z.object({
 export type UserFormData = z.infer<typeof userFormSchema>;
 
 interface UserFormDialogProps {
-  children: React.ReactNode; // Trigger button
-  userToEdit?: Partial<UserFormData> & { id?: string }; // For editing existing users
+  children: React.ReactNode;
+  userToEdit?: Partial<UserFormData> & { id?: string };
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   onFormSubmit: (data: Partial<UserFormData> & { password?: string }, id?: string) => Promise<void>;
 }
 
 const userRoleOptions: { value: UserRole; label: string }[] = [
-  { value: 'ADMIN', label: 'Admin' },
-  { value: 'SUPERVISOR', label: 'Supervisor' },
-  { value: 'TECHNICIAN', label: 'Technician' },
+  { value: 'ADMIN', label: 'Administrateur' },
+  { value: 'SUPERVISOR', label: 'Superviseur' },
+  { value: 'TECHNICIAN', label: 'Technicien' },
 ];
 
 export function UserFormDialog({ children, userToEdit, open, onOpenChange, onFormSubmit }: UserFormDialogProps) {
@@ -85,7 +80,7 @@ export function UserFormDialog({ children, userToEdit, open, onOpenChange, onFor
       displayName: '',
       email: '',
       role: 'TECHNICIAN',
-      password: '', // Laissé vide, le schéma optionnel et length(0) devrait le gérer
+      password: '',
       confirmPassword: '',
     },
   });
@@ -97,11 +92,10 @@ export function UserFormDialog({ children, userToEdit, open, onOpenChange, onFor
           displayName: userToEdit.displayName || '',
           email: userToEdit.email || '',
           role: userToEdit.role || 'TECHNICIAN',
-          password: '', // Les mots de passe ne sont pas pré-remplis pour l'édition
+          password: '',
           confirmPassword: '',
         });
       } else {
-        // Pour un nouvel utilisateur, on peut laisser les mots de passe vides pour que l'utilisateur les remplisse
         form.reset({ displayName: '', email: '', role: 'TECHNICIAN', password: '', confirmPassword: '' });
       }
     }
@@ -110,37 +104,33 @@ export function UserFormDialog({ children, userToEdit, open, onOpenChange, onFor
   const onSubmit = async (data: UserFormData) => {
     setIsSubmitting(true);
 
-    // Validation spécifique pour le mode création
-    if (!userToEdit) { // Mode Création
+    if (!userToEdit) { 
       if (!data.password || data.password.length < 6) {
-         form.setError("password", { type: "manual", message: "Password is required and must be at least 6 characters."});
+         form.setError("password", { type: "manual", message: "Le mot de passe est requis et doit comporter au moins 6 caractères."});
          setIsSubmitting(false);
          return; 
       }
       if (data.password !== data.confirmPassword) {
-        form.setError("confirmPassword", { type: "manual", message: "Passwords do not match."});
+        form.setError("confirmPassword", { type: "manual", message: "Les mots de passe ne correspondent pas."});
         setIsSubmitting(false);
         return; 
       }
     }
 
-    // Préparer les données pour onFormSubmit
     const dataToSend: Partial<UserFormData> & { password?: string } = {
         displayName: data.displayName,
-        email: data.email, // L'email n'est pas modifiable en édition via ce formulaire mais fait partie des données
+        email: data.email,
         role: data.role,
     };
 
     if (!userToEdit && data.password) {
         dataToSend.password = data.password;
     }
-    // Exclure confirmPassword n'est plus nécessaire car dataToSend est construit explicitement
 
     try {
       await onFormSubmit(dataToSend, userToEdit?.id);
     } catch (error) {
-      console.error("UserFormDialog submission error:", error);
-      // Le toast d'erreur est géré par la page parente via le catch de onFormSubmit
+      console.error("Erreur de soumission UserFormDialog:", error);
     } finally {
       setIsSubmitting(false);
     }
@@ -162,9 +152,9 @@ export function UserFormDialog({ children, userToEdit, open, onOpenChange, onFor
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{userToEdit ? 'Edit User' : 'Add New User'}</DialogTitle>
+          <DialogTitle>{userToEdit ? 'Modifier l\'Utilisateur' : 'Ajouter un Nouvel Utilisateur'}</DialogTitle>
           <DialogDescription>
-            {userToEdit ? "Modify the user's details below." : "Enter the details for the new user."}
+            {userToEdit ? "Modifiez les détails de l'utilisateur ci-dessous." : "Entrez les détails du nouvel utilisateur."}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -174,9 +164,9 @@ export function UserFormDialog({ children, userToEdit, open, onOpenChange, onFor
               name="displayName"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Full Name</FormLabel>
+                  <FormLabel>Nom Complet</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., John Doe" {...field} />
+                    <Input placeholder="Ex: Jean Dupont" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -187,11 +177,11 @@ export function UserFormDialog({ children, userToEdit, open, onOpenChange, onFor
               name="email"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Email Address</FormLabel>
+                  <FormLabel>Adresse Email</FormLabel>
                   <FormControl>
-                    <Input type="email" placeholder="e.g., user@example.com" {...field} disabled={!!userToEdit} />
+                    <Input type="email" placeholder="Ex: utilisateur@example.com" {...field} disabled={!!userToEdit} />
                   </FormControl>
-                  {!!userToEdit && <FormMessage>Email cannot be changed after creation.</FormMessage>}
+                  {!!userToEdit && <FormMessage>L'email ne peut pas être modifié après la création.</FormMessage>}
                   {!userToEdit && <FormMessage />} 
                 </FormItem>
               )}
@@ -201,11 +191,11 @@ export function UserFormDialog({ children, userToEdit, open, onOpenChange, onFor
               name="role"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>User Role</FormLabel>
+                  <FormLabel>Rôle de l'Utilisateur</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select a role" />
+                        <SelectValue placeholder="Sélectionner un rôle" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -225,9 +215,9 @@ export function UserFormDialog({ children, userToEdit, open, onOpenChange, onFor
                   name="password"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Password</FormLabel>
+                      <FormLabel>Mot de passe</FormLabel>
                       <FormControl>
-                        <Input type="password" placeholder="Min. 6 characters" {...field} />
+                        <Input type="password" placeholder="Min. 6 caractères" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -238,9 +228,9 @@ export function UserFormDialog({ children, userToEdit, open, onOpenChange, onFor
                   name="confirmPassword"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Confirm Password</FormLabel>
+                      <FormLabel>Confirmer le Mot de passe</FormLabel>
                       <FormControl>
-                        <Input type="password" placeholder="Retype password" {...field} />
+                        <Input type="password" placeholder="Retapez le mot de passe" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -251,12 +241,12 @@ export function UserFormDialog({ children, userToEdit, open, onOpenChange, onFor
             <DialogFooter>
               <DialogClose asChild>
                 <Button type="button" variant="outline" disabled={isSubmitting}>
-                  Cancel
+                  Annuler
                 </Button>
               </DialogClose>
               <Button type="submit" disabled={isSubmitting} className="rounded-lg">
                 {isSubmitting ? <Loader2 className="animate-spin" /> : (userToEdit ? <Save className="mr-2 h-4 w-4"/> : <UserPlus className="mr-2 h-4 w-4" />)}
-                {userToEdit ? 'Save Changes' : 'Add User'}
+                {userToEdit ? 'Enregistrer les Modifications' : 'Ajouter l\'Utilisateur'}
               </Button>
             </DialogFooter>
           </form>
@@ -265,3 +255,4 @@ export function UserFormDialog({ children, userToEdit, open, onOpenChange, onFor
     </Dialog>
   );
 }
+

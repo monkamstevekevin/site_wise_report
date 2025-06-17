@@ -25,12 +25,12 @@ import {
 } from "@/components/ui/alert-dialog";
 
 const materialTypeFilterOptions: { value: MaterialType | 'ALL'; label: string }[] = [
-  { value: 'ALL', label: 'All Types' },
-  { value: 'cement', label: 'Cement' },
-  { value: 'asphalt', label: 'Asphalt' },
-  { value: 'gravel', label: 'Gravel' },
-  { value: 'sand', label: 'Sand' },
-  { value: 'other', label: 'Other' },
+  { value: 'ALL', label: 'Tous Types' },
+  { value: 'cement', label: 'Ciment' },
+  { value: 'asphalt', label: 'Asphalte' },
+  { value: 'gravel', label: 'Gravier' },
+  { value: 'sand', label: 'Sable' },
+  { value: 'other', label: 'Autre' },
 ];
 
 export default function MaterialManagementPage() {
@@ -55,7 +55,7 @@ export default function MaterialManagementPage() {
       const fetchedMaterials = await getMaterials();
       setMaterials(fetchedMaterials);
     } catch (err) {
-      setError((err as Error).message || "Failed to load materials. Please try again later.");
+      setError((err as Error).message || "Échec du chargement des matériaux. Veuillez réessayer plus tard.");
       console.error(err);
     } finally {
       setIsLoading(false);
@@ -86,15 +86,15 @@ export default function MaterialManagementPage() {
     try {
       await deleteMaterial(materialToDelete.id);
       toast({
-        title: "Material Deleted",
-        description: `Material "${materialToDelete.name}" (ID: ${materialToDelete.id}) has been deleted.`,
+        title: "Matériau Supprimé",
+        description: `Le matériau "${materialToDelete.name}" (ID: ${materialToDelete.id}) a été supprimé.`,
       });
       await fetchMaterials();
     } catch (err) {
       toast({
         variant: "destructive",
-        title: "Failed to Delete Material",
-        description: (err as Error).message || "An unexpected error occurred.",
+        title: "Échec de la Suppression du Matériau",
+        description: (err as Error).message || "Une erreur inattendue s'est produite.",
       });
     } finally {
       setIsDeleteDialogOpen(false);
@@ -109,31 +109,31 @@ export default function MaterialManagementPage() {
       try {
         await updateMaterial(id, data);
         toast({
-          title: "Material Updated Successfully",
-          description: `Material "${data.name}" has been updated.`,
+          title: "Matériau Mis à Jour avec Succès",
+          description: `Le matériau "${data.name}" a été mis à jour.`,
         });
       } catch (err) {
         toast({
           variant: "destructive",
-          title: "Failed to Update Material",
-          description: (err as Error).message || "An unexpected error occurred.",
+          title: "Échec de la Mise à Jour du Matériau",
+          description: (err as Error).message || "Une erreur inattendue s'est produite.",
         });
-        setIsMaterialFormOpen(true); // Re-open dialog on error if needed
+        setIsMaterialFormOpen(true); 
       }
     } else {
       try {
         const newMaterialId = await addMaterial(data);
         toast({
-          title: "Material Added Successfully",
-          description: `Material "${data.name}" (ID: ${newMaterialId}) has been added.`,
+          title: "Matériau Ajouté avec Succès",
+          description: `Le matériau "${data.name}" (ID: ${newMaterialId}) a été ajouté.`,
         });
       } catch (err) {
         toast({
           variant: "destructive",
-          title: "Failed to Add Material",
-          description: (err as Error).message || "An unexpected error occurred.",
+          title: "Échec de l'Ajout du Matériau",
+          description: (err as Error).message || "Une erreur inattendue s'est produite.",
         });
-         setIsMaterialFormOpen(true); // Re-open dialog on error if needed
+         setIsMaterialFormOpen(true); 
       }
     }
     await fetchMaterials();
@@ -154,9 +154,9 @@ export default function MaterialManagementPage() {
   return (
     <>
       <PageTitle
-        title="Material Management"
+        title="Gestion des Matériaux"
         icon={TestTube2}
-        subtitle="Define materials and their validation parameters."
+        subtitle="Définissez les matériaux et leurs paramètres de validation."
         actions={
           <MaterialFormDialog
             open={isMaterialFormOpen}
@@ -168,7 +168,7 @@ export default function MaterialManagementPage() {
             onFormSubmit={handleMaterialFormSubmit}
           >
             <Button className="rounded-lg" onClick={handleAddNewMaterial}>
-              <PlusCircle className="mr-2 h-4 w-4" /> Add New Material
+              <PlusCircle className="mr-2 h-4 w-4" /> Ajouter un Nouveau Matériau
             </Button>
           </MaterialFormDialog>
         }
@@ -177,21 +177,21 @@ export default function MaterialManagementPage() {
       <div className="mb-6 p-4 bg-card rounded-lg shadow-sm border">
         <div className="flex flex-col md:flex-row gap-4 items-end">
           <div className="flex-grow">
-            <Label htmlFor="material-search" className="mb-1 block text-sm font-medium">Search Materials</Label>
+            <Label htmlFor="material-search" className="mb-1 block text-sm font-medium">Rechercher des Matériaux</Label>
             <Input
               id="material-search"
               type="text"
-              placeholder="Search by name or ID..."
+              placeholder="Rechercher par nom ou ID..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full"
             />
           </div>
           <div>
-            <Label htmlFor="type-filter" className="mb-1 block text-sm font-medium">Filter by Type</Label>
+            <Label htmlFor="type-filter" className="mb-1 block text-sm font-medium">Filtrer par Type</Label>
             <Select value={typeFilter} onValueChange={(value: MaterialType | 'ALL') => setTypeFilter(value)}>
               <SelectTrigger className="w-full md:w-[180px]" id="type-filter">
-                <SelectValue placeholder="Filter by type" />
+                <SelectValue placeholder="Filtrer par type" />
               </SelectTrigger>
               <SelectContent>
                 {materialTypeFilterOptions.map(option => (
@@ -201,20 +201,20 @@ export default function MaterialManagementPage() {
             </Select>
           </div>
           <Button variant="outline" onClick={() => { setSearchTerm(''); setTypeFilter('ALL');}} className="h-10">
-            <Filter className="mr-2 h-4 w-4" /> Clear Filters
+            <Filter className="mr-2 h-4 w-4" /> Effacer les Filtres
           </Button>
         </div>
       </div>
 
       {isLoading && (
         <div className="flex items-center justify-center py-10 text-muted-foreground">
-          <Loader2 className="mr-2 h-6 w-6 animate-spin" /> Loading materials...
+          <Loader2 className="mr-2 h-6 w-6 animate-spin" /> Chargement des matériaux...
         </div>
       )}
       {error && (
          <div className="text-center py-10 text-destructive bg-destructive/10 p-4 rounded-md">
             <AlertTriangle className="mx-auto h-8 w-8 mb-2" />
-           <p className="font-semibold">Error Loading Materials</p>
+           <p className="font-semibold">Erreur de Chargement des Matériaux</p>
            <p>{error}</p>
          </div>
       )}
@@ -233,19 +233,19 @@ export default function MaterialManagementPage() {
           <AlertDialogHeader>
             <div className="flex items-center">
               <AlertTriangle className="h-6 w-6 mr-2 text-destructive" />
-              <AlertDialogTitle>Confirm Material Deletion</AlertDialogTitle>
+              <AlertDialogTitle>Confirmer la Suppression du Matériau</AlertDialogTitle>
             </div>
             <AlertDialogDescription>
-              Are you sure you want to delete the material "{materialToDelete?.name}" (ID: {materialToDelete?.id})? This action is irreversible.
+              Êtes-vous sûr de vouloir supprimer le matériau "{materialToDelete?.name}" (ID: {materialToDelete?.id}) ? Cette action est irréversible.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setIsDeleteDialogOpen(false)}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setIsDeleteDialogOpen(false)}>Annuler</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDeleteMaterial}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete Material
+              Supprimer le Matériau
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -253,3 +253,4 @@ export default function MaterialManagementPage() {
     </>
   );
 }
+

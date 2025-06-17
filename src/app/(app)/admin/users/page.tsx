@@ -32,10 +32,10 @@ import { db } from '@/lib/firebase';
 
 
 const userRoleFilterOptions: { value: UserRole | 'ALL'; label: string }[] = [
-  { value: 'ALL', label: 'All Roles' },
-  { value: 'ADMIN', label: 'Admin' },
-  { value: 'SUPERVISOR', label: 'Supervisor' },
-  { value: 'TECHNICIAN', label: 'Technician' },
+  { value: 'ALL', label: 'Tous les Rôles' },
+  { value: 'ADMIN', label: 'Administrateur' },
+  { value: 'SUPERVISOR', label: 'Superviseur' },
+  { value: 'TECHNICIAN', label: 'Technicien' },
 ];
 
 export default function UserManagementPage() {
@@ -74,8 +74,8 @@ export default function UserManagementPage() {
       setUsersData(fetchedUsers);
       setAllProjects(fetchedProjects);
     } catch (err) {
-      setUsersError((err as Error).message || "Failed to load data. Please try again later.");
-      console.error("Error fetching users or projects:", err);
+      setUsersError((err as Error).message || "Échec du chargement des données. Veuillez réessayer plus tard.");
+      console.error("Erreur lors de la récupération des utilisateurs ou des projets:", err);
     } finally {
       setIsLoadingUsers(false);
       setIsLoadingProjects(false);
@@ -106,15 +106,15 @@ export default function UserManagementPage() {
     try {
       await deleteUserFirestoreRecord(userToDelete.id);
       toast({
-        title: "User Record Deleted",
-        description: `User "${userToDelete.name}" (ID: ${userToDelete.id}) has been deleted from Firestore. Their authentication record may still exist.`,
+        title: "Enregistrement Utilisateur Supprimé",
+        description: `L'utilisateur "${userToDelete.name}" (ID: ${userToDelete.id}) a été supprimé de Firestore. Son enregistrement d'authentification peut encore exister.`,
       });
       await fetchUsersAndProjects(); 
     } catch (err) {
       toast({
         variant: "destructive",
-        title: "Failed to Delete User Record",
-        description: (err as Error).message || "An unexpected error occurred.",
+        title: "Échec de la Suppression de l'Enregistrement Utilisateur",
+        description: (err as Error).message || "Une erreur inattendue s'est produite.",
       });
     } finally {
       setIsDeleteDialogOpen(false);
@@ -130,20 +130,20 @@ export default function UserManagementPage() {
       try {
         await updateUser(id, { displayName: data.displayName, role: data.role });
         toast({
-          title: "User Updated Successfully",
-          description: `User "${data.displayName}" has been updated.`,
+          title: "Utilisateur Mis à Jour avec Succès",
+          description: `L'utilisateur "${data.displayName}" a été mis à jour.`,
         });
       } catch (err) {
         toast({
           variant: "destructive",
-          title: "Failed to Update User",
-          description: (err as Error).message || "An unexpected error occurred.",
+          title: "Échec de la Mise à Jour de l'Utilisateur",
+          description: (err as Error).message || "Une erreur inattendue s'est produite.",
         });
         setIsUserFormOpen(true); 
       }
     } else { 
       if (!data.password) {
-        toast({ variant: "destructive", title: "Missing Password", description: "Password is required to create a new user." });
+        toast({ variant: "destructive", title: "Mot de Passe Manquant", description: "Le mot de passe est requis pour créer un nouvel utilisateur." });
         setIsUserFormOpen(true);
         return;
       }
@@ -154,14 +154,14 @@ export default function UserManagementPage() {
           role: data.role as UserRole 
         }, data.password);
         toast({
-          title: "User Added Successfully!",
-          description: `User "${data.displayName}" (ID: ${newUserId}) has been created.`,
+          title: "Utilisateur Ajouté avec Succès !",
+          description: `L'utilisateur "${data.displayName}" (ID: ${newUserId}) a été créé.`,
         });
       } catch (err) {
         toast({
           variant: "destructive",
-          title: "Failed to Add User",
-          description: (err as Error).message || "An unexpected error occurred.",
+          title: "Échec de l'Ajout de l'Utilisateur",
+          description: (err as Error).message || "Une erreur inattendue s'est produite.",
         });
         setIsUserFormOpen(true); 
       }
@@ -179,7 +179,7 @@ export default function UserManagementPage() {
     setIsProcessingAssignment(true);
     const targetUser = usersData.find(u => u.id === userId);
     if (!targetUser || !adminAuthUser) {
-      toast({ variant: "destructive", title: "Error", description: "User or admin not found."});
+      toast({ variant: "destructive", title: "Erreur", description: "Utilisateur ou administrateur non trouvé."});
       setIsProcessingAssignment(false);
       return;
     }
@@ -204,8 +204,8 @@ export default function UserManagementPage() {
        }
       
        toast({
-          title: "Project Assignments Updated",
-          description: `${targetUser.name}'s project assignments have been successfully updated. In-app notifications sent. Email queuing process initiated for new assignments.`,
+          title: "Assignations de Projet Mises à Jour",
+          description: `Les assignations de projet de ${targetUser.name} ont été mises à jour avec succès. Notifications in-app envoyées. Processus de mise en file d'attente des e-mails initié pour les nouvelles assignations.`,
           duration: 7000,
       });
       
@@ -234,27 +234,27 @@ export default function UserManagementPage() {
               html: notificationContent.emailBody,
             },
           });
-          console.log(`Email document for project ${project.name} written to 'mail' collection for ${targetUser.email}.`);
+          console.log(`Document e-mail pour le projet ${project.name} écrit dans la collection 'mail' pour ${targetUser.email}.`);
           toast({
-            title: `Email Queued for ${project.name}`,
-            description: `Assignment email for ${targetUser.name} regarding ${project.name} (${assignmentTypeDisplay}) has been queued. Subject: ${notificationContent.emailSubject}`,
+            title: `E-mail Mis en File d'Attente pour ${project.name}`,
+            description: `L'e-mail d'assignation pour ${targetUser.name} concernant ${project.name} (${assignmentTypeDisplay}) a été mis en file d'attente. Sujet : ${notificationContent.emailSubject}`,
             duration: 8000,
           });
 
         } catch (aiErrorOrMailError) {
-          console.error(`Error generating content or queueing assignment email for project ${project.name}:`, aiErrorOrMailError);
+          console.error(`Erreur lors de la génération du contenu ou de la mise en file d'attente de l'e-mail d'assignation pour le projet ${project.name}:`, aiErrorOrMailError);
           toast({ 
             variant: "destructive", 
-            title: `Email Error for ${project.name}`, 
-            description: (aiErrorOrMailError as Error).message || "Could not generate or queue email notification."
+            title: `Erreur E-mail pour ${project.name}`, 
+            description: (aiErrorOrMailError as Error).message || "Impossible de générer ou de mettre en file d'attente la notification par e-mail."
           });
         }
       }
     } catch (error) {
       toast({
         variant: "destructive",
-        title: "Failed to Assign Projects",
-        description: (error as Error).message || "An unexpected error occurred.",
+        title: "Échec de l'Assignation des Projets",
+        description: (error as Error).message || "Une erreur inattendue s'est produite.",
       });
     } finally {
       setIsProcessingAssignment(false);
@@ -275,9 +275,9 @@ export default function UserManagementPage() {
   return (
     <>
       <PageTitle
-        title="User Management"
+        title="Gestion des Utilisateurs"
         icon={Users}
-        subtitle="Administer user accounts, roles, and project assignments."
+        subtitle="Administrez les comptes utilisateurs, les rôles et les assignations aux projets."
         actions={
           <UserFormDialog
             open={isUserFormOpen}
@@ -289,7 +289,7 @@ export default function UserManagementPage() {
             onFormSubmit={handleUserFormSubmit}
           >
             <Button className="rounded-lg" onClick={handleAddNewUser}>
-              <UserPlus className="mr-2 h-4 w-4" /> Add New User
+              <UserPlus className="mr-2 h-4 w-4" /> Ajouter un Nouvel Utilisateur
             </Button>
           </UserFormDialog>
         }
@@ -298,21 +298,21 @@ export default function UserManagementPage() {
       <div className="mb-6 p-4 bg-card rounded-lg shadow-sm border">
         <div className="flex flex-col md:flex-row gap-4 items-end">
           <div className="flex-grow">
-            <Label htmlFor="user-search" className="mb-1 block text-sm font-medium">Search Users</Label>
+            <Label htmlFor="user-search" className="mb-1 block text-sm font-medium">Rechercher des Utilisateurs</Label>
             <Input
               id="user-search"
               type="text"
-              placeholder="Search by name or email..."
+              placeholder="Rechercher par nom ou email..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full"
             />
           </div>
           <div>
-            <Label htmlFor="role-filter" className="mb-1 block text-sm font-medium">Filter by Role</Label>
+            <Label htmlFor="role-filter" className="mb-1 block text-sm font-medium">Filtrer par Rôle</Label>
             <Select value={roleFilter} onValueChange={(value: UserRole | 'ALL') => setRoleFilter(value)}>
               <SelectTrigger className="w-full md:w-[180px]" id="role-filter">
-                <SelectValue placeholder="Filter by role" />
+                <SelectValue placeholder="Filtrer par rôle" />
               </SelectTrigger>
               <SelectContent>
                 {userRoleFilterOptions.map(option => (
@@ -322,20 +322,20 @@ export default function UserManagementPage() {
             </Select>
           </div>
            <Button variant="outline" onClick={() => { setSearchTerm(''); setRoleFilter('ALL');}} className="h-10">
-            <Filter className="mr-2 h-4 w-4" /> Clear Filters
+            <Filter className="mr-2 h-4 w-4" /> Effacer les Filtres
           </Button>
         </div>
       </div>
 
       {(isLoadingUsers || isLoadingProjects) && (
         <div className="flex items-center justify-center py-10 text-muted-foreground">
-          <Loader2 className="mr-2 h-6 w-6 animate-spin" /> Loading data...
+          <Loader2 className="mr-2 h-6 w-6 animate-spin" /> Chargement des données...
         </div>
       )}
       {usersError && !isLoadingUsers && (
          <div className="text-center py-10 text-destructive bg-destructive/10 p-4 rounded-md">
             <AlertTriangle className="mx-auto h-8 w-8 mb-2" />
-           <p className="font-semibold">Error Loading Data</p>
+           <p className="font-semibold">Erreur de Chargement des Données</p>
            <p>{usersError}</p>
          </div>
       )}
@@ -343,7 +343,7 @@ export default function UserManagementPage() {
         <div className="bg-card p-0 md:p-6 rounded-lg shadow-md">
           {isProcessingAssignment &&
             <div className="flex items-center justify-center p-4 text-sm text-muted-foreground">
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing assignments...
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Traitement des assignations...
             </div>
           }
           <UserTable
@@ -356,7 +356,7 @@ export default function UserManagementPage() {
       )}
 
       {isLoadingProjects ? (
-         <div className="flex items-center justify-center p-4"><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading projects for assignment...</div>
+         <div className="flex items-center justify-center p-4"><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Chargement des projets pour assignation...</div>
       ) : (
         <AssignProjectsDialog
           open={isAssignProjectsDialogOpen}
@@ -372,20 +372,20 @@ export default function UserManagementPage() {
           <AlertDialogHeader>
             <div className="flex items-center">
               <AlertTriangle className="h-6 w-6 mr-2 text-destructive" />
-              <AlertDialogTitle>Confirm User Record Deletion</AlertDialogTitle>
+              <AlertDialogTitle>Confirmer la Suppression de l'Enregistrement Utilisateur</AlertDialogTitle>
             </div>
             <AlertDialogDescription>
-              Are you sure you want to delete the Firestore record for user "{userToDelete?.name}" (ID: {userToDelete?.id})?
-              This action is irreversible and only deletes the app-specific data. The user's Firebase Authentication account will remain.
+              Êtes-vous sûr de vouloir supprimer l'enregistrement Firestore pour l'utilisateur "{userToDelete?.name}" (ID: {userToDelete?.id}) ?
+              Cette action est irréversible et ne supprime que les données spécifiques à l'application. Le compte d'authentification Firebase de l'utilisateur restera.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setIsDeleteDialogOpen(false)}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setIsDeleteDialogOpen(false)}>Annuler</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDeleteUser}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete Record
+              Supprimer l'Enregistrement
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -393,3 +393,4 @@ export default function UserManagementPage() {
     </>
   );
 }
+
