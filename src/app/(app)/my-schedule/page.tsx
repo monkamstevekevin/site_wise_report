@@ -10,7 +10,7 @@ import { getProjects } from '@/services/projectService';
 import { getUserById } from '@/services/userService';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ScheduleView } from '@/app/(app)/dashboard/components/ScheduleView'; // Updated import path
+import { ScheduleView } from '@/app/(app)/dashboard/components/ScheduleView';
 
 export default function MySchedulePage() {
   const { user, loading: authLoading } = useAuth();
@@ -38,7 +38,7 @@ export default function MySchedulePage() {
         setAllProjects(fetchedProjects);
         setCurrentUserData(fetchedCurrentUser);
       } catch (err) {
-        console.error("Error fetching data for My Schedule:", err);
+        console.error("Erreur lors de la récupération des données pour Mon Planning:", err);
         setError((err as Error).message || "Échec du chargement des données du planning.");
       } finally {
         setIsLoading(false);
