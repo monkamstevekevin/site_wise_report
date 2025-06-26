@@ -89,7 +89,9 @@ export function UserTable({ users, allProjects, onEditUser, onDeleteUser, onAssi
           </TableRow>
         </TableHeader>
         <TableBody>
-          {users.map((user) => (
+          {users.map((user) => {
+            const validAssignments = user.assignments?.filter(a => projectsById[a.projectId]) || [];
+            return (
             <TableRow key={user.id}>
               <TableCell className="font-medium text-xs">{user.id}</TableCell>
               <TableCell>
@@ -106,26 +108,11 @@ export function UserTable({ users, allProjects, onEditUser, onDeleteUser, onAssi
                 <Badge variant={roleBadgeVariant[user.role] || 'outline'}>{user.role}</Badge>
               </TableCell>
               <TableCell>
-                {user.assignments && user.assignments.length > 0 ? (
+                {validAssignments.length > 0 ? (
                   <TooltipProvider delayDuration={150}>
                     <div className="flex flex-wrap gap-1 max-w-xs">
-                      {user.assignments.map((assignment) => {
+                      {validAssignments.map((assignment) => {
                         const project = projectsById[assignment.projectId];
-                        if (!project) {
-                          return (
-                             <Tooltip key={assignment.projectId}>
-                              <TooltipTrigger>
-                                <Badge variant="destructive" className="text-xs font-normal">
-                                  Projet Inconnu
-                                </Badge>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Projet (ID: {assignment.projectId}) non trouvé.</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          )
-                        };
-                        
                         const assignmentTypeLabel = assignment.assignmentType === 'FULL_TIME' ? 'TPL' : 'TPA';
                         const assignmentTypeFull = assignment.assignmentType === 'FULL_TIME' ? 'Temps Plein' : 'Temps Partiel';
 
@@ -173,7 +160,8 @@ export function UserTable({ users, allProjects, onEditUser, onDeleteUser, onAssi
                 </DropdownMenu>
               </TableCell>
             </TableRow>
-          ))}
+          );
+        })}
         </TableBody>
       </Table>
     </div>

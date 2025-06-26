@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -60,27 +59,29 @@ export function AssignProjectsDialog({
   useEffect(() => {
     if (user && open) {
       const userAssignments = user.assignments || [];
-      const projectIdsFromAssignments = new Set(userAssignments.map(a => a.projectId));
+      // Filter out invalid assignments upfront. This automatically prepares them for removal on save.
+      const validUserAssignments = userAssignments.filter(a => projectsById[a.projectId]);
+      const projectIdsFromValidAssignments = new Set(validUserAssignments.map(a => a.projectId));
       
       const allProjectIdsToShow = new Set([
-        ...projectIdsFromAssignments,
+        ...projectIdsFromValidAssignments,
         ...allProjects.map(p => p.id)
       ]);
 
       const initialAssignments = Array.from(allProjectIdsToShow).map(projectId => {
-        const existingAssignment = userAssignments.find(a => a.projectId === projectId);
+        const existingAssignment = validUserAssignments.find(a => a.projectId === projectId);
         return {
           projectId: projectId,
           assignmentType: existingAssignment ? existingAssignment.assignmentType : 'NOT_ASSIGNED',
         };
       });
 
-      // Sort so that non-existent projects appear first
+      // Sort by project name for consistent ordering
       initialAssignments.sort((a, b) => {
-        const aExists = !!projectsById[a.projectId];
-        const bExists = !!projectsById[b.projectId];
-        if (aExists === bExists) return 0;
-        return aExists ? 1 : -1;
+        const projectA = projectsById[a.projectId];
+        const projectB = projectsById[b.projectId];
+        if (!projectA || !projectB) return 0;
+        return projectA.name.localeCompare(projectB.name);
       });
 
       setTempAssignments(initialAssignments);
@@ -131,37 +132,8 @@ export function AssignProjectsDialog({
             
             {tempAssignments.map(tempAssignment => {
               const project = projectsById[tempAssignment.projectId];
-              
-              if (!project) {
-                 return (
-                    <div key={tempAssignment.projectId} className="p-3 border rounded-lg shadow-sm bg-destructive/10 border-destructive/30">
-                      <div className="mb-2">
-                        <p className="font-semibold text-destructive flex items-center"><AlertTriangle className="h-4 w-4 mr-2" />Projet Inconnu (Probablement Supprimé)</p>
-                        <p className="text-xs text-muted-foreground mt-1">ID Projet: {tempAssignment.projectId}</p>
-                        <p className="text-xs text-destructive/80 mt-1">Ce projet n'existe plus. Choisissez "Non Assigné" et enregistrez pour retirer cette assignation.</p>
-                      </div>
-                      <RadioGroup
-                        value={tempAssignment.assignmentType}
-                        onValueChange={(value) => handleAssignmentTypeChange(tempAssignment.projectId, value as TempAssignment['assignmentType'])}
-                        className="flex space-x-2 md:space-x-4"
-                        disabled={isSubmitting}
-                      >
-                        <div className="flex items-center space-x-1.5">
-                          <RadioGroupItem value="NOT_ASSIGNED" id={`none-${tempAssignment.projectId}`} />
-                          <Label htmlFor={`none-${tempAssignment.projectId}`} className="text-xs font-normal">Non Assigné</Label>
-                        </div>
-                         <div className="flex items-center space-x-1.5 opacity-50">
-                          <RadioGroupItem value="PART_TIME" id={`part-${tempAssignment.projectId}`} disabled />
-                          <Label htmlFor={`part-${tempAssignment.projectId}`} className="text-xs font-normal">Temps Partiel</Label>
-                        </div>
-                        <div className="flex items-center space-x-1.5 opacity-50">
-                          <RadioGroupItem value="FULL_TIME" id={`full-${tempAssignment.projectId}`} disabled />
-                          <Label htmlFor={`full-${tempAssignment.projectId}`} className="text-xs font-normal">Temps Plein</Label>
-                        </div>
-                      </RadioGroup>
-                    </div>
-                );
-              }
+              // With the new logic, project should always be found.
+              if (!project) return null; 
 
               const currentAssignment = tempAssignment;
               return (
