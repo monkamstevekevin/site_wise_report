@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { User, Project, UserAssignment } from '@/lib/types';
-import { Loader2, Save, CalendarDays } from 'lucide-react';
+import { Loader2, Save, CalendarDays, AlertTriangle } from 'lucide-react';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -50,20 +50,45 @@ export function AssignProjectsDialog({
   const [tempAssignments, setTempAssignments] = useState<TempAssignment[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const projectsById = useMemo(() => 
+    allProjects.reduce((acc, project) => {
+        acc[project.id] = project;
+        return acc;
+    }, {} as Record<string, Project>),
+  [allProjects]);
+
   useEffect(() => {
     if (user && open) {
-      const initialAssignments = allProjects.map(project => {
-        const existingAssignment = user.assignments?.find(a => a.projectId === project.id);
+      const userAssignments = user.assignments || [];
+      const projectIdsFromAssignments = new Set(userAssignments.map(a => a.projectId));
+      
+      const allProjectIdsToShow = new Set([
+        ...projectIdsFromAssignments,
+        ...allProjects.map(p => p.id)
+      ]);
+
+      const initialAssignments = Array.from(allProjectIdsToShow).map(projectId => {
+        const existingAssignment = userAssignments.find(a => a.projectId === projectId);
         return {
-          projectId: project.id,
+          projectId: projectId,
           assignmentType: existingAssignment ? existingAssignment.assignmentType : 'NOT_ASSIGNED',
         };
       });
+
+      // Sort so that non-existent projects appear first
+      initialAssignments.sort((a, b) => {
+        const aExists = !!projectsById[a.projectId];
+        const bExists = !!projectsById[b.projectId];
+        if (aExists === bExists) return 0;
+        return aExists ? 1 : -1;
+      });
+
       setTempAssignments(initialAssignments);
     } else if (!open) {
       setTempAssignments([]);
     }
-  }, [user, allProjects, open]);
+  }, [user, allProjects, open, projectsById]);
+
 
   const handleAssignmentTypeChange = (projectId: string, newType: TempAssignment['assignmentType']) => {
     setTempAssignments(prev =>
@@ -97,14 +122,48 @@ export function AssignProjectsDialog({
         <DialogHeader>
           <DialogTitle>Assigner des Projets & Type à {user.name}</DialogTitle>
           <DialogDescription>
-            Sélectionnez les projets et spécifiez le type d'assignation (Temps Partiel ou Temps Plein).
+            Sélectionnez les projets et spécifiez le type d'assignation. Les projets inconnus seront retirés lors de l'enregistrement.
           </DialogDescription>
         </DialogHeader>
         <ScrollArea className="h-80 pr-2">
           <div className="space-y-4 py-4">
-            {allProjects.length === 0 && <p className="text-muted-foreground text-center">Aucun projet disponible à assigner.</p>}
-            {allProjects.map(project => {
-              const currentAssignment = tempAssignments.find(a => a.projectId === project.id);
+            {allProjects.length === 0 && tempAssignments.length === 0 && <p className="text-muted-foreground text-center">Aucun projet disponible à assigner.</p>}
+            
+            {tempAssignments.map(tempAssignment => {
+              const project = projectsById[tempAssignment.projectId];
+              
+              if (!project) {
+                 return (
+                    <div key={tempAssignment.projectId} className="p-3 border rounded-lg shadow-sm bg-destructive/10 border-destructive/30">
+                      <div className="mb-2">
+                        <p className="font-semibold text-destructive flex items-center"><AlertTriangle className="h-4 w-4 mr-2" />Projet Inconnu (Probablement Supprimé)</p>
+                        <p className="text-xs text-muted-foreground mt-1">ID Projet: {tempAssignment.projectId}</p>
+                        <p className="text-xs text-destructive/80 mt-1">Ce projet n'existe plus. Choisissez "Non Assigné" et enregistrez pour retirer cette assignation.</p>
+                      </div>
+                      <RadioGroup
+                        value={tempAssignment.assignmentType}
+                        onValueChange={(value) => handleAssignmentTypeChange(tempAssignment.projectId, value as TempAssignment['assignmentType'])}
+                        className="flex space-x-2 md:space-x-4"
+                        disabled={isSubmitting}
+                      >
+                        <div className="flex items-center space-x-1.5">
+                          <RadioGroupItem value="NOT_ASSIGNED" id={`none-${tempAssignment.projectId}`} />
+                          <Label htmlFor={`none-${tempAssignment.projectId}`} className="text-xs font-normal">Non Assigné</Label>
+                        </div>
+                         <div className="flex items-center space-x-1.5 opacity-50">
+                          <RadioGroupItem value="PART_TIME" id={`part-${tempAssignment.projectId}`} disabled />
+                          <Label htmlFor={`part-${tempAssignment.projectId}`} className="text-xs font-normal">Temps Partiel</Label>
+                        </div>
+                        <div className="flex items-center space-x-1.5 opacity-50">
+                          <RadioGroupItem value="FULL_TIME" id={`full-${tempAssignment.projectId}`} disabled />
+                          <Label htmlFor={`full-${tempAssignment.projectId}`} className="text-xs font-normal">Temps Plein</Label>
+                        </div>
+                      </RadioGroup>
+                    </div>
+                );
+              }
+
+              const currentAssignment = tempAssignment;
               return (
                 <div key={project.id} className="p-3 border rounded-lg shadow-sm hover:bg-muted/50">
                   <div className="mb-2">
@@ -144,7 +203,7 @@ export function AssignProjectsDialog({
               Annuler
             </Button>
           </DialogClose>
-          <Button onClick={handleSubmit} disabled={isSubmitting || allProjects.length === 0} className="rounded-lg">
+          <Button onClick={handleSubmit} disabled={isSubmitting || (allProjects.length === 0 && tempAssignments.length === 0)} className="rounded-lg">
             {isSubmitting ? <Loader2 className="animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
             Enregistrer les Assignations
           </Button>
@@ -153,4 +212,3 @@ export function AssignProjectsDialog({
     </Dialog>
   );
 }
-
