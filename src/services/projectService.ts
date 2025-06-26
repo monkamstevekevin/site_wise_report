@@ -2,8 +2,8 @@
 'use server';
 
 import { db } from '@/lib/firebase';
-import type { Project, MaterialType } from '@/lib/types'; // MaterialType still used for general type system
-import { collection, getDocs, doc, getDoc, Timestamp, query, orderBy, addDoc, serverTimestamp, updateDoc, setDoc, deleteDoc } from 'firebase/firestore';
+import type { Project, MaterialType, User } from '@/lib/types';
+import { collection, getDocs, doc, getDoc, Timestamp, query, orderBy, addDoc, serverTimestamp, updateDoc, setDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import type { ProjectSubmitData as OriginalProjectSubmitData } from '@/app/(app)/admin/projects/components/ProjectFormDialog';
 
 // Adjust ProjectSubmitData to reflect assignedMaterialIds
@@ -19,7 +19,7 @@ export type ProjectSubmitData = Omit<OriginalProjectSubmitData, 'assignedMateria
  * - getProjectById - Fetches a single project by its ID from Firestore.
  * - addProject - Adds a new project to Firestore.
  * - updateProject - Updates an existing project in Firestore.
- * - deleteProject - Deletes a project from Firestore.
+ * - deleteProject - Deletes a project from Firestore and cleans up user assignments.
  */
 
 const formatTimestamp = (timestampField: any): string => {
@@ -169,12 +169,6 @@ export async function updateProject(projectId: string, projectData: Partial<Proj
       dataToUpdate.assignedMaterialIds = projectData.assignedMaterialIds || [];
     }
 
-    // Remove undefined fields that were part of OriginalProjectSubmitData but not in current projectData
-    // This ensures we don't accidentally write 'undefined' to Firestore for fields not being updated.
-    // For example, if projectData only contains { name: "New Name" }, we don't want to set other fields to undefined.
-    // The spread `...projectData` handles this correctly by only including provided fields.
-    // Keys like `startDate`, `endDate`, `assignedMaterialIds` are handled explicitly above with defaults or nulls.
-
     await updateDoc(projectDocRef, dataToUpdate);
   } catch (error) {
     console.error(`Error updating project ${projectId}: `, error);
@@ -183,17 +177,51 @@ export async function updateProject(projectId: string, projectData: Partial<Proj
 }
 
 /**
- * Deletes a project from Firestore.
+ * Deletes a project from Firestore and removes all associated user assignments.
  * @param {string} projectId The ID of the project to delete.
- * @returns {Promise<void>} A promise that resolves when the project is successfully deleted.
- * @throws Will throw an error if deleting the project fails.
+ * @returns {Promise<void>} A promise that resolves when the project and assignments are successfully deleted/removed.
+ * @throws Will throw an error if the process fails.
  */
 export async function deleteProject(projectId: string): Promise<void> {
+  if (!projectId) {
+    throw new Error("L'ID du projet est requis pour supprimer un projet.");
+  }
+
+  const projectDocRef = doc(db, 'projects', projectId);
+  const usersCollectionRef = collection(db, 'users');
+
   try {
-    const projectDocRef = doc(db, 'projects', projectId);
-    await deleteDoc(projectDocRef);
+    const batch = writeBatch(db);
+
+    // Récupérer tous les utilisateurs
+    const usersSnapshot = await getDocs(usersCollectionRef);
+
+    // Itérer sur les utilisateurs pour trouver et supprimer les assignations du projet supprimé
+    usersSnapshot.forEach(userDoc => {
+      const userData = userDoc.data() as User;
+      if (userData.assignments && Array.isArray(userData.assignments)) {
+        const initialAssignmentsCount = userData.assignments.length;
+        const updatedAssignments = userData.assignments.filter(
+          assignment => assignment.projectId !== projectId
+        );
+
+        // Si les assignations ont changé, mettre à jour le document utilisateur dans le lot
+        if (updatedAssignments.length < initialAssignmentsCount) {
+          const userDocRefToUpdate = doc(db, 'users', userDoc.id);
+          batch.update(userDocRefToUpdate, { assignments: updatedAssignments, updatedAt: serverTimestamp() });
+        }
+      }
+    });
+
+    // Ajouter la suppression du projet au lot
+    batch.delete(projectDocRef);
+
+    // Valider le lot
+    await batch.commit();
+    console.log(`Le projet ${projectId} et toutes ses assignations utilisateur ont été supprimés.`);
+
   } catch (error) {
-    console.error(`Error deleting project ${projectId}: `, error);
-    throw new Error(`Failed to delete project ${projectId} from database.`);
+    console.error(`Erreur lors de la suppression du projet ${projectId} et de ses assignations : `, error);
+    throw new Error(`Échec de la suppression du projet ${projectId} et de ses assignations de la base de données.`);
   }
 }
