@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -348,6 +347,7 @@ export default function UserManagementPage() {
           }
           <UserTable
             users={filteredUsers}
+            allProjects={allProjects}
             onEditUser={handleEditUser}
             onDeleteUser={openDeleteDialog}
             onAssignProjects={handleOpenAssignProjectsDialog}
@@ -393,4 +393,3 @@ export default function UserManagementPage() {
     </>
   );
 }
-

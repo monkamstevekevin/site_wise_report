@@ -1,4 +1,3 @@
-
 'use client';
 
 import React from 'react';
@@ -21,12 +20,19 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from '@/components/ui/badge';
-import type { User, UserRole, UserAssignment } from '@/lib/types';
+import type { User, UserRole, UserAssignment, Project } from '@/lib/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { UserFormData } from './UserFormDialog';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface UserTableProps {
   users: User[];
+  allProjects: Project[];
   onEditUser: (user: Partial<UserFormData> & { id: string }) => void;
   onDeleteUser: (user: User) => void; 
   onAssignProjects: (user: User) => void;
@@ -38,24 +44,15 @@ const roleBadgeVariant: Record<UserRole, "default" | "secondary" | "outline" | "
   TECHNICIAN: "secondary",
 };
 
-const getAssignmentsSummary = (assignments: UserAssignment[] | undefined): string => {
-  if (!assignments || assignments.length === 0) return '0';
-  const fullTimeCount = assignments.filter(a => a.assignmentType === 'FULL_TIME').length;
-  const partTimeCount = assignments.filter(a => a.assignmentType === 'PART_TIME').length;
-  
-  let summary = `${assignments.length} projet(s)`;
-  const details: string[] = [];
-  if (fullTimeCount > 0) details.push(`${fullTimeCount} TPl`);
-  if (partTimeCount > 0) details.push(`${partTimeCount} TPa`);
-  
-  if (details.length > 0) {
-    summary += ` (${details.join(', ')})`;
-  }
-  return summary;
-};
 
+export function UserTable({ users, allProjects, onEditUser, onDeleteUser, onAssignProjects }: UserTableProps) {
 
-export function UserTable({ users, onEditUser, onDeleteUser, onAssignProjects }: UserTableProps) {
+  const projectsById = React.useMemo(() => 
+    allProjects.reduce((acc, project) => {
+      acc[project.id] = project;
+      return acc;
+    }, {} as Record<string, Project>), 
+  [allProjects]);
 
   const handleEdit = (user: User) => {
     const userToPass = {
@@ -108,8 +105,49 @@ export function UserTable({ users, onEditUser, onDeleteUser, onAssignProjects }:
               <TableCell>
                 <Badge variant={roleBadgeVariant[user.role] || 'outline'}>{user.role}</Badge>
               </TableCell>
-              <TableCell className="text-xs">
-                {getAssignmentsSummary(user.assignments)}
+              <TableCell>
+                {user.assignments && user.assignments.length > 0 ? (
+                  <TooltipProvider delayDuration={150}>
+                    <div className="flex flex-wrap gap-1 max-w-xs">
+                      {user.assignments.map((assignment) => {
+                        const project = projectsById[assignment.projectId];
+                        if (!project) {
+                          return (
+                             <Tooltip key={assignment.projectId}>
+                              <TooltipTrigger>
+                                <Badge variant="destructive" className="text-xs font-normal">
+                                  Projet Inconnu
+                                </Badge>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Projet (ID: {assignment.projectId}) non trouvé.</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          )
+                        };
+                        
+                        const assignmentTypeLabel = assignment.assignmentType === 'FULL_TIME' ? 'TPL' : 'TPA';
+                        const assignmentTypeFull = assignment.assignmentType === 'FULL_TIME' ? 'Temps Plein' : 'Temps Partiel';
+
+                        return (
+                          <Tooltip key={assignment.projectId}>
+                            <TooltipTrigger>
+                              <Badge variant="outline" className="text-xs font-normal cursor-default">
+                                {project.name.length > 15 ? `${project.name.substring(0, 13)}...` : project.name}
+                                <span className="ml-1.5 font-semibold opacity-80 border-l pl-1.5">{assignmentTypeLabel}</span>
+                              </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>{project.name} ({assignmentTypeFull})</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        );
+                      })}
+                    </div>
+                  </TooltipProvider>
+                ) : (
+                  <span className="text-xs text-muted-foreground">Aucun</span>
+                )}
               </TableCell>
               <TableCell>{new Date(user.createdAt).toLocaleDateString('fr-FR')}</TableCell>
               <TableCell className="text-right">
@@ -141,4 +179,3 @@ export function UserTable({ users, onEditUser, onDeleteUser, onAssignProjects }:
     </div>
   );
 }
-
