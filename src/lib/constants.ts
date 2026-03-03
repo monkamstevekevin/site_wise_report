@@ -16,7 +16,6 @@ export const ALL_NAV_ITEMS: NavItem[] = [
   { href: '/reports', label: 'Rapports de Terrain', icon: FileText, roles: ['ADMIN', 'SUPERVISOR', 'TECHNICIAN'] },
   { href: '/reports/create', label: 'Créer un Rapport', icon: FileText, roles: ['ADMIN', 'SUPERVISOR', 'TECHNICIAN'] },
   { href: '/my-projects', label: 'Mes Projets', icon: Briefcase, roles: ['TECHNICIAN', 'SUPERVISOR'] },
-  // { href: '/my-schedule', label: 'Mon Planning', icon: CalendarDays, roles: ['TECHNICIAN', 'SUPERVISOR'] }, // Removed
   {
     href: '/admin',
     label: 'Panneau Admin',
@@ -60,4 +59,3 @@ export type UserRole = 'ADMIN' | 'SUPERVISOR' | 'TECHNICIAN';
 // Mock technician identity for data population
 export const MOCK_TECHNICIAN_EMAIL = 'tech@example.com';
 export const MOCK_TECHNICIAN_REPORTS_ID = 'tech001';
-

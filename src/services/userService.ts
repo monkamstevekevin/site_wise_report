@@ -65,7 +65,7 @@ export async function getUsers(): Promise<User[]> {
     return users;
   } catch (error) {
     console.error("Error fetching users (see details below): ", error);
-    throw new Error("Failed to fetch users from database. Check server logs for Firebase error details.");
+    throw new Error("Échec de la récupération des utilisateurs depuis la base de données. Vérifiez les journaux du serveur pour les détails de l'erreur Firebase.");
   }
 }
 
@@ -97,7 +97,7 @@ export async function getUserById(userId: string): Promise<User | null> {
     }
   } catch (error) {
     console.error(`Error fetching user by ID ${userId}: `, error);
-    throw new Error(`Failed to fetch user ${userId} from database.`);
+    throw new Error(`Échec de la récupération de l'utilisateur ${userId} depuis la base de données.`);
   }
 }
 
@@ -113,7 +113,7 @@ export async function addUser(
   password?: string
 ): Promise<string> {
   if (!password) {
-    throw new Error('Password is required for new user creation.');
+    throw new Error('Le mot de passe est requis pour la création d\'un nouvel utilisateur.');
   }
   try {
     const userCredential = await createUserWithEmailAndPassword(auth, userData.email, password);
@@ -137,12 +137,12 @@ export async function addUser(
     return firebaseUser.uid;
   } catch (error: any) {
     console.error("Error adding user: ", error);
-    const errorMessage = error.message || "Failed to add user. Ensure email is not already in use and password is valid.";
+    const errorMessage = error.message || "Échec de l'ajout de l'utilisateur. Assurez-vous que l'e-mail n'est pas déjà utilisé et que le mot de passe est valide.";
     if (error.code === 'auth/email-already-in-use') {
-      throw new Error('This email address is already in use by another account.');
+      throw new Error('Cette adresse e-mail est déjà utilisée par un autre compte.');
     }
     if (error.code === 'auth/weak-password') {
-      throw new Error('Password should be at least 6 characters.');
+      throw new Error('Le mot de passe doit comporter au moins 6 caractères.');
     }
     throw new Error(errorMessage);
   }
@@ -172,7 +172,7 @@ export async function updateUser(userId: string, data: { name?: string; role?: U
     }
 
     if (Object.keys(updateData).length === 0) {
-      console.log("No data provided to update user in Firestore. Returning current user data.");
+      console.log("Aucune donnée fournie pour mettre à jour l'utilisateur dans Firestore. Retour des données utilisateur actuelles.");
       return getUserById(userId); // Return current data if no updates
     }
 
@@ -197,7 +197,7 @@ export async function updateUser(userId: string, data: { name?: string; role?: U
     return null; // Should not happen if update was successful on an existing doc
   } catch (error) {
     console.error(`Error updating user ${userId} in Firestore: `, error);
-    throw new Error(`Failed to update user ${userId} in database.`);
+    throw new Error(`Échec de la mise à jour de l'utilisateur ${userId} dans la base de données.`);
   }
 }
 
@@ -219,7 +219,7 @@ export async function updateUserAssignments(userId: string, newAssignments: User
   const userDocRef = doc(db, 'users', userId);
   const userDocSnap = await getDoc(userDocRef);
   if (!userDocSnap.exists()) {
-    throw new Error(`User with ID ${userId} not found.`);
+    throw new Error(`Utilisateur avec l'ID ${userId} non trouvé.`);
   }
   const currentUserData = userDocSnap.data() as User;
   const oldAssignments = currentUserData.assignments || [];
@@ -239,7 +239,7 @@ export async function updateUserAssignments(userId: string, newAssignments: User
         }
     }
      if (activeFullTimeProjectIds.length > 1) {
-        throw new Error(`Technician cannot be assigned FULL_TIME to multiple active projects simultaneously. Conflict with new assignments for projects: ${activeFullTimeProjectIds.join(', ')}.`);
+        throw new Error(`Le technicien ne peut pas être assigné à TEMPS PLEIN à plusieurs projets actifs simultanément. Conflit avec les nouvelles assignations pour les projets : ${activeFullTimeProjectIds.join(', ')}.`);
     }
 
     for (const newFtAssignment of fullTimeNewAssignments) {
@@ -249,7 +249,7 @@ export async function updateUserAssignments(userId: string, newAssignments: User
           const existingProject = await getProjectById(existingFtAssignment.projectId);
           if (existingProject && isProjectActive(existingProject)) {
             throw new Error(
-              `Technician is already assigned FULL_TIME to active project "${existingProject.name}" (ends ${existingProject.endDate || 'N/A'}). Cannot also assign FULL_TIME to active project "${newProject.name}" (ends ${newProject.endDate || 'N/A'}).`
+              `Le technicien est déjà assigné à TEMPS PLEIN au projet actif "${existingProject.name}" (se termine le ${existingProject.endDate || 'N/A'}). Impossible de l'assigner également à TEMPS PLEIN au projet actif "${newProject.name}" (se termine le ${newProject.endDate || 'N/A'}).`
             );
           }
         }
@@ -295,7 +295,7 @@ export async function updateUserAssignments(userId: string, newAssignments: User
     if (error instanceof Error) { 
         throw error;
     }
-    throw new Error(`Failed to update assigned projects for user ${userId} in database.`);
+    throw new Error(`Échec de la mise à jour des projets assignés pour l'utilisateur ${userId} dans la base de données.`);
   }
 }
 
