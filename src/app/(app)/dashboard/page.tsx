@@ -20,9 +20,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useEffect, useState, useMemo } from 'react';
 import type { FieldReport, MaterialType, Project, User, UserAssignment } from '@/lib/types';
-import { getReportsByTechnicianId, getReports as getAllReports } from '@/services/reportService'; 
-import { getProjects } from '@/services/projectService';
-import { getUsers, getUserById } from '@/services/userService';
+import { getReportsSubscription, getReportsByTechnicianIdSubscription } from '@/lib/reportClientService';
+import { getProjectsSubscription } from '@/lib/projectClientService';
+import { getUsersSubscription, getUserByIdSubscription } from '@/lib/userClientService';
 import { Badge } from '@/components/ui/badge';
 import { format, formatDistanceToNow, isSameDay, startOfDay, endOfDay, parseISO, isAfter, isBefore, isEqual } from 'date-fns';
 import { fr } from 'date-fns/locale'; // Import French locale
@@ -89,14 +89,11 @@ const supplierChartColors: string[] = [
 
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
-  const [currentUserRole, setCurrentUserRole] = useState<UserRole | null>(null);
-  const [effectiveTechnicianId, setEffectiveTechnicianId] = useState<string | null>(null);
-  const [currentUserDetails, setCurrentUserDetails] = useState<User | null>(null);
   
   const [allReportsData, setAllReportsData] = useState<FieldReport[]>([]);
-  const [technicianReports, setTechnicianReports] = useState<FieldReport[]>([]);
   const [allProjectsData, setAllProjectsData] = useState<Project[]>([]);
   const [allUsersData, setAllUsersData] = useState<User[]>([]);
+  const [currentUserDetails, setCurrentUserDetails] = useState<User | null>(null);
   
   const [isLoadingDashboardData, setIsLoadingDashboardData] = useState(true);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
@@ -110,78 +107,76 @@ export default function DashboardPage() {
     to: startOfDay(new Date()),
   });
 
+  const { role, effectiveTechnicianId } = useMemo(() => mapFirebaseUserToAppRoleAndId(user), [user]);
+
 
   useEffect(() => {
-    const loadDashboardData = async () => {
-      if (authLoading) { 
-        setIsLoadingDashboardData(true); 
-        return;
-      }
-      
-      if (!user) { 
-        setIsLoadingDashboardData(false);
-        setAllReportsData([]);
-        setTechnicianReports([]);
-        setAllProjectsData([]);
-        setAllUsersData([]);
-        setCurrentUserDetails(null);
-        setCurrentUserRole(null); 
-        setDashboardError(null); 
-        return;
-      }
-      
+    if (authLoading) {
       setIsLoadingDashboardData(true);
-      setDashboardError(null); 
-      const { role, effectiveTechnicianId: mappedTechId } = mapFirebaseUserToAppRoleAndId(user);
-      setCurrentUserRole(role);
-      setEffectiveTechnicianId(mappedTechId);
+      return;
+    }
+    if (!user) {
+      setIsLoadingDashboardData(false);
+      return;
+    }
 
-      try {
-        let reportsToSetForDashboard: FieldReport[] = [];
-        let projectsToSet: Project[] = [];
-        let usersToSet: User[] = [];
-        
-        if (role === 'ADMIN' || role === 'SUPERVISOR') {
-          const [reports, projects, usersList] = await Promise.all([
-            getAllReports(),
-            getProjects(),
-            getUsers()
-          ]);
-          reportsToSetForDashboard = reports;
-          projectsToSet = projects;
-          usersToSet = usersList;
-        } else if (role === 'TECHNICIAN' && mappedTechId) {
-           const [reports, projects, fetchedCurrentUser] = await Promise.all([
-            getReportsByTechnicianId(mappedTechId),
-            getProjects(),
-            getUserById(user.uid) 
-          ]);
-          reportsToSetForDashboard = reports;
-          setTechnicianReports(reports);
-          projectsToSet = projects;
-          if (fetchedCurrentUser) {
-            setCurrentUserDetails(fetchedCurrentUser);
-          }
-        } else if (role === 'TECHNICIAN' && !mappedTechId) {
-           setTechnicianReports([]);
+    const subscriptions: (() => void)[] = [];
+    let active = true;
+
+    const handleSubscriptionError = (entity: string) => (error: Error) => {
+        if (active) {
+            console.error(`Error subscribing to ${entity}:`, error);
+            setDashboardError(prev => prev || `Failed to load ${entity}.`);
+            setIsLoadingDashboardData(false);
         }
-        setAllReportsData(reportsToSetForDashboard);
-        setAllProjectsData(projectsToSet);
-        setAllUsersData(usersToSet);
+    };
+    
+    if (role === 'ADMIN' || role === 'SUPERVISOR') {
+        subscriptions.push(getReportsSubscription(
+            (data) => active && setAllReportsData(data),
+            handleSubscriptionError('reports')
+        ));
+        subscriptions.push(getProjectsSubscription(
+            (data) => active && setAllProjectsData(data),
+            handleSubscriptionError('projects')
+        ));
+        subscriptions.push(getUsersSubscription(
+            (data) => active && setAllUsersData(data),
+            handleSubscriptionError('users')
+        ));
+    } else if (role === 'TECHNICIAN' && effectiveTechnicianId) {
+        subscriptions.push(getReportsByTechnicianIdSubscription(
+            effectiveTechnicianId,
+            (data) => active && setAllReportsData(data),
+            handleSubscriptionError('technician reports')
+        ));
+        // Technicians still need all projects for the schedule view
+        subscriptions.push(getProjectsSubscription(
+            (data) => active && setAllProjectsData(data),
+            handleSubscriptionError('projects')
+        ));
+        subscriptions.push(getUserByIdSubscription(
+            user.uid,
+            (data) => active && setCurrentUserDetails(data),
+            handleSubscriptionError('current user details')
+        ));
+    }
+    
+    if(subscriptions.length > 0) {
+      setIsLoadingDashboardData(false); // Assume data will stream in
+    } else {
+      setIsLoadingDashboardData(false);
+    }
 
-      } catch (err) {
-        console.error("Error loading dashboard data:", err);
-        setDashboardError((err as Error).message || "Échec du chargement des données des rapports pour le tableau de bord.");
-      } finally {
-        setIsLoadingDashboardData(false);
-      }
+    return () => {
+      active = false;
+      subscriptions.forEach(unsub => unsub());
     };
 
-    loadDashboardData();
-  }, [user, authLoading]); 
+  }, [user, authLoading, role, effectiveTechnicianId]); 
 
   useEffect(() => {
-    if (currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') {
+    if (role === 'ADMIN' || role === 'SUPERVISOR') {
       const fetchCompliancePrediction = async () => {
         setIsLoadingCompliance(true);
         setComplianceError(null);
@@ -205,17 +200,16 @@ export default function DashboardPage() {
       };
       fetchCompliancePrediction();
     }
-  }, [currentUserRole]);
+  }, [role]);
   
   const adminKpiData = useMemo(() => {
-    const reportsForKpi = allReportsData; 
     const predictedComplianceValue = currentCompliancePrediction?.predictedCompliancePercentage;
     const complianceTrend = currentCompliancePrediction ? (predictedComplianceValue && predictedComplianceValue > 90 ? "En amélioration" : "Stable") : "N/A";
 
     return [
-        { title: "Total Rapports", value: reportsForKpi.length, icon: FileText, trend: "", trendDirection: "neutral" as const }, 
-        { title: "En Attente de Validation", value: reportsForKpi.filter(r => r.status === 'SUBMITTED').length, icon: KpiAlertTriangle, trend: "", trendDirection: "neutral" as const },
-        { title: "Rapports Validés", value: reportsForKpi.filter(r => r.status === 'VALIDATED').length, icon: CheckCircle, trend: "", trendDirection: "neutral" as const },
+        { title: "Total Rapports", value: allReportsData.length, icon: FileText, trend: "", trendDirection: "neutral" as const }, 
+        { title: "En Attente de Validation", value: allReportsData.filter(r => r.status === 'SUBMITTED').length, icon: KpiAlertTriangle, trend: "", trendDirection: "neutral" as const },
+        { title: "Rapports Validés", value: allReportsData.filter(r => r.status === 'VALIDATED').length, icon: CheckCircle, trend: "", trendDirection: "neutral" as const },
         { 
           title: "Prédiction Conformité IA", 
           value: isLoadingCompliance ? "..." : (predictedComplianceValue !== undefined ? `${predictedComplianceValue.toFixed(1)}%` : "N/A"), 
@@ -237,20 +231,19 @@ export default function DashboardPage() {
 
 
   const technicianKpiData = useMemo(() => [
-    { title: "Mes Rapports Soumis", value: technicianReports.filter(r => r.status !== 'DRAFT').length, icon: FileText, description: "Total des rapports que vous avez soumis." },
-    { title: "En Attente de Mon Examen", value: technicianReports.filter(r => r.status === 'SUBMITTED' || r.status === 'REJECTED').length, icon: ListChecks, description: "Rapports nécessitant une action ou soumis." },
-    { title: "Mes Rapports Validés", value: technicianReports.filter(r => r.status === 'VALIDATED').length, icon: UserCheck, description: "Rapports approuvés." },
-    { title: "Rapports en Brouillon", value: technicianReports.filter(r => r.status === 'DRAFT').length, icon: Clock, description: "Rapports sauvegardés comme brouillons." },
-  ], [technicianReports]);
+    { title: "Mes Rapports Soumis", value: allReportsData.filter(r => r.status !== 'DRAFT').length, icon: FileText, description: "Total des rapports que vous avez soumis." },
+    { title: "En Attente de Mon Examen", value: allReportsData.filter(r => r.status === 'SUBMITTED' || r.status === 'REJECTED').length, icon: ListChecks, description: "Rapports nécessitant une action ou soumis." },
+    { title: "Mes Rapports Validés", value: allReportsData.filter(r => r.status === 'VALIDATED').length, icon: UserCheck, description: "Rapports approuvés." },
+    { title: "Rapports en Brouillon", value: allReportsData.filter(r => r.status === 'DRAFT').length, icon: Clock, description: "Rapports sauvegardés comme brouillons." },
+  ], [allReportsData]);
   
   const sortedTechnicianReportsForDisplay = useMemo(() => {
-    return [...technicianReports].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [technicianReports]);
+    return [...allReportsData].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [allReportsData]);
 
   const materialUsageData = useMemo(() => {
-    const reportsSource = (currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') ? allReportsData : technicianReports;
     const counts: { [key in MaterialType | string]: number } = { cement: 0, asphalt: 0, gravel: 0, sand: 0, other: 0 }; 
-    reportsSource.forEach(report => {
+    allReportsData.forEach(report => {
       const materialKey = report.materialType.toLowerCase() as MaterialType | 'other';
       if (counts[materialKey] !== undefined) {
         counts[materialKey]++;
@@ -263,12 +256,11 @@ export default function DashboardPage() {
       reports: reportCount,
       fill: materialColors[material.toLowerCase() as MaterialType] || materialColors.other,
     }));
-  }, [allReportsData, technicianReports, currentUserRole]);
+  }, [allReportsData]);
 
   const supplierUsageData = useMemo(() => {
-    const reportsSource = (currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') ? allReportsData : technicianReports;
     const supplierCounts: { [key: string]: number } = {};
-    reportsSource.forEach(report => {
+    allReportsData.forEach(report => {
       const supplier = report.supplier || "Fournisseur Inconnu";
       supplierCounts[supplier] = (supplierCounts[supplier] || 0) + 1;
     });
@@ -293,7 +285,7 @@ export default function DashboardPage() {
       });
     }
     return chartData;
-  }, [allReportsData, technicianReports, currentUserRole]);
+  }, [allReportsData]);
 
   const filteredProjectsForAssignments = useMemo(() => {
     const effectiveFromDate = dateRange?.from || new Date();
@@ -335,29 +327,7 @@ export default function DashboardPage() {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
           {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-36 rounded-lg" />)}
         </div>
-        {(currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') && (
-          <>
-            <Skeleton className="h-72 w-full rounded-lg mb-6" />
-            <Skeleton className="h-24 w-full mb-6 rounded-lg" />
-            <Skeleton className="h-96 w-full mb-6 rounded-lg" />
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                <Skeleton className="h-72 rounded-lg" /> 
-                <Skeleton className="h-72 rounded-lg" /> 
-                <Skeleton className="lg:col-span-2 h-72 rounded-lg" />
-                <Skeleton className="lg:col-span-2 h-72 rounded-lg" />
-            </div>
-          </>
-        )}
-        { currentUserRole === 'TECHNICIAN' && (
-            <>
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-                <Skeleton className="lg:col-span-1 h-96 rounded-lg" />
-                <Skeleton className="lg:col-span-1 h-96 rounded-lg" />
-                <Skeleton className="lg:col-span-1 h-96 rounded-lg" />
-              </div>
-              <Skeleton className="h-[400px] w-full rounded-lg" />
-            </>
-        )}
+        <Skeleton className="h-72 w-full rounded-lg mb-6" />
       </>
     );
   }
@@ -391,29 +361,15 @@ export default function DashboardPage() {
     )
   }
 
-  if (user && currentUserRole === null && !isLoadingDashboardData) {
-     return ( 
-      <>
-        <PageTitle title="Aperçu du Tableau de Bord" icon={LayoutDashboard} subtitle="Finalisation du tableau de bord..." />
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
-          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-36 rounded-lg" />)}
-        </div>
-      </>
-    );
-  }
-
-  const noReportsExistForUser = (currentUserRole === 'TECHNICIAN' && technicianReports.length === 0) ||
-                               ((currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') && allReportsData.length === 0);
-  
-  const noProjectsExistForAdmin = (currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') && allProjectsData.length === 0;
-
+  const noReportsExistForUser = allReportsData.length === 0;
+  const noProjectsExistForAdmin = (role === 'ADMIN' || role === 'SUPERVISOR') && allProjectsData.length === 0;
 
   return (
     <TooltipProvider>
       <PageTitle
-        title={currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR' ? "Aperçu du Tableau de Bord" : "Mon Tableau de Bord"}
+        title={role === 'ADMIN' || role === 'SUPERVISOR' ? "Aperçu du Tableau de Bord" : "Mon Tableau de Bord"}
         icon={LayoutDashboard}
-        subtitle={currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR' ? "Indicateurs clés et aperçus de vos projets." : "Votre résumé personnel des rapports et activités."}
+        subtitle={role === 'ADMIN' || role === 'SUPERVISOR' ? "Indicateurs clés et aperçus de vos projets." : "Votre résumé personnel des rapports et activités."}
         actions={
           <Button asChild className="rounded-lg">
             <Link href="/reports/create">
@@ -423,7 +379,7 @@ export default function DashboardPage() {
         }
       />
 
-      { (currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') && (
+      { (role === 'ADMIN' || role === 'SUPERVISOR') && (
         <>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
               {adminKpiData.map((kpi) => (
@@ -460,11 +416,7 @@ export default function DashboardPage() {
           </div>
           
           <div className="mb-6">
-            {isLoadingDashboardData ? (
-              <Skeleton className="h-72 w-full rounded-lg" />
-            ) : (
-              <AlertsCard projects={allProjectsData} users={allUsersData} />
-            )}
+            <AlertsCard projects={allProjectsData} users={allUsersData} />
           </div>
 
           <Card className="mb-6 shadow-lg rounded-lg">
@@ -520,9 +472,7 @@ export default function DashboardPage() {
           </Card>
 
           <div className="mb-6"> 
-            {isLoadingDashboardData ? (
-                <Skeleton className="h-96 w-full rounded-lg" />
-            ) : noProjectsExistForAdmin ? (
+            {noProjectsExistForAdmin ? (
                 <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center"><HardHat className="mr-2 h-5 w-5 text-muted-foreground" />Aucun Projet Trouvé</CardTitle>
@@ -537,14 +487,6 @@ export default function DashboardPage() {
             )}
           </div>
           
-          {isLoadingDashboardData ? (
-             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Skeleton className="h-72 rounded-lg" /> 
-                <Skeleton className="h-72 rounded-lg" /> 
-                <Skeleton className="lg:col-span-2 h-96 rounded-lg" />
-                <Skeleton className="lg:col-span-2 h-96 rounded-lg" />
-            </div>
-          ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {noReportsExistForUser && !noProjectsExistForAdmin && (
                     <div className="lg:col-span-full">
@@ -564,8 +506,8 @@ export default function DashboardPage() {
                     <>
                         <MaterialReportsChart data={materialUsageData} /> 
                         <SupplierUsageChart data={supplierUsageData} />
-                        <ComplianceTrendChart className="lg:col-span-2" />
-                        <ActivityLog className="lg:col-span-2" />
+                        <ComplianceTrendChart />
+                        <ActivityLog />
                     </>
                 )}
                  {noProjectsExistForAdmin && ( 
@@ -579,13 +521,12 @@ export default function DashboardPage() {
                     </div>
                 )}
             </div>
-          )}
         </>
       )}
 
-      { currentUserRole === 'TECHNICIAN' && (
+      { role === 'TECHNICIAN' && (
         <>
-         {noReportsExistForUser && !isLoadingDashboardData && !dashboardError && (
+         {noReportsExistForUser && (
             <Card className="mb-8">
               <CardHeader>
                 <CardTitle>Aucun Rapport Trouvé</CardTitle>
@@ -660,17 +601,17 @@ export default function DashboardPage() {
                     <CardDescription>Actions importantes ou avis système.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        {technicianReports.filter(r => r.status === 'REJECTED').length > 0 && (
+                        {allReportsData.filter(r => r.status === 'REJECTED').length > 0 && (
                             <div className="mb-3 p-2 bg-destructive/10 border border-destructive/30 rounded-md">
-                                <p className="text-sm text-destructive font-medium">Vous avez {technicianReports.filter(r => r.status === 'REJECTED').length} rapport(s) rejeté(s) nécessitant votre attention.</p>
+                                <p className="text-sm text-destructive font-medium">Vous avez {allReportsData.filter(r => r.status === 'REJECTED').length} rapport(s) rejeté(s) nécessitant votre attention.</p>
                             </div>
                         )}
-                        {technicianReports.filter(r => r.status === 'DRAFT').length > 0 && (
+                        {allReportsData.filter(r => r.status === 'DRAFT').length > 0 && (
                             <div className="mb-3 p-2 bg-amber-500/10 border border-amber-500/30 rounded-md">
-                                <p className="text-sm text-amber-700 font-medium">Vous avez {technicianReports.filter(r => r.status === 'DRAFT').length} rapport(s) en brouillon.</p>
+                                <p className="text-sm text-amber-700 font-medium">Vous avez {allReportsData.filter(r => r.status === 'DRAFT').length} rapport(s) en brouillon.</p>
                             </div>
                         )}
-                        {(technicianReports.filter(r => r.status === 'REJECTED').length === 0 && technicianReports.filter(r => r.status === 'DRAFT').length === 0) && (
+                        {(allReportsData.filter(r => r.status === 'REJECTED').length === 0 && allReportsData.filter(r => r.status === 'DRAFT').length === 0) && (
                             <p className="text-muted-foreground text-sm">Aucun rappel urgent actuellement.</p>
                         )}
                     </CardContent>

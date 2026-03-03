@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -13,8 +14,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { getProjects } from '@/services/projectService';
-import { getUsers, addUser, updateUserAssignments, updateUser, deleteUserFirestoreRecord } from '@/services/userService';
+import { getProjectsSubscription } from '@/lib/projectClientService';
+import { getUsersSubscription } from '@/lib/userClientService';
+import { addUser, updateUserAssignments, updateUser, deleteUserFirestoreRecord } from '@/services/userService';
 import { generateAssignmentNotificationEmail } from '@/ai/flows/assignment-notification-flow.ts'; 
 import {
   AlertDialog,
@@ -39,11 +41,9 @@ const userRoleFilterOptions: { value: UserRole | 'ALL'; label: string }[] = [
 
 export default function UserManagementPage() {
   const [usersData, setUsersData] = useState<User[]>([]);
-  const [isLoadingUsers, setIsLoadingUsers] = useState(true);
-  const [usersError, setUsersError] = useState<string | null>(null);
-
   const [allProjects, setAllProjects] = useState<Project[]>([]);
-  const [isLoadingProjects, setIsLoadingProjects] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const [isUserFormOpen, setIsUserFormOpen] = useState(false);
   const [editingUser, setEditingUser] = useState< (Partial<UserFormData> & { id?: string }) | undefined >(undefined);
@@ -61,28 +61,36 @@ export default function UserManagementPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<UserRole | 'ALL'>('ALL');
 
-  const fetchUsersAndProjects = async () => {
-    setIsLoadingUsers(true);
-    setIsLoadingProjects(true);
-    setUsersError(null);
-    try {
-      const [fetchedUsers, fetchedProjects] = await Promise.all([
-        getUsers(),
-        getProjects()
-      ]);
-      setUsersData(fetchedUsers);
-      setAllProjects(fetchedProjects);
-    } catch (err) {
-      setUsersError((err as Error).message || "Échec du chargement des données. Veuillez réessayer plus tard.");
-      console.error("Erreur lors de la récupération des utilisateurs ou des projets:", err);
-    } finally {
-      setIsLoadingUsers(false);
-      setIsLoadingProjects(false);
-    }
-  };
-
   useEffect(() => {
-    fetchUsersAndProjects();
+    setIsLoading(true);
+    const unsubUsers = getUsersSubscription(
+        (fetchedUsers) => {
+            setUsersData(fetchedUsers);
+            if (!isLoading) setIsLoading(false); 
+        },
+        (err) => {
+            setError((err as Error).message || "Échec du chargement des utilisateurs.");
+            setIsLoading(false);
+        }
+    );
+
+    const unsubProjects = getProjectsSubscription(
+        (fetchedProjects) => {
+            setAllProjects(fetchedProjects);
+            if (!isLoading) setIsLoading(false);
+        },
+        (err) => {
+            setError((err as Error).message || "Échec du chargement des projets.");
+            setIsLoading(false);
+        }
+    );
+
+    Promise.all([unsubUsers, unsubProjects]).then(() => setIsLoading(false)).catch(console.error);
+
+    return () => {
+        unsubUsers();
+        unsubProjects();
+    };
   }, []);
 
   const handleAddNewUser = () => {
@@ -108,7 +116,6 @@ export default function UserManagementPage() {
         title: "Enregistrement Utilisateur Supprimé",
         description: `L'utilisateur "${userToDelete.name}" (ID: ${userToDelete.id}) a été supprimé de Firestore. Son enregistrement d'authentification peut encore exister.`,
       });
-      await fetchUsersAndProjects(); 
     } catch (err) {
       toast({
         variant: "destructive",
@@ -165,7 +172,6 @@ export default function UserManagementPage() {
         setIsUserFormOpen(true); 
       }
     }
-    await fetchUsersAndProjects(); 
     setEditingUser(undefined);
   };
 
@@ -188,8 +194,6 @@ export default function UserManagementPage() {
     try {
       await updateUserAssignments(userId, newAssignments); 
       
-      await fetchUsersAndProjects(); 
-
       const oldProjectIdsSet = new Set(oldAssignments.map(a => a.projectId));
       const newlyAssignedProjectDetails: { project: Project; assignmentType: UserAssignment['assignmentType'] }[] = [];
 
@@ -326,19 +330,19 @@ export default function UserManagementPage() {
         </div>
       </div>
 
-      {(isLoadingUsers || isLoadingProjects) && (
+      {(isLoading) && (
         <div className="flex items-center justify-center py-10 text-muted-foreground">
           <Loader2 className="mr-2 h-6 w-6 animate-spin" /> Chargement des données...
         </div>
       )}
-      {usersError && !isLoadingUsers && (
+      {error && !isLoading && (
          <div className="text-center py-10 text-destructive bg-destructive/10 p-4 rounded-md">
             <AlertTriangle className="mx-auto h-8 w-8 mb-2" />
            <p className="font-semibold">Erreur de Chargement des Données</p>
-           <p>{usersError}</p>
+           <p>{error}</p>
          </div>
       )}
-      {!isLoadingUsers && !isLoadingProjects && !usersError && (
+      {!isLoading && !error && (
         <div className="bg-card p-0 md:p-6 rounded-lg shadow-md">
           {isProcessingAssignment &&
             <div className="flex items-center justify-center p-4 text-sm text-muted-foreground">
@@ -355,7 +359,7 @@ export default function UserManagementPage() {
         </div>
       )}
 
-      {isLoadingProjects ? (
+      {isLoading ? (
          <div className="flex items-center justify-center p-4"><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Chargement des projets pour assignation...</div>
       ) : (
         <AssignProjectsDialog

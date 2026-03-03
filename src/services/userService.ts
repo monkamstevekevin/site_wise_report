@@ -3,7 +3,7 @@
 
 import { auth, db } from '@/lib/firebase';
 import type { User, UserRole, Project, UserAssignment } from '@/lib/types'; // Added Project type
-import { collection, getDocs, doc, getDoc, Timestamp, query, setDoc, serverTimestamp, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, Timestamp, query, setDoc, serverTimestamp, updateDoc, deleteDoc, onSnapshot, type Unsubscribe } from 'firebase/firestore';
 import { createUserWithEmailAndPassword, updateProfile as updateAuthProfile } from 'firebase/auth';
 import { addNotification } from './notificationService'; 
 import { getProjectById } from './projectService'; // For fetching project details
@@ -38,6 +38,20 @@ const formatTimestamp = (timestampField: any): string => {
   return new Date().toISOString();
 };
 
+const mapDocToUser = (docSnapshot: any): User => {
+    const data = docSnapshot.data();
+    return {
+        id: docSnapshot.id,
+        name: data.name || 'Unnamed User',
+        email: data.email || 'no-email@example.com',
+        role: data.role || 'TECHNICIAN',
+        avatarUrl: data.avatarUrl || undefined,
+        assignments: Array.isArray(data.assignments) ? data.assignments : [], 
+        createdAt: formatTimestamp(data.createdAt),
+        updatedAt: formatTimestamp(data.updatedAt),
+    } as User;
+};
+
 /**
  * Fetches all users from the 'users' collection in Firestore.
  * @returns {Promise<User[]>} A promise that resolves to an array of User objects.
@@ -48,21 +62,7 @@ export async function getUsers(): Promise<User[]> {
     const usersCollectionRef = collection(db, 'users');
     const q = query(usersCollectionRef);
     const querySnapshot = await getDocs(q);
-
-    const users: User[] = querySnapshot.docs.map(docSnapshot => {
-      const data = docSnapshot.data();
-      return {
-        id: docSnapshot.id,
-        name: data.name || 'Unnamed User',
-        email: data.email || 'no-email@example.com',
-        role: data.role || 'TECHNICIAN',
-        avatarUrl: data.avatarUrl || undefined,
-        assignments: Array.isArray(data.assignments) ? data.assignments : [], 
-        createdAt: formatTimestamp(data.createdAt),
-        updatedAt: formatTimestamp(data.updatedAt),
-      } as User;
-    });
-    return users;
+    return querySnapshot.docs.map(mapDocToUser);
   } catch (error) {
     console.error("Error fetching users (see details below): ", error);
     throw new Error("Échec de la récupération des utilisateurs depuis la base de données. Vérifiez les journaux du serveur pour les détails de l'erreur Firebase.");
@@ -80,17 +80,7 @@ export async function getUserById(userId: string): Promise<User | null> {
     const docSnap = await getDoc(userDocRef);
 
     if (docSnap.exists()) {
-      const data = docSnap.data();
-      return {
-        id: docSnap.id,
-        name: data.name || 'Unnamed User',
-        email: data.email || 'no-email@example.com',
-        role: data.role || 'TECHNICIAN',
-        avatarUrl: data.avatarUrl || undefined,
-        assignments: Array.isArray(data.assignments) ? data.assignments : [], 
-        createdAt: formatTimestamp(data.createdAt),
-        updatedAt: formatTimestamp(data.updatedAt),
-      } as User;
+      return mapDocToUser(docSnap);
     } else {
       console.log("No such user document with ID:", userId);
       return null;
@@ -100,6 +90,7 @@ export async function getUserById(userId: string): Promise<User | null> {
     throw new Error(`Échec de la récupération de l'utilisateur ${userId} depuis la base de données.`);
   }
 }
+
 
 /**
  * Adds a new user to Firebase Authentication and creates a corresponding document in Firestore.
@@ -182,17 +173,7 @@ export async function updateUser(userId: string, data: { name?: string; role?: U
     // Fetch and return the updated user document
     const updatedDocSnap = await getDoc(userDocRef);
     if (updatedDocSnap.exists()) {
-      const updatedData = updatedDocSnap.data();
-      return {
-        id: updatedDocSnap.id,
-        name: updatedData.name || 'Unnamed User',
-        email: updatedData.email || 'no-email@example.com',
-        role: updatedData.role || 'TECHNICIAN',
-        avatarUrl: updatedData.avatarUrl || undefined,
-        assignments: Array.isArray(updatedData.assignments) ? updatedData.assignments : [], 
-        createdAt: formatTimestamp(updatedData.createdAt),
-        updatedAt: formatTimestamp(updatedData.updatedAt),
-      } as User;
+        return mapDocToUser(updatedDocSnap);
     }
     return null; // Should not happen if update was successful on an existing doc
   } catch (error) {

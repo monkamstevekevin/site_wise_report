@@ -3,19 +3,18 @@
 
 import { db } from '@/lib/firebase';
 import type { FieldReport } from '@/lib/types';
-import { collection, getDocs, Timestamp, query, where, orderBy, addDoc, serverTimestamp, doc, getDoc, updateDoc, deleteDoc, type FirestoreError } from 'firebase/firestore';
+import { collection, getDocs, Timestamp, query, where, orderBy, addDoc, serverTimestamp, doc, getDoc, updateDoc, deleteDoc, type FirestoreError, onSnapshot, type Unsubscribe } from 'firebase/firestore';
 import { addNotification } from './notificationService';
 
 /**
  * @fileOverview Report service for interacting with Firestore.
  *
  * - getReports - Fetches all reports from Firestore, ordered by creation date (desc).
- * - getReportsByTechnicianId - Fetches reports for a specific technician, ordered by creation date (desc).
+ * - getReportsByTechnicianId - Fetches reports for a specific technician.
  * - getReportById - Fetches a single report by its ID.
  * - addReport - Adds a new report to Firestore.
  * - updateReport - Updates an existing report in Firestore.
  * - deleteReport - Deletes a report from Firestore.
- * - formatTimestamp - Utility to format Firestore Timestamps.
  */
 
 const formatTimestamp = (timestampField: any): string => {
@@ -68,76 +67,46 @@ export async function getReports(): Promise<FieldReport[]> {
     const reportsCollectionRef = collection(db, 'reports');
     const q = query(reportsCollectionRef, orderBy('createdAt', 'desc'));
     const querySnapshot = await getDocs(q);
-
-    const reports: FieldReport[] = querySnapshot.docs.map(mapDocToFieldReport);
-    return reports;
+    return querySnapshot.docs.map(mapDocToFieldReport);
   } catch (error) {
     const firestoreError = error as FirestoreError;
     if (firestoreError.code === 'failed-precondition') {
-      console.warn(
-        `[Service/getReports] La requête Firestore pour tous les rapports (triés par createdAt) a échoué en raison d'un index manquant. Message Firebase : ${firestoreError.message}. Veuillez créer l'index requis dans votre console Firebase. Retour d'un tableau vide pour l'instant.`
-      );
-      const match = firestoreError.message.match(/(https:\/\/[^\s]+)/);
-      if (match && match[0]) {
-        console.warn(`[Service/getReports] Lien de création d'index : ${match[0]}`);
-      }
+      console.warn(`[Service/getReports] La requête Firestore pour tous les rapports (triés par createdAt) a échoué en raison d'un index manquant. Message Firebase : ${firestoreError.message}.`);
       return []; 
     }
-    console.error("[Service/getReports] Erreur lors de la récupération de tous les rapports : ", firestoreError.code, firestoreError.message, firestoreError);
-    throw new Error(`Échec de la récupération des rapports depuis la base de données. Erreur Firebase : ${firestoreError.code} - ${firestoreError.message}. Vérifiez les journaux du serveur et les index Firestore.`);
+    console.error("[Service/getReports] Erreur lors de la récupération de tous les rapports : ", firestoreError);
+    throw new Error(`Échec de la récupération des rapports depuis la base de données. Erreur Firebase : ${firestoreError.code}.`);
   }
 }
 
 export async function getReportsByTechnicianId(technicianId: string): Promise<FieldReport[]> {
-  if (!technicianId) {
-    console.warn("[Service/getReportsByTechnicianId] Appelé sans technicianId. Retour d'un tableau vide.");
-    return [];
-  }
+  if (!technicianId) return [];
   try {
     const reportsCollectionRef = collection(db, 'reports');
-    const q = query(
-      reportsCollectionRef,
-      where('technicianId', '==', technicianId),
-      orderBy('createdAt', 'desc')
-    );
+    const q = query(reportsCollectionRef, where('technicianId', '==', technicianId), orderBy('createdAt', 'desc'));
     const querySnapshot = await getDocs(q);
-    
-    const reports: FieldReport[] = querySnapshot.docs.map(docSnapshot => {
-        const report = mapDocToFieldReport(docSnapshot);
-        return report;
-    });
-    return reports;
+    return querySnapshot.docs.map(mapDocToFieldReport);
   } catch (error) {
     const firestoreError = error as FirestoreError;
-     if (firestoreError.code === 'failed-precondition') {
-      console.warn(
-        `[Service/getReportsByTechnicianId] La requête Firestore pour les rapports du technicien "${technicianId}" (où technicianId et trié par createdAt) a échoué en raison d'un index composite manquant. Message Firebase : ${firestoreError.message}. Veuillez créer l'index requis dans votre console Firebase. Retour d'un tableau vide pour l'instant.`
-      );
-      const match = firestoreError.message.match(/(https:\/\/[^\s]+)/);
-      if (match && match[0]) {
-        console.warn(`[Service/getReportsByTechnicianId] Lien de création d'index : ${match[0]}`);
-      }
-      return []; 
+    if (firestoreError.code === 'failed-precondition') {
+      console.warn(`[Service/getReportsByTechnicianId] La requête Firestore pour les rapports du technicien "${technicianId}" a échoué en raison d'un index composite manquant.`);
+      return [];
     }
-    console.error(`[Service/getReportsByTechnicianId] Erreur lors de la récupération des rapports pour le technicien ${technicianId}: `, firestoreError.code, firestoreError.message, firestoreError);
-    throw new Error(`Échec de la récupération des rapports pour le technicien ${technicianId}. Erreur Firebase : ${firestoreError.code} - ${firestoreError.message}. Vérifiez les journaux du serveur et les index Firestore.`);
+    console.error(`[Service/getReportsByTechnicianId] Erreur pour le technicien ${technicianId}: `, firestoreError);
+    throw new Error(`Échec de la récupération des rapports pour le technicien ${technicianId}. Erreur Firebase : ${firestoreError.code}.`);
   }
 }
+
 
 export async function getReportById(reportId: string): Promise<FieldReport | null> {
   try {
     const reportDocRef = doc(db, 'reports', reportId);
     const docSnap = await getDoc(reportDocRef);
-
-    if (docSnap.exists()) {
-      return mapDocToFieldReport(docSnap);
-    } else {
-      return null;
-    }
+    return docSnap.exists() ? mapDocToFieldReport(docSnap) : null;
   } catch (error) {
     const firestoreError = error as FirestoreError;
-    console.error(`[Service/getReportById] Erreur lors de la récupération du rapport par ID ${reportId}: `, firestoreError.code, firestoreError.message, firestoreError);
-    throw new Error(`Échec de la récupération du rapport ${reportId} depuis la base de données. Erreur Firebase : ${firestoreError.code} - ${firestoreError.message}.`);
+    console.error(`[Service/getReportById] Erreur lors de la récupération du rapport par ID ${reportId}: `, firestoreError);
+    throw new Error(`Échec de la récupération du rapport ${reportId}. Erreur Firebase : ${firestoreError.code}.`);
   }
 }
 
@@ -157,8 +126,8 @@ export async function addReport(
     return docRef.id;
   } catch (error) {
     const firestoreError = error as FirestoreError;
-    console.error("[Service/addReport] Erreur lors de l'ajout du rapport : ", firestoreError.code, firestoreError.message, firestoreError);
-    throw new Error(`Échec de l'ajout du rapport à la base de données. Erreur Firebase : ${firestoreError.code} - ${firestoreError.message}.`);
+    console.error("[Service/addReport] Erreur lors de l'ajout du rapport : ", firestoreError);
+    throw new Error(`Échec de l'ajout du rapport. Erreur Firebase : ${firestoreError.code}.`);
   }
 }
 
@@ -222,8 +191,8 @@ export async function updateReport(
 
   } catch (error) {
     const firestoreError = error as FirestoreError;
-    console.error(`[Service/updateReport] Erreur lors de la mise à jour du rapport ${reportId}: `, firestoreError.code, firestoreError.message, firestoreError);
-    throw new Error(`Échec de la mise à jour du rapport ${reportId} dans la base de données. Erreur Firebase : ${firestoreError.code} - ${firestoreError.message}.`);
+    console.error(`[Service/updateReport] Erreur lors de la mise à jour du rapport ${reportId}: `, firestoreError);
+    throw new Error(`Échec de la mise à jour du rapport ${reportId}. Erreur Firebase : ${firestoreError.code}.`);
   }
 }
 
@@ -233,7 +202,7 @@ export async function deleteReport(reportId: string): Promise<void> {
     await deleteDoc(reportDocRef);
   } catch (error) {
     const firestoreError = error as FirestoreError;
-    console.error(`[Service/deleteReport] Erreur lors de la suppression du rapport ${reportId}: `, firestoreError.code, firestoreError.message, firestoreError);
-    throw new Error(`Échec de la suppression du rapport ${reportId} de la base de données. Erreur Firebase : ${firestoreError.code} - ${firestoreError.message}.`);
+    console.error(`[Service/deleteReport] Erreur lors de la suppression du rapport ${reportId}: `, firestoreError);
+    throw new Error(`Échec de la suppression du rapport ${reportId}. Erreur Firebase : ${firestoreError.code}.`);
   }
 }

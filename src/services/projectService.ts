@@ -3,7 +3,7 @@
 
 import { db } from '@/lib/firebase';
 import type { Project, MaterialType, User } from '@/lib/types';
-import { collection, getDocs, doc, getDoc, Timestamp, query, orderBy, addDoc, serverTimestamp, updateDoc, setDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, Timestamp, query, orderBy, addDoc, serverTimestamp, updateDoc, setDoc, deleteDoc, writeBatch, onSnapshot, type Unsubscribe } from 'firebase/firestore';
 import type { ProjectSubmitData as OriginalProjectSubmitData } from '@/app/(app)/admin/projects/components/ProjectFormDialog';
 
 // Adjust ProjectSubmitData to reflect assignedMaterialIds
@@ -15,7 +15,7 @@ export type ProjectSubmitData = Omit<OriginalProjectSubmitData, 'assignedMateria
 /**
  * @fileOverview Project service for interacting with Firestore.
  *
- * - getProjects - Fetches all projects from Firestore.
+ * - getProjects - Fetches all projects from Firestore (one-time).
  * - getProjectById - Fetches a single project by its ID from Firestore.
  * - addProject - Adds a new project to Firestore.
  * - updateProject - Updates an existing project in Firestore.
@@ -41,6 +41,22 @@ const formatTimestamp = (timestampField: any): string => {
   return new Date().toISOString();
 };
 
+const mapDocToProject = (docSnapshot: any): Project => {
+    const data = docSnapshot.data();
+    return {
+        id: docSnapshot.id,
+        name: data.name || 'Unnamed Project',
+        location: data.location || 'Unknown Location',
+        description: data.description || '',
+        status: data.status || 'INACTIVE',
+        startDate: data.startDate, 
+        endDate: data.endDate,     
+        assignedMaterialIds: data.assignedMaterialIds || [],
+        createdAt: formatTimestamp(data.createdAt),
+        updatedAt: formatTimestamp(data.updatedAt),
+    } as Project; 
+};
+
 /**
  * Fetches all projects from the 'projects' collection in Firestore.
  * @returns {Promise<Project[]>} A promise that resolves to an array of Project objects.
@@ -52,22 +68,7 @@ export async function getProjects(): Promise<Project[]> {
     const q = query(projectsCollectionRef, orderBy('createdAt', 'desc')); 
     const querySnapshot = await getDocs(q);
     
-    const projects: Project[] = querySnapshot.docs.map(docSnapshot => {
-      const data = docSnapshot.data();
-      return {
-        id: docSnapshot.id,
-        name: data.name || 'Unnamed Project',
-        location: data.location || 'Unknown Location',
-        description: data.description || '',
-        status: data.status || 'INACTIVE',
-        startDate: data.startDate, 
-        endDate: data.endDate,     
-        assignedMaterialIds: data.assignedMaterialIds || [], // Ensure it's an array
-        createdAt: formatTimestamp(data.createdAt),
-        updatedAt: formatTimestamp(data.updatedAt),
-      } as Project; 
-    });
-    return projects;
+    return querySnapshot.docs.map(mapDocToProject);
   } catch (error: any) {
     console.error("Error fetching projects (see details below): ", error);
     if (error.code === 'failed-precondition') {
@@ -93,19 +94,7 @@ export async function getProjectById(projectId: string): Promise<Project | null>
     const docSnap = await getDoc(projectDocRef);
 
     if (docSnap.exists()) {
-      const data = docSnap.data();
-      return {
-        id: docSnap.id,
-        name: data.name || 'Unnamed Project',
-        location: data.location || 'Unknown Location',
-        description: data.description || '',
-        status: data.status || 'INACTIVE',
-        startDate: data.startDate,
-        endDate: data.endDate,
-        assignedMaterialIds: data.assignedMaterialIds || [], // Ensure it's an array
-        createdAt: formatTimestamp(data.createdAt),
-        updatedAt: formatTimestamp(data.updatedAt),
-      } as Project;
+      return mapDocToProject(docSnap);
     } else {
       console.log("No such project document with ID:", projectId);
       return null;
@@ -130,9 +119,9 @@ export async function addProject(projectData: ProjectSubmitData): Promise<string
       location: projectData.location,
       description: projectData.description || '',
       status: projectData.status,
-      startDate: projectData.startDate || null,
-      endDate: projectData.endDate || null,    
-      assignedMaterialIds: projectData.assignedMaterialIds || [], // Ensure array, even if empty
+      startDate: projectData.startDate ? projectData.startDate.toISOString() : null,
+      endDate: projectData.endDate ? projectData.endDate.toISOString() : null,    
+      assignedMaterialIds: projectData.assignedMaterialIds || [],
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
@@ -155,15 +144,18 @@ export async function updateProject(projectId: string, projectData: Partial<Proj
   try {
     const projectDocRef = doc(db, 'projects', projectId);
     const dataToUpdate: any = {
-      ...projectData, // Spread first to include name, location, description, status
+      name: projectData.name,
+      location: projectData.location,
+      description: projectData.description,
+      status: projectData.status,
       updatedAt: serverTimestamp(),
     };
     
     if (Object.prototype.hasOwnProperty.call(projectData, 'startDate')) {
-      dataToUpdate.startDate = projectData.startDate || null;
+      dataToUpdate.startDate = projectData.startDate ? projectData.startDate.toISOString() : null;
     }
     if (Object.prototype.hasOwnProperty.call(projectData, 'endDate')) {
-      dataToUpdate.endDate = projectData.endDate || null;
+      dataToUpdate.endDate = projectData.endDate ? projectData.endDate.toISOString() : null;
     }
     if (Object.prototype.hasOwnProperty.call(projectData, 'assignedMaterialIds')) {
       dataToUpdate.assignedMaterialIds = projectData.assignedMaterialIds || [];

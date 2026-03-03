@@ -17,7 +17,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { UserRole } from '@/lib/constants';
 import { MOCK_TECHNICIAN_EMAIL, MOCK_TECHNICIAN_REPORTS_ID } from '@/lib/constants';
-import { getReports, getReportsByTechnicianId, deleteReport as deleteReportService, updateReport } from '@/services/reportService'; 
+import { getReportsSubscription, getReportsByTechnicianIdSubscription } from '@/lib/reportClientService';
+import { deleteReport as deleteReportService, updateReport } from '@/services/reportService'; 
 import { useRouter } from 'next/navigation'; 
 import {
   AlertDialog,
@@ -93,40 +94,44 @@ export default function ReportsPage() {
   const [isRejectionDialogOpen, setIsRejectionDialogOpen] = useState(false);
   const [reportToReject, setReportToReject] = useState<FieldReport | null>(null);
 
-
-  const fetchReportsForUser = async () => {
-    if (authLoading || !user) {
-      setIsLoadingReports(false);
-      if (!authLoading && !user) setAllFetchedReports([]); 
+  useEffect(() => {
+    if (authLoading) {
+      setIsLoadingReports(true);
       return;
     }
+    if (!user) {
+        setIsLoadingReports(false);
+        setAllFetchedReports([]);
+        return;
+    }
 
-    setIsLoadingReports(true);
-    setReportsError(null);
     const { role, effectiveTechnicianId: mappedTechId } = mapFirebaseUserToAppRoleAndId(user);
     setCurrentUserRole(role);
     setEffectiveTechnicianId(mappedTechId);
+    
+    let unsubscribe = () => {};
 
-    try {
-      let fetchedReports: FieldReport[] = [];
-      if (role === 'TECHNICIAN' && mappedTechId) {
-        fetchedReports = await getReportsByTechnicianId(mappedTechId);
-      } else if (role === 'ADMIN' || role === 'SUPERVISOR') {
-        fetchedReports = await getReports();
-      } else {
-        fetchedReports = [];
-      }
-      setAllFetchedReports(fetchedReports);
-    } catch (err) {
-      setReportsError((err as Error).message || "Échec du chargement des rapports.");
-      setAllFetchedReports([]);
-    } finally {
-      setIsLoadingReports(false);
+    const onUpdate = (fetchedReports: FieldReport[]) => {
+        setAllFetchedReports(fetchedReports);
+        setReportsError(null);
+        setIsLoadingReports(false);
+    };
+    const onError = (err: Error) => {
+        setReportsError((err as Error).message || "Échec du chargement des rapports.");
+        setAllFetchedReports([]);
+        setIsLoadingReports(false);
+    };
+
+    if (role === 'TECHNICIAN' && mappedTechId) {
+        unsubscribe = getReportsByTechnicianIdSubscription(mappedTechId, onUpdate, onError);
+    } else if (role === 'ADMIN' || role === 'SUPERVISOR') {
+        unsubscribe = getReportsSubscription(onUpdate, onError);
+    } else {
+        setIsLoadingReports(false);
+        setAllFetchedReports([]);
     }
-  };
 
-  useEffect(() => {
-    fetchReportsForUser();
+    return () => unsubscribe();
   }, [user, authLoading]);
 
 
@@ -147,7 +152,6 @@ export default function ReportsPage() {
         title: "Rapport Supprimé",
         description: `Le rapport ID: ${reportToDelete.id} a été supprimé.`,
       });
-      await fetchReportsForUser(); 
     } catch (err) {
       toast({
         variant: "destructive",
@@ -168,7 +172,6 @@ export default function ReportsPage() {
     try {
       await updateReport(report.id, { status: 'VALIDATED' });
       toast({ title: 'Rapport Validé', description: `Le rapport ID: ${report.id} a été marqué comme VALIDÉ.` });
-      await fetchReportsForUser();
     } catch (err) {
       toast({ variant: 'destructive', title: 'Erreur de Validation', description: (err as Error).message || "Une erreur s'est produite." });
     }
@@ -196,7 +199,6 @@ export default function ReportsPage() {
           </div>
         )
       });
-      await fetchReportsForUser();
     } catch (err) {
       toast({ variant: 'destructive', title: 'Erreur de Rejet', description: (err as Error).message || "Une erreur s'est produite." });
       setIsRejectionDialogOpen(true);
@@ -365,4 +367,3 @@ export default function ReportsPage() {
     </>
   );
 }
-

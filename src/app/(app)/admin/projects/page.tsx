@@ -6,14 +6,16 @@ import { PageTitle } from '@/components/common/PageTitle';
 import { HardHat, PlusCircle, Filter, Loader2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ProjectTable } from './components/ProjectTable';
-import { ProjectFormDialog, type ProjectFormData } from './components/ProjectFormDialog';
+import { ProjectFormDialog } from './components/ProjectFormDialog';
+import type { ProjectFormData } from './components/ProjectFormDialog';
 import type { Project, Material } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { getProjects, addProject, updateProject, deleteProject } from '@/services/projectService';
-import { getMaterials } from '@/services/materialService';
+import { addProject, updateProject, deleteProject } from '@/services/projectService';
+import { getProjectsSubscription } from '@/lib/projectClientService';
+import { getMaterialsSubscription } from '@/lib/materialClientService';
 import type { ProjectSubmitData } from '@/services/projectService';
 
 const projectStatusFilterOptions: { value: Project['status'] | 'ALL'; label: string }[] = [
@@ -36,26 +38,38 @@ export default function ProjectManagementPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<Project['status'] | 'ALL'>('ALL');
 
-  const fetchData = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const [fetchedProjects, fetchedMaterials] = await Promise.all([
-        getProjects(),
-        getMaterials()
-      ]);
-      setProjects(fetchedProjects);
-      setAllMaterials(fetchedMaterials);
-    } catch (err) {
-      setError((err as Error).message || "Échec du chargement des données du projet ou des matériaux. Veuillez réessayer plus tard.");
-      console.error(err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchData();
+    setIsLoading(true);
+    const unsubProjects = getProjectsSubscription(
+        (fetchedProjects) => {
+            setProjects(fetchedProjects);
+            if (!isLoading) setIsLoading(false);
+        }, 
+        (err) => {
+            setError((err as Error).message || "Échec du chargement des projets.");
+            setIsLoading(false);
+        }
+    );
+
+    const unsubMaterials = getMaterialsSubscription(
+        (fetchedMaterials) => {
+            setAllMaterials(fetchedMaterials);
+            if (!isLoading) setIsLoading(false);
+        },
+        (err) => {
+            setError((err as Error).message || "Échec du chargement des matériaux.");
+            setIsLoading(false);
+        }
+    );
+    
+    // Set loading to false once both subscriptions are initiated
+    Promise.all([unsubProjects, unsubMaterials]).then(() => setIsLoading(false)).catch(console.error);
+
+
+    return () => {
+        unsubProjects();
+        unsubMaterials();
+    };
   }, []);
 
   const handleAddNewProject = () => {
@@ -75,7 +89,6 @@ export default function ProjectManagementPage() {
         title: "Projet Supprimé",
         description: `Le projet (ID: ${projectId}) a été supprimé avec succès.`,
       });
-      await fetchData(); 
     } catch (err) {
       toast({
         variant: "destructive",
@@ -93,8 +106,8 @@ export default function ProjectManagementPage() {
       location: formData.location,
       description: formData.description,
       status: formData.status,
-      startDate: formData.startDate ? formData.startDate.toISOString() : undefined,
-      endDate: formData.endDate ? formData.endDate.toISOString() : undefined,
+      startDate: formData.startDate,
+      endDate: formData.endDate,
       assignedMaterialIds: formData.assignedMaterialIds || [],
     };
 
@@ -131,7 +144,6 @@ export default function ProjectManagementPage() {
       }
     }
     
-    await fetchData(); 
     setEditingProject(undefined); 
   };
 
@@ -226,4 +238,3 @@ export default function ProjectManagementPage() {
     </>
   );
 }
-

@@ -12,7 +12,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { getMaterials, addMaterial, updateMaterial, deleteMaterial } from '@/services/materialService';
+import { addMaterial, updateMaterial, deleteMaterial } from '@/services/materialService';
+import { getMaterialsSubscription } from '@/lib/materialClientService';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,22 +49,22 @@ export default function MaterialManagementPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState<MaterialType | 'ALL'>('ALL');
 
-  const fetchMaterials = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const fetchedMaterials = await getMaterials();
-      setMaterials(fetchedMaterials);
-    } catch (err) {
-      setError((err as Error).message || "Échec du chargement des matériaux. Veuillez réessayer plus tard.");
-      console.error(err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchMaterials();
+    setIsLoading(true);
+    const unsubscribe = getMaterialsSubscription(
+      (fetchedMaterials) => {
+        setMaterials(fetchedMaterials);
+        setError(null);
+        setIsLoading(false);
+      },
+      (err) => {
+        setError((err as Error).message || "Échec du chargement des matériaux. Veuillez réessayer plus tard.");
+        console.error(err);
+        setIsLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
   }, []);
 
   const handleAddNewMaterial = () => {
@@ -89,7 +90,6 @@ export default function MaterialManagementPage() {
         title: "Matériau Supprimé",
         description: `Le matériau "${materialToDelete.name}" (ID: ${materialToDelete.id}) a été supprimé.`,
       });
-      await fetchMaterials();
     } catch (err) {
       toast({
         variant: "destructive",
@@ -136,7 +136,6 @@ export default function MaterialManagementPage() {
          setIsMaterialFormOpen(true); 
       }
     }
-    await fetchMaterials();
     setEditingMaterial(undefined);
   };
 
@@ -253,4 +252,3 @@ export default function MaterialManagementPage() {
     </>
   );
 }
-

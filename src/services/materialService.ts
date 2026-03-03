@@ -3,14 +3,14 @@
 
 import { db } from '@/lib/firebase';
 import type { Material, MaterialType, MaterialValidationRules } from '@/lib/types';
-import { collection, getDocs, doc, getDoc, Timestamp, query, orderBy, addDoc, serverTimestamp, updateDoc, deleteDoc, setDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, Timestamp, query, orderBy, addDoc, serverTimestamp, updateDoc, deleteDoc, setDoc, onSnapshot, type Unsubscribe } from 'firebase/firestore';
 import type { MaterialSubmitData } from '@/app/(app)/admin/materials/components/MaterialFormDialog';
 
 
 /**
  * @fileOverview Material service for interacting with Firestore.
  *
- * - getMaterials - Fetches all materials from Firestore.
+ * - getMaterials - Fetches all materials from Firestore (one-time).
  * - getMaterialById - Fetches a single material by its ID from Firestore.
  * - addMaterial - Adds a new material to Firestore.
  * - updateMaterial - Updates an existing material in Firestore.
@@ -24,20 +24,28 @@ const formatTimestamp = (timestampField: any): string => {
   if (timestampField instanceof Timestamp) {
     return timestampField.toDate().toISOString();
   }
-  // Handle cases where timestamp might be an object from Firestore but not an instance of Timestamp
-  // (e.g., after being serialized and deserialized, or directly from certain SDK versions/contexts)
   if (timestampField.seconds !== undefined && typeof timestampField.nanoseconds === 'number') {
     return new Timestamp(timestampField.seconds, timestampField.nanoseconds).toDate().toISOString();
   }
-  // Handle cases where it might already be a string or number (e.g., from mock data or other sources)
   if (typeof timestampField === 'string' || typeof timestampField === 'number') {
     const date = new Date(timestampField);
     if (!isNaN(date.getTime())) {
       return date.toISOString();
     }
   }
-  // Fallback for any other unexpected format
   return new Date().toISOString();
+};
+
+const mapDocToMaterial = (docSnapshot: any): Material => {
+    const data = docSnapshot.data();
+    return {
+        id: docSnapshot.id,
+        name: data.name || 'Unnamed Material',
+        type: data.type || 'other',
+        validationRules: data.validationRules || {},
+        createdAt: formatTimestamp(data.createdAt),
+        updatedAt: formatTimestamp(data.updatedAt),
+    } as Material;
 };
 
 
@@ -49,23 +57,9 @@ const formatTimestamp = (timestampField: any): string => {
 export async function getMaterials(): Promise<Material[]> {
   try {
     const materialsCollectionRef = collection(db, 'materials');
-    // To order by name, ensure an index exists for the 'name' field in the 'materials' collection.
-    // const q = query(materialsCollectionRef, orderBy('name'));
-    const q = query(materialsCollectionRef); // Query without ordering for now to avoid index issues
+    const q = query(materialsCollectionRef, orderBy('name'));
     const querySnapshot = await getDocs(q);
-
-    const materials: Material[] = querySnapshot.docs.map(docSnapshot => {
-      const data = docSnapshot.data();
-      return {
-        id: docSnapshot.id,
-        name: data.name || 'Unnamed Material',
-        type: data.type || 'other', // Default to 'other' if type is missing
-        validationRules: data.validationRules || {}, // Default to empty object
-        createdAt: formatTimestamp(data.createdAt),
-        updatedAt: formatTimestamp(data.updatedAt),
-      } as Material;
-    });
-    return materials;
+    return querySnapshot.docs.map(mapDocToMaterial);
   } catch (error) {
     console.error("Error fetching materials (see details below): ", error);
     throw new Error("Failed to fetch materials from database. Check server logs for Firebase error details.");
@@ -83,15 +77,7 @@ export async function getMaterialById(materialId: string): Promise<Material | nu
     const docSnap = await getDoc(materialDocRef);
 
     if (docSnap.exists()) {
-      const data = docSnap.data();
-      return {
-        id: docSnap.id,
-        name: data.name || 'Unnamed Material',
-        type: data.type || 'other',
-        validationRules: data.validationRules || {},
-        createdAt: formatTimestamp(data.createdAt),
-        updatedAt: formatTimestamp(data.updatedAt),
-      } as Material;
+      return mapDocToMaterial(docSnap);
     } else {
       console.log("No such material document with ID:", materialId);
       return null;

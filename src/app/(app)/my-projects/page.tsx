@@ -6,8 +6,8 @@ import { PageTitle } from '@/components/common/PageTitle';
 import { Briefcase, Loader2, AlertTriangle, Search } from 'lucide-react';
 import type { Project, User, UserAssignment } from '@/lib/types';
 import { useAuth } from '@/contexts/AuthContext';
-import { getProjects } from '@/services/projectService';
-import { getUserById } from '@/services/userService';
+import { getProjectsSubscription } from '@/lib/projectClientService';
+import { getUserByIdSubscription } from '@/lib/userClientService';
 import { MyProjectCard } from './components/MyProjectCard';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
@@ -22,31 +22,41 @@ export default function MyProjectsPage() {
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    const fetchData = async () => {
-      if (authLoading) return;
-      if (!user) {
-        setError("Veuillez vous connecter pour voir vos projets.");
-        setIsLoading(false);
-        return;
-      }
+    if (authLoading) return;
+    if (!user) {
+      setError("Veuillez vous connecter pour voir vos projets.");
+      setIsLoading(false);
+      return;
+    }
 
-      setIsLoading(true);
-      setError(null);
-      try {
-        const [fetchedProjects, fetchedCurrentUser] = await Promise.all([
-          getProjects(),
-          getUserById(user.uid),
-        ]);
+    setIsLoading(true);
+    const unsubProjects = getProjectsSubscription(
+      (fetchedProjects) => {
         setAllProjects(fetchedProjects);
-        setCurrentUserData(fetchedCurrentUser);
-      } catch (err) {
-        console.error("Erreur lors de la récupération des données pour Mes Projets:", err);
-        setError((err as Error).message || "Échec du chargement des données du projet.");
-      } finally {
+        if (currentUserData) setIsLoading(false);
+      },
+      (err) => {
+        setError((err as Error).message || "Échec du chargement des projets.");
         setIsLoading(false);
       }
+    );
+
+    const unsubUser = getUserByIdSubscription(
+      user.uid,
+      (fetchedCurrentUser) => {
+        setCurrentUserData(fetchedCurrentUser);
+        if (allProjects.length > 0 || !isLoading) setIsLoading(false);
+      },
+      (err) => {
+        setError((err as Error).message || "Échec du chargement des données utilisateur.");
+        setIsLoading(false);
+      }
+    );
+    
+    return () => {
+      unsubProjects();
+      unsubUser();
     };
-    fetchData();
   }, [user, authLoading]);
 
   const assignedProjects = useMemo(() => {
@@ -157,4 +167,3 @@ export default function MyProjectsPage() {
     </>
   );
 }
-
