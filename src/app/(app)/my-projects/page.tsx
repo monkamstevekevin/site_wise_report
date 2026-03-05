@@ -31,6 +31,7 @@ export default function MyProjectsPage() {
 
     setIsLoading(true);
     const unsubProjects = getProjectsSubscription(
+      user?.organizationId,
       (fetchedProjects) => {
         setAllProjects(fetchedProjects);
         if (currentUserData) setIsLoading(false);
@@ -42,7 +43,7 @@ export default function MyProjectsPage() {
     );
 
     const unsubUser = getUserByIdSubscription(
-      user.uid,
+      user.id,
       (fetchedCurrentUser) => {
         setCurrentUserData(fetchedCurrentUser);
         if (allProjects.length > 0 || !isLoading) setIsLoading(false);

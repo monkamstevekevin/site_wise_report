@@ -1,84 +1,120 @@
-// This file is for client-side user utilities, specifically for real-time subscriptions.
-import { db } from '@/lib/firebase';
-import type { User } from '@/lib/types';
-import {
-  collection,
-  doc,
-  query,
-  onSnapshot,
-  Timestamp,
-  type Unsubscribe,
-} from 'firebase/firestore';
+// Client-side user subscriptions using Supabase Realtime
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import type { User, UserAssignment } from '@/lib/types';
 
-const formatTimestamp = (timestampField: any): string => {
-  if (!timestampField) {
-    return new Date().toISOString();
-  }
-  if (timestampField instanceof Timestamp) {
-    return timestampField.toDate().toISOString();
-  }
-  if (timestampField.seconds !== undefined && typeof timestampField.nanoseconds === 'number') {
-    return new Timestamp(timestampField.seconds, timestampField.nanoseconds).toDate().toISOString();
-  }
-  if (typeof timestampField === 'string' || typeof timestampField === 'number') {
-    const date = new Date(timestampField);
-    if (!isNaN(date.getTime())) {
-      return date.toISOString();
-    }
-  }
-  return new Date().toISOString();
+type Unsubscribe = () => void;
+
+type UserRow = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  avatar_url: string | null;
+  created_at: string;
+  updated_at: string;
+  user_assignments: { project_id: string; assignment_type: string }[];
 };
 
-const mapDocToUser = (docSnapshot: any): User => {
-    const data = docSnapshot.data();
-    return {
-        id: docSnapshot.id,
-        name: data.name || 'Unnamed User',
-        email: data.email || 'no-email@example.com',
-        role: data.role || 'TECHNICIAN',
-        avatarUrl: data.avatarUrl || undefined,
-        assignments: Array.isArray(data.assignments) ? data.assignments : [],
-        createdAt: formatTimestamp(data.createdAt),
-        updatedAt: formatTimestamp(data.updatedAt),
-    } as User;
-};
-
-/**
- * Subscribes to real-time updates for all users.
- * @param onUpdate - Callback function to handle the updated users list.
- * @returns An unsubscribe function to stop listening for updates.
- */
-export function getUsersSubscription(onUpdate: (users: User[]) => void, onError: (error: Error) => void): Unsubscribe {
-  const usersCollectionRef = collection(db, 'users');
-  const q = query(usersCollectionRef);
-
-  return onSnapshot(q, (querySnapshot) => {
-    const users = querySnapshot.docs.map(mapDocToUser);
-    onUpdate(users);
-  }, (error) => {
-    console.error("Error with users real-time subscription:", error);
-    onError(new Error("Failed to subscribe to users updates."));
-  });
+function mapRowToUser(row: UserRow): User {
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    role: row.role as User['role'],
+    avatarUrl: row.avatar_url ?? undefined,
+    assignments: row.user_assignments.map((a) => ({
+      projectId: a.project_id,
+      assignmentType: a.assignment_type as UserAssignment['assignmentType'],
+    })),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }
 
+async function fetchAll(
+  supabase: ReturnType<typeof createSupabaseBrowserClient>,
+  orgId?: string
+): Promise<User[]> {
+  let query = supabase
+    .from('users')
+    .select('*, user_assignments(project_id, assignment_type)');
 
-/**
- * Subscribes to real-time updates for a single user.
- * @param userId - The ID of the user to subscribe to.
- * @param onUpdate - Callback function to handle the updated user data.
- * @returns An unsubscribe function to stop listening for updates.
- */
-export function getUserByIdSubscription(userId: string, onUpdate: (user: User | null) => void, onError: (error: Error) => void): Unsubscribe {
-  const userDocRef = doc(db, 'users', userId);
+  if (orgId) {
+    query = query.eq('organization_id', orgId);
+  }
 
-  return onSnapshot(userDocRef, (docSnap) => {
-    if (docSnap.exists()) {
-      onUpdate(mapDocToUser(docSnap));
-    } else {
-      onUpdate(null);
-    }
-  }, (error) => {
-    console.error(`Error with user real-time subscription for ID ${userId}:`, error);
-    onError(new Error(`Failed to subscribe to user updates for ID ${userId}.`));
-  });
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return (data as UserRow[]).map(mapRowToUser);
+}
+
+async function fetchById(
+  supabase: ReturnType<typeof createSupabaseBrowserClient>,
+  userId: string
+): Promise<User | null> {
+  const { data, error } = await supabase
+    .from('users')
+    .select('*, user_assignments(project_id, assignment_type)')
+    .eq('id', userId)
+    .single();
+  if (error) {
+    if (error.code === 'PGRST116') return null;
+    throw new Error(error.message);
+  }
+  return mapRowToUser(data as UserRow);
+}
+
+export function getUsersSubscription(
+  orgId: string | null | undefined,
+  onUpdate: (users: User[]) => void,
+  onError: (error: Error) => void
+): Unsubscribe {
+  const supabase = createSupabaseBrowserClient();
+
+  fetchAll(supabase, orgId ?? undefined).then(onUpdate).catch(onError);
+
+  const channelFilter = orgId ? { filter: `organization_id=eq.${orgId}` } : {};
+
+  const channel = supabase
+    .channel(`users-all-${orgId ?? 'global'}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'users', ...channelFilter }, () => {
+      fetchAll(supabase, orgId ?? undefined).then(onUpdate).catch(onError);
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'user_assignments' }, () => {
+      fetchAll(supabase, orgId ?? undefined).then(onUpdate).catch(onError);
+    })
+    .subscribe();
+
+  return () => { supabase.removeChannel(channel); };
+}
+
+export function getUserByIdSubscription(
+  userId: string,
+  onUpdate: (user: User | null) => void,
+  onError: (error: Error) => void
+): Unsubscribe {
+  if (!userId) {
+    onUpdate(null);
+    return () => {};
+  }
+
+  const supabase = createSupabaseBrowserClient();
+
+  fetchById(supabase, userId).then(onUpdate).catch(onError);
+
+  const channel = supabase
+    .channel(`user-${userId}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'users', filter: `id=eq.${userId}` },
+      () => { fetchById(supabase, userId).then(onUpdate).catch(onError); }
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'user_assignments', filter: `user_id=eq.${userId}` },
+      () => { fetchById(supabase, userId).then(onUpdate).catch(onError); }
+    )
+    .subscribe();
+
+  return () => { supabase.removeChannel(channel); };
 }

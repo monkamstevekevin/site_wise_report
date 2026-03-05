@@ -17,7 +17,7 @@ import { Label } from '@/components/ui/label';
 import { getProjectsSubscription } from '@/lib/projectClientService';
 import { getUsersSubscription } from '@/lib/userClientService';
 import { addUser, updateUserAssignments, updateUser, deleteUserFirestoreRecord } from '@/services/userService';
-import { generateAssignmentNotificationEmail } from '@/ai/flows/assignment-notification-flow.ts'; 
+import { generateAssignmentNotificationEmail } from '@/ai/flows/assignment-notification-flow';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,8 +28,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { collection, addDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 
 
 const userRoleFilterOptions: { value: UserRole | 'ALL'; label: string }[] = [
@@ -64,9 +62,10 @@ export default function UserManagementPage() {
   useEffect(() => {
     setIsLoading(true);
     const unsubUsers = getUsersSubscription(
+        adminAuthUser?.organizationId,
         (fetchedUsers) => {
             setUsersData(fetchedUsers);
-            if (!isLoading) setIsLoading(false); 
+            if (!isLoading) setIsLoading(false);
         },
         (err) => {
             setError((err as Error).message || "Échec du chargement des utilisateurs.");
@@ -75,6 +74,7 @@ export default function UserManagementPage() {
     );
 
     const unsubProjects = getProjectsSubscription(
+        adminAuthUser?.organizationId,
         (fetchedProjects) => {
             setAllProjects(fetchedProjects);
             if (!isLoading) setIsLoading(false);
@@ -91,7 +91,7 @@ export default function UserManagementPage() {
         unsubUsers();
         unsubProjects();
     };
-  }, []);
+  }, [adminAuthUser?.organizationId]);
 
   const handleAddNewUser = () => {
     setEditingUser(undefined);
@@ -129,12 +129,12 @@ export default function UserManagementPage() {
   };
 
 
-  const handleUserFormSubmit = async (data: UserFormData & { password?: string }, id?: string) => {
+  const handleUserFormSubmit = async (data: Partial<UserFormData> & { password?: string }, id?: string) => {
     setIsUserFormOpen(false);
 
     if (id) { 
       try {
-        await updateUser(id, { displayName: data.displayName, role: data.role });
+        await updateUser(id, { name: data.displayName, role: data.role });
         toast({
           title: "Utilisateur Mis à Jour avec Succès",
           description: `L'utilisateur "${data.displayName}" a été mis à jour.`,
@@ -155,10 +155,10 @@ export default function UserManagementPage() {
       }
       try {
         const newUserId = await addUser({
-          displayName: data.displayName,
-          email: data.email,
-          role: data.role as UserRole 
-        }, data.password);
+          displayName: data.displayName as string,
+          email: data.email as string,
+          role: data.role as UserRole,
+        }, data.password, adminAuthUser?.organizationId);
         toast({
           title: "Utilisateur Ajouté avec Succès !",
           description: `L'utilisateur "${data.displayName}" (ID: ${newUserId}) a été créé.`,
@@ -224,20 +224,13 @@ export default function UserManagementPage() {
             userName: targetUser.name,
             projectName: `${project.name} (Assignation ${assignmentTypeDisplay})`,
             projectLocation: project.location,
-            assignerName: adminAuthUser.displayName || adminAuthUser.email || "Admin",
+            assignerName: adminAuthUser.name || adminAuthUser.email || "Admin",
             appName: "SiteWise Reports",
             appUrl: appBaseUrl
           });
           
-          const mailCollectionRef = collection(db, 'mail');
-          await addDoc(mailCollectionRef, {
-            to: [targetUser.email],
-            message: {
-              subject: notificationContent.emailSubject,
-              html: notificationContent.emailBody,
-            },
-          });
-          console.log(`Document e-mail pour le projet ${project.name} écrit dans la collection 'mail' pour ${targetUser.email}.`);
+          // TODO: Replace with Supabase-based email sending (e.g., via Edge Function or Resend API)
+          console.log(`Email notification for ${targetUser.email} (project: ${project.name}):`, notificationContent.emailSubject);
           toast({
             title: `E-mail Mis en File d'Attente pour ${project.name}`,
             description: `L'e-mail d'assignation pour ${targetUser.name} concernant ${project.name} (${assignmentTypeDisplay}) a été mis en file d'attente. Sujet : ${notificationContent.emailSubject}`,

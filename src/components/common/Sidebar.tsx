@@ -19,17 +19,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useAuth } from '@/contexts/AuthContext';
-import type { User as FirebaseUser } from 'firebase/auth';
 import { Skeleton } from '@/components/ui/skeleton';
-
-const mapFirebaseUserToAppRole = (firebaseUser: FirebaseUser | null): UserRole => {
-  if (!firebaseUser) return 'TECHNICIAN'; // Default or guest role
-  // Specific email checks for roles
-  if (firebaseUser.email === 'janesteve237@gmail.com') return 'ADMIN';
-  if (firebaseUser.email?.includes('admin@example.com')) return 'ADMIN';
-  if (firebaseUser.email?.includes('supervisor@example.com')) return 'SUPERVISOR';
-  return 'TECHNICIAN'; // Default for other authenticated users
-};
 
 interface NavItemDisplayProps {
   item: NavItem;
@@ -89,14 +79,12 @@ export function SiteWiseSidebar() {
 
   useEffect(() => {
     if (!loading && user) {
-      const role = mapFirebaseUserToAppRole(user);
+      const role = user.role as UserRole;
       setCurrentUserRole(role);
       setNavItems(getNavItemsForRole(role));
     } else if (!loading && !user) {
-      // Handle guest or logged-out state if necessary, or default to TECHNICIAN for nav structure
-      const role = mapFirebaseUserToAppRole(null);
-      setCurrentUserRole(role);
-      setNavItems(getNavItemsForRole(role)); // Or a minimal set for guests
+      setCurrentUserRole('TECHNICIAN');
+      setNavItems(getNavItemsForRole('TECHNICIAN'));
     }
   }, [user, loading]);
 

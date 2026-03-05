@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { ProjectTable } from './components/ProjectTable';
 import { ProjectFormDialog } from './components/ProjectFormDialog';
 import type { ProjectFormData } from './components/ProjectFormDialog';
-import type { Project, Material } from '@/lib/types';
+import type { Project, Material, User } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -16,7 +16,9 @@ import { Label } from '@/components/ui/label';
 import { addProject, updateProject, deleteProject } from '@/services/projectService';
 import { getProjectsSubscription } from '@/lib/projectClientService';
 import { getMaterialsSubscription } from '@/lib/materialClientService';
+import { getUsersSubscription } from '@/lib/userClientService';
 import type { ProjectSubmitData } from '@/services/projectService';
+import { useAuth } from '@/contexts/AuthContext';
 
 const projectStatusFilterOptions: { value: Project['status'] | 'ALL'; label: string }[] = [
   { value: 'ALL', label: 'Tous les Statuts' },
@@ -28,12 +30,14 @@ const projectStatusFilterOptions: { value: Project['status'] | 'ALL'; label: str
 export default function ProjectManagementPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [allMaterials, setAllMaterials] = useState<Material[]>([]);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [isProjectFormOpen, setIsProjectFormOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | undefined>(undefined);
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<Project['status'] | 'ALL'>('ALL');
@@ -41,10 +45,11 @@ export default function ProjectManagementPage() {
   useEffect(() => {
     setIsLoading(true);
     const unsubProjects = getProjectsSubscription(
+        user?.organizationId,
         (fetchedProjects) => {
             setProjects(fetchedProjects);
             if (!isLoading) setIsLoading(false);
-        }, 
+        },
         (err) => {
             setError((err as Error).message || "Échec du chargement des projets.");
             setIsLoading(false);
@@ -61,16 +66,21 @@ export default function ProjectManagementPage() {
             setIsLoading(false);
         }
     );
-    
-    // Set loading to false once both subscriptions are initiated
-    Promise.all([unsubProjects, unsubMaterials]).then(() => setIsLoading(false)).catch(console.error);
 
+    const unsubUsers = getUsersSubscription(
+        user?.organizationId,
+        (fetchedUsers) => { setAllUsers(fetchedUsers); },
+        (err) => { console.error("Échec du chargement des utilisateurs:", err); }
+    );
+
+    Promise.all([unsubProjects, unsubMaterials, unsubUsers]).then(() => setIsLoading(false)).catch(console.error);
 
     return () => {
         unsubProjects();
         unsubMaterials();
+        unsubUsers();
     };
-  }, []);
+  }, [user?.organizationId]);
 
   const handleAddNewProject = () => {
     setEditingProject(undefined); 
@@ -129,7 +139,7 @@ export default function ProjectManagementPage() {
       }
     } else {
       try {
-        const newProjectId = await addProject(submitData);
+        const newProjectId = await addProject(submitData, user?.organizationId);
         toast({
           title: "Projet Ajouté avec Succès",
           description: `Le projet "${submitData.name}" (ID: ${newProjectId}) a été ajouté.`,
@@ -230,7 +240,8 @@ export default function ProjectManagementPage() {
           <ProjectTable
             projects={filteredProjects}
             allMaterials={allMaterials}
-            onEditProject={handleEditProject} 
+            allUsers={allUsers}
+            onEditProject={handleEditProject}
             onDeleteProject={handleDeleteProject}
           />
         </div>

@@ -1,60 +1,60 @@
-// This file is for client-side material utilities, specifically for real-time subscriptions.
-import { db } from '@/lib/firebase';
+// Client-side material subscriptions using Supabase Realtime
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import type { Material } from '@/lib/types';
-import {
-  collection,
-  query,
-  orderBy,
-  onSnapshot,
-  Timestamp,
-  type Unsubscribe,
-} from 'firebase/firestore';
 
-const formatTimestamp = (timestampField: any): string => {
-  if (!timestampField) {
-    return new Date().toISOString();
-  }
-  if (timestampField instanceof Timestamp) {
-    return timestampField.toDate().toISOString();
-  }
-  if (timestampField.seconds !== undefined && typeof timestampField.nanoseconds === 'number') {
-    return new Timestamp(timestampField.seconds, timestampField.nanoseconds).toDate().toISOString();
-  }
-  if (typeof timestampField === 'string' || typeof timestampField === 'number') {
-    const date = new Date(timestampField);
-    if (!isNaN(date.getTime())) {
-      return date.toISOString();
-    }
-  }
-  return new Date().toISOString();
+type Unsubscribe = () => void;
+
+type MaterialRow = {
+  id: string;
+  name: string;
+  type: string;
+  min_density: string | null;
+  max_density: string | null;
+  min_temperature: string | null;
+  max_temperature: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
-const mapDocToMaterial = (docSnapshot: any): Material => {
-    const data = docSnapshot.data();
-    return {
-        id: docSnapshot.id,
-        name: data.name || 'Unnamed Material',
-        type: data.type || 'other',
-        validationRules: data.validationRules || {},
-        createdAt: formatTimestamp(data.createdAt),
-        updatedAt: formatTimestamp(data.updatedAt),
-    } as Material;
-};
+function mapRowToMaterial(row: MaterialRow): Material {
+  return {
+    id: row.id,
+    name: row.name,
+    type: row.type as Material['type'],
+    validationRules: {
+      minDensity: row.min_density != null ? Number(row.min_density) : undefined,
+      maxDensity: row.max_density != null ? Number(row.max_density) : undefined,
+      minTemperature: row.min_temperature != null ? Number(row.min_temperature) : undefined,
+      maxTemperature: row.max_temperature != null ? Number(row.max_temperature) : undefined,
+    },
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
 
-/**
- * Subscribes to real-time updates for all materials.
- * @param onUpdate - Callback function to handle the updated materials list.
- * @returns An unsubscribe function to stop listening for updates.
- */
-export function getMaterialsSubscription(onUpdate: (materials: Material[]) => void, onError: (error: Error) => void): Unsubscribe {
-  const materialsCollectionRef = collection(db, 'materials');
-  const q = query(materialsCollectionRef, orderBy('name'));
+async function fetchAll(supabase: ReturnType<typeof createSupabaseBrowserClient>): Promise<Material[]> {
+  const { data, error } = await supabase
+    .from('materials')
+    .select('*')
+    .order('name', { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data as MaterialRow[]).map(mapRowToMaterial);
+}
 
-  return onSnapshot(q, (querySnapshot) => {
-    const materials = querySnapshot.docs.map(mapDocToMaterial);
-    onUpdate(materials);
-  }, (error) => {
-    console.error("Error with materials real-time subscription:", error);
-    onError(new Error("Failed to subscribe to materials updates."));
-  });
+export function getMaterialsSubscription(
+  onUpdate: (materials: Material[]) => void,
+  onError: (error: Error) => void
+): Unsubscribe {
+  const supabase = createSupabaseBrowserClient();
+
+  fetchAll(supabase).then(onUpdate).catch(onError);
+
+  const channel = supabase
+    .channel('materials-all')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'materials' }, () => {
+      fetchAll(supabase).then(onUpdate).catch(onError);
+    })
+    .subscribe();
+
+  return () => { supabase.removeChannel(channel); };
 }

@@ -1,147 +1,187 @@
-
 'use client';
 
-import type { User as FirebaseUser, AuthError } from 'firebase/auth';
-import { onAuthStateChanged, signOut as firebaseSignOut, GoogleAuthProvider, signInWithPopup, updateProfile } from 'firebase/auth';
 import React, { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { auth } from '@/lib/firebase';
 import { useRouter, usePathname } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
-import { updateUser as updateUserInFirestore } from '@/services/userService';
-import { uploadProfileImage, deleteProfileImage } from '@/services/storageService';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import {
+  getUserProfile,
+  createUserProfile,
+  updateUserProfile as updateUserProfileAction,
+  type AppUser,
+} from '@/actions/users';
+import { createOrgAndSignUp } from '@/actions/signup';
+
+export type { AppUser };
 
 interface AuthContextType {
-  user: FirebaseUser | null;
+  user: AppUser | null;
   loading: boolean;
   logout: () => Promise<void>;
-  signInWithGoogle: () => Promise<void>;
-  updateUserProfile: (data: { displayName?: string; photoURL?: string | null }) => Promise<string | null>;
+  signInWithEmail: (email: string, password: string) => Promise<void>;
+  signUpWithEmail: (email: string, password: string, name?: string, companyName?: string) => Promise<void>;
+  updateUserProfile: (data: { name?: string; avatarUrl?: string | null }) => Promise<string | null>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const supabase = createSupabaseBrowserClient();
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const pathname = usePathname();
   const { toast } = useToast();
 
+  /**
+   * Charge ou crée le profil PostgreSQL à partir d'un user Supabase Auth
+   */
+  const syncUserProfile = async (authUser: { id: string; email?: string | null; user_metadata?: Record<string, string> }) => {
+    let profile = await getUserProfile(authUser.id);
+
+    if (!profile) {
+      const name =
+        authUser.user_metadata?.full_name ||
+        authUser.user_metadata?.name ||
+        authUser.email?.split('@')[0] ||
+        'Utilisateur';
+
+      profile = await createUserProfile({
+        id: authUser.id,
+        email: authUser.email ?? '',
+        name,
+        avatarUrl: authUser.user_metadata?.avatar_url ?? null,
+      });
+    }
+
+    setUser(profile);
+  };
+
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      setLoading(false);
-      if (currentUser && (pathname.startsWith('/auth/login') || pathname.startsWith('/auth/signup'))) {
-        router.push('/dashboard');
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session?.user) {
+        await syncUserProfile(session.user);
       }
+      setLoading(false);
     });
-    return () => unsubscribe();
-  }, [router, pathname]);
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        await syncUserProfile(session.user);
+        if (pathname.startsWith('/auth/')) {
+          router.push('/dashboard');
+        }
+      } else {
+        setUser(null);
+        if (!pathname.startsWith('/auth') && pathname !== '/') {
+          router.push('/auth/login');
+        }
+      }
+      setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const logout = async () => {
     try {
-      await firebaseSignOut(auth);
+      await supabase.auth.signOut();
       setUser(null);
       toast({ title: 'Déconnexion Réussie', description: 'Vous avez été déconnecté avec succès.' });
-      if (!pathname.startsWith('/auth')) {
-        router.push('/auth/login');
-      }
+      router.push('/auth/login');
     } catch (error) {
       console.error('Erreur de déconnexion:', error);
-      const authError = error as AuthError;
-      toast({ variant: 'destructive', title: 'Erreur de Déconnexion', description: authError.message || 'Impossible de se déconnecter.' });
+      toast({ variant: 'destructive', title: 'Erreur de Déconnexion', description: 'Impossible de se déconnecter.' });
     }
   };
 
-  const signInWithGoogle = async () => {
-    setLoading(true);
-    try {
-      const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
-      toast({ title: 'Connexion Réussie', description: 'Bienvenue !' });
-    } catch (error) {
-      const authError = error as AuthError;
-      console.error('Erreur de connexion Google:', authError);
-      let errorMessage = authError.message || 'Une erreur inattendue s\'est produite lors de la connexion Google.';
-      if (authError.code === 'auth/unauthorized-domain') {
-        errorMessage = `Domaine non autorisé pour la connexion Google. Domaine actuel : ${typeof window !== 'undefined' ? window.location.origin : 'Inconnu'}. Veuillez l'ajouter dans votre console Firebase.`
+  const signInWithEmail = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      let message = error.message;
+      if (error.message.includes('Invalid login credentials')) {
+        message = 'Adresse e-mail ou mot de passe incorrect.';
       }
+      toast({ variant: 'destructive', title: 'Échec de la Connexion', description: message });
+      throw error;
+    }
+    toast({ title: 'Connexion Réussie', description: 'Redirection vers le tableau de bord...' });
+  };
+
+  const signUpWithEmail = async (email: string, password: string, name?: string, companyName?: string) => {
+    if (companyName) {
+      // Org signup flow via server action (atomic)
+      const result = await createOrgAndSignUp({
+        email,
+        password,
+        name: name ?? email.split('@')[0],
+        companyName,
+      });
+
+      if (!result.success) {
+        toast({ variant: 'destructive', title: 'Échec de l\'Inscription', description: result.error });
+        throw new Error(result.error);
+      }
+
+      // Sign in immediately after account creation
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      if (signInError) {
+        toast({ variant: 'destructive', title: 'Compte créé, connexion échouée', description: signInError.message });
+        throw signInError;
+      }
+
+      toast({ title: 'Inscription Réussie', description: `Bienvenue sur SiteWise Reports ! Votre organisation "${companyName}" a été créée.` });
+      router.push('/dashboard');
+    } else {
+      // Legacy flow (invited users handled via join page)
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { full_name: name ?? email.split('@')[0] },
+        },
+      });
+      if (error) {
+        let message = error.message;
+        if (error.message.includes('already registered')) {
+          message = 'Cette adresse e-mail est déjà utilisée par un autre compte.';
+        }
+        toast({ variant: 'destructive', title: 'Échec de l\'Inscription', description: message });
+        throw error;
+      }
+      toast({ title: 'Inscription Réussie', description: 'Bienvenue sur SiteWise Reports !' });
+    }
+  };
+
+  const updateUserProfile = async (data: { name?: string; avatarUrl?: string | null }): Promise<string | null> => {
+    if (!user) throw new Error('Utilisateur non authentifié.');
+
+    try {
+      await supabase.auth.updateUser({
+        data: {
+          ...(data.name && { full_name: data.name }),
+          ...(data.avatarUrl !== undefined && { avatar_url: data.avatarUrl }),
+        },
+      });
+
+      const updated = await updateUserProfileAction(user.id, data);
+      setUser(updated);
+
+      return updated.avatarUrl;
+    } catch (error) {
+      console.error('Erreur de mise à jour du profil:', error);
       toast({
         variant: 'destructive',
-        title: 'Échec de la Connexion Google',
-        description: errorMessage,
+        title: 'Erreur de Mise à Jour du Profil',
+        description: (error as Error).message || 'Échec de la mise à jour du profil.',
       });
-    } finally {
-      setLoading(false);
+      throw error;
     }
   };
 
-  const updateUserProfile = async (data: { displayName?: string; photoURL?: string | null }): Promise<string | null> => {
-    if (!auth.currentUser) {
-      throw new Error("Utilisateur non authentifié.");
-    }
-    const currentUserAuth = auth.currentUser;
-    let finalPhotoURLForAuthAndFirestore: string | null = currentUserAuth.photoURL;
-    const updatesForAuth: { displayName?: string; photoURL?: string } = {};
-    const updatesForFirestore: { name?: string; avatarUrl?: string | null } = {};
-
-    if (data.displayName !== undefined && data.displayName !== (currentUserAuth.displayName || '')) {
-      updatesForAuth.displayName = data.displayName;
-      updatesForFirestore.name = data.displayName;
-    }
-
-    if (data.photoURL !== undefined) {
-      if (data.photoURL === null || data.photoURL === '') {
-        if (currentUserAuth.photoURL) {
-            await deleteProfileImage(currentUserAuth.photoURL);
-        }
-        finalPhotoURLForAuthAndFirestore = null;
-      } else if (data.photoURL.startsWith('data:image')) {
-        try {
-          finalPhotoURLForAuthAndFirestore = await uploadProfileImage(currentUserAuth.uid, data.photoURL, currentUserAuth.photoURL);
-        } catch (uploadError) {
-          console.error("Erreur de téléversement de la nouvelle image de profil:", uploadError);
-          toast({ variant: 'destructive', title: 'Échec du Téléversement de l\'Image', description: (uploadError as Error).message });
-          throw uploadError;
-        }
-      } else {
-        finalPhotoURLForAuthAndFirestore = data.photoURL;
-      }
-    }
-    
-    if (finalPhotoURLForAuthAndFirestore !== currentUserAuth.photoURL) {
-        updatesForAuth.photoURL = finalPhotoURLForAuthAndFirestore || undefined;
-    }
-    if (finalPhotoURLForAuthAndFirestore !== (updatesForFirestore.avatarUrl !== undefined ? updatesForFirestore.avatarUrl : (await updateUserInFirestore(currentUserAuth.uid, {}) as any)?.avatarUrl)) {
-        updatesForFirestore.avatarUrl = finalPhotoURLForAuthAndFirestore;
-    }
-
-    try {
-      if (Object.keys(updatesForAuth).length > 0) {
-        await updateProfile(currentUserAuth, updatesForAuth);
-      }
-      if (Object.keys(updatesForFirestore).length > 0) {
-         await updateUserInFirestore(currentUserAuth.uid, updatesForFirestore);
-      }
-      
-      const updatedUserContextData = { ...auth.currentUser } as FirebaseUser;
-      setUser(updatedUserContextData);
-
-      return updatedUserContextData.photoURL;
-
-    } catch (error) {
-      const authError = error as AuthError;
-      console.error("Erreur de mise à jour du profil utilisateur dans Auth/Firestore:", authError);
-      toast({
-          variant: 'destructive',
-          title: 'Erreur de Mise à Jour du Profil',
-          description: authError.message || "Échec de la mise à jour du profil.",
-      });
-      throw new Error(authError.message || "Échec de la mise à jour du profil.");
-    }
-  };
-  
-  const value = { user, loading, logout, signInWithGoogle, updateUserProfile };
+  const value = { user, loading, logout, signInWithEmail, signUpWithEmail, updateUserProfile };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
@@ -153,4 +193,3 @@ export function useAuth() {
   }
   return context;
 }
-

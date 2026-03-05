@@ -8,11 +8,12 @@ import Link from 'next/link';
 import { ReportForm, type ReportSubmitPayload } from './components/ReportForm';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { UpgradeGate } from '@/components/common/UpgradeGate';
 import { addReport } from '@/services/reportService';
-import { detectReportAnomaly, type FieldReport, type AnomalyAssessment } from '@/ai/flows/report-anomaly-detection';
+import { detectReportAnomaly, type AnomalyAssessment } from '@/ai/flows/report-anomaly-detection';
+import { notifyReportSubmitted } from '@/actions/notifications';
+import type { FieldReport } from '@/lib/types';
 import { useRouter } from 'next/navigation';
-import { MOCK_TECHNICIAN_EMAIL, MOCK_TECHNICIAN_REPORTS_ID } from '@/lib/constants';
-
 
 const readFileAsDataURL = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -38,8 +39,8 @@ export default function CreateReportPage() {
       return { success: false };
     }
     
-    const reportTechnicianId = user.email === MOCK_TECHNICIAN_EMAIL ? MOCK_TECHNICIAN_REPORTS_ID : user.uid;
-    
+    const reportTechnicianId = user.id;
+
 
     let photoDataUriInSubmit: string | undefined = undefined;
     if (photoFile) {
@@ -79,6 +80,10 @@ export default function CreateReportPage() {
 
     try {
       const newReportId = await addReport(reportDataToSave);
+      // Notifier les superviseurs/admins si le rapport est soumis
+      if (status === 'SUBMITTED') {
+        notifyReportSubmitted(newReportId).catch(() => {});
+      }
       return { success: true, reportId: newReportId, anomalyAssessment: assessment };
     } catch (error) {
       console.error('Erreur de création du rapport:', error);
@@ -88,7 +93,8 @@ export default function CreateReportPage() {
 
 
   return (
-    <>
+    <UpgradeGate>
+      <>
       <PageTitle 
         title="Créer un Nouveau Rapport de Terrain" 
         icon={FileText}
@@ -102,6 +108,7 @@ export default function CreateReportPage() {
         }
       />
       <ReportForm onSubmitReport={handleCreateReportSubmit} />
-    </>
+      </>
+    </UpgradeGate>
   );
 }

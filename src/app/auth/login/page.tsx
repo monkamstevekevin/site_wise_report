@@ -1,129 +1,169 @@
-
 'use client';
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { signInWithEmailAndPassword, type AuthError } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { useToast } from '@/hooks/use-toast';
-import { LogIn, Loader2 } from 'lucide-react';
+import { LogIn, Loader2, Mail } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { Separator } from '@/components/ui/separator';
-
-const GoogleIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="24px" height="24px">
-    <path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24s8.955,20,20,20s20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/>
-    <path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/>
-    <path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/>
-    <path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571l0.001-0.001l6.19,5.238C39.909,34.437,44,29.891,44,24C44,22.659,43.862,21.35,43.611,20.083z"/>
-  </svg>
-);
-
+import {
+  Dialog, DialogContent, DialogDescription,
+  DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isLoadingEmail, setIsLoadingEmail] = useState(false);
-  const [isLoadingGoogle, setIsLoadingGoogle] = useState(false);
-  const router = useRouter();
+  const [isLoading, setIsLoading] = useState(false);
+
+  const [isForgotOpen, setIsForgotOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [isSendingReset, setIsSendingReset] = useState(false);
+
+  const { signInWithEmail, loading: authLoading } = useAuth();
   const { toast } = useToast();
-  const { signInWithGoogle, loading: authLoading } = useAuth();
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoadingEmail(true);
+    setIsLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      toast({ title: 'Connexion Réussie', description: 'Redirection vers le tableau de bord...' });
-    } catch (error) {
-      const authError = error as AuthError;
-      console.error('Login error:', authError);
-      let errorMessage = authError.message || 'Une erreur inattendue s\'est produite.';
-      if (authError.code === 'auth/invalid-credential' || authError.code === 'auth/user-not-found' || authError.code === 'auth/wrong-password') {
-        errorMessage = 'Adresse e-mail ou mot de passe incorrect.';
-      }
+      await signInWithEmail(email, password);
+    } catch {
+      // Erreur déjà gérée dans AuthContext (toast)
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotEmail) return;
+    setIsSendingReset(true);
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
+        redirectTo: `${window.location.origin}/auth/reset-password`,
+      });
+      if (error) throw error;
+      toast({
+        title: 'Email envoyé',
+        description: `Un lien de réinitialisation a été envoyé à ${forgotEmail}.`,
+      });
+      setIsForgotOpen(false);
+      setForgotEmail('');
+    } catch (err) {
       toast({
         variant: 'destructive',
-        title: 'Échec de la Connexion',
-        description: errorMessage,
+        title: 'Erreur',
+        description: (err as Error).message || "Impossible d'envoyer l'email de réinitialisation.",
       });
     } finally {
-      setIsLoadingEmail(false);
+      setIsSendingReset(false);
     }
   };
 
-  const handleGoogleLogin = async () => {
-    setIsLoadingGoogle(true);
-    try {
-        await signInWithGoogle();
-        // Toast and redirect are handled by AuthContext or onAuthStateChanged
-    } catch (error) {
-        // Error is already handled and toasted by signInWithGoogle in AuthContext
-    } finally {
-        setIsLoadingGoogle(false);
-    }
-  };
-  
-  const isLoading = isLoadingEmail || isLoadingGoogle || authLoading;
+  const disabled = isLoading || authLoading;
 
   return (
-    <Card className="w-full max-w-md shadow-xl">
-      <CardHeader className="text-center">
-        <div className="flex justify-center mb-2">
+    <>
+      <Card className="w-full max-w-md shadow-xl">
+        <CardHeader className="text-center">
+          <div className="flex justify-center mb-2">
             <LogIn className="h-8 w-8 text-primary" />
-        </div>
-        <CardTitle className="text-2xl font-headline">Bon Retour</CardTitle>
-        <CardDescription>Connectez-vous à votre compte SiteWise Reports.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleEmailLogin} className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="vous@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              disabled={isLoading}
-            />
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="password">Mot de passe</Label>
-            <Input
-              id="password"
-              type="password"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              disabled={isLoading}
-            />
-          </div>
-          <Button type="submit" className="w-full rounded-lg" disabled={isLoading}>
-            {isLoadingEmail ? <Loader2 className="animate-spin" /> : 'Se Connecter'}
-          </Button>
-        </form>
-        <Separator className="my-6" />
-        <Button variant="outline" className="w-full rounded-lg" onClick={handleGoogleLogin} disabled={isLoading}>
-          {isLoadingGoogle ? <Loader2 className="animate-spin" /> : <GoogleIcon />} 
-          <span className="ml-2">Se connecter avec Google</span>
-        </Button>
-      </CardContent>
-      <CardFooter className="flex flex-col items-center text-sm">
-        <p>
-          Vous n'avez pas de compte ?{' '}
-          <Button variant="link" asChild className="p-0 h-auto">
-            <Link href="/auth/signup">S'inscrire</Link>
-          </Button>
-        </p>
-      </CardFooter>
-    </Card>
+          <CardTitle className="text-2xl font-headline">Bon Retour</CardTitle>
+          <CardDescription>Connectez-vous à votre compte SiteWise Reports.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleEmailLogin} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="vous@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                disabled={disabled}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">Mot de passe</Label>
+                <button
+                  type="button"
+                  onClick={() => { setForgotEmail(email); setIsForgotOpen(true); }}
+                  className="text-xs text-primary hover:underline"
+                >
+                  Mot de passe oublié ?
+                </button>
+              </div>
+              <Input
+                id="password"
+                type="password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                disabled={disabled}
+              />
+            </div>
+            <Button type="submit" className="w-full rounded-lg" disabled={disabled}>
+              {isLoading ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : null}
+              Se Connecter
+            </Button>
+          </form>
+        </CardContent>
+        <CardFooter className="flex flex-col items-center text-sm">
+          <p>
+            Vous n&apos;avez pas de compte ?{' '}
+            <Button variant="link" asChild className="p-0 h-auto">
+              <Link href="/auth/signup">S&apos;inscrire</Link>
+            </Button>
+          </p>
+        </CardFooter>
+      </Card>
+
+      <Dialog open={isForgotOpen} onOpenChange={setIsForgotOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Mail className="h-5 w-5 text-primary" /> Réinitialiser le mot de passe
+            </DialogTitle>
+            <DialogDescription>
+              Entrez votre adresse email. Vous recevrez un lien pour choisir un nouveau mot de passe.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleForgotPassword} className="space-y-4 mt-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="forgot-email">Email</Label>
+              <Input
+                id="forgot-email"
+                type="email"
+                placeholder="vous@example.com"
+                value={forgotEmail}
+                onChange={(e) => setForgotEmail(e.target.value)}
+                required
+                disabled={isSendingReset}
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsForgotOpen(false)} disabled={isSendingReset}>
+                Annuler
+              </Button>
+              <Button type="submit" disabled={isSendingReset || !forgotEmail}>
+                {isSendingReset ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : null}
+                Envoyer le lien
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

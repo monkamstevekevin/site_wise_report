@@ -11,12 +11,12 @@ import { ReportForm, type ReportSubmitPayload } from '@/app/(app)/reports/create
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { getReportById, updateReport } from '@/services/reportService';
-import { detectReportAnomaly, type FieldReport, type AnomalyAssessment } from '@/ai/flows/report-anomaly-detection';
+import { detectReportAnomaly, type AnomalyAssessment } from '@/ai/flows/report-anomaly-detection';
+import type { FieldReport } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'; 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; 
 import type { UserRole } from '@/lib/constants';
-import { MOCK_TECHNICIAN_EMAIL, MOCK_TECHNICIAN_REPORTS_ID } from '@/lib/constants';
 
 
 const readFileAsDataURL = (file: File): Promise<string> => {
@@ -26,14 +26,6 @@ const readFileAsDataURL = (file: File): Promise<string> => {
     reader.onerror = (error) => reject(error);
     reader.readAsDataURL(file);
   });
-};
-
-const mapFirebaseUserToAppRole = (firebaseUser: any): UserRole => {
-  if (!firebaseUser || !firebaseUser.email) return 'TECHNICIAN'; 
-  if (firebaseUser.email === 'janesteve237@gmail.com') return 'ADMIN';
-  if (firebaseUser.email.includes('admin@example.com')) return 'ADMIN';
-  if (firebaseUser.email.includes('supervisor@example.com')) return 'SUPERVISOR';
-  return 'TECHNICIAN';
 };
 
 
@@ -56,8 +48,8 @@ export default function EditReportPage() {
       getReportById(reportId)
         .then(data => {
           if (data) {
-            const currentUserRole = mapFirebaseUserToAppRole(user);
-            const effectiveTechnicianId = user.email === MOCK_TECHNICIAN_EMAIL ? MOCK_TECHNICIAN_REPORTS_ID : user.uid;
+            const currentUserRole = user.role as UserRole;
+            const effectiveTechnicianId = user.id;
             const isOwner = data.technicianId === effectiveTechnicianId;
 
             let canAccessEditPage = false;
@@ -128,7 +120,7 @@ export default function EditReportPage() {
 
     const finalStatus = reportToEdit.status === 'REJECTED' && status === 'SUBMITTED' ? 'SUBMITTED' : status;
     
-    const reportDataToUpdate: Partial<Omit<FieldReport, 'id' | 'createdAt' | 'updatedAt' | 'technicianId' | 'projectId'>> & { rejectionReason?: string | null } = {
+    const reportDataToUpdate: Partial<Omit<FieldReport, 'id' | 'createdAt' | 'updatedAt' | 'technicianId' | 'projectId'>> = {
       ...data,
       status: finalStatus, 
       photoDataUri: finalPhotoDataUri,
@@ -136,9 +128,7 @@ export default function EditReportPage() {
       aiAnomalyExplanation: assessment.explanation,
     };
     
-    if (finalStatus === 'SUBMITTED' && reportToEdit.status === 'REJECTED') {
-        reportDataToUpdate.rejectionReason = null; 
-    }
+    // The service auto-clears rejectionReason when status changes away from REJECTED
 
 
     try {

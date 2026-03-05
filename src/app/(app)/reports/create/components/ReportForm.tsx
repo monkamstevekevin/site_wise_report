@@ -130,7 +130,7 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
       setIsLoadingProjectsData(true);
       try {
         const allFetchedProjects = await getProjects();
-        const userProfile = await getUserById(user.uid);
+        const userProfile = await getUserById(user.id);
         const currentUserAssignments = userProfile?.assignments || [];
         
         const userProjects = allFetchedProjects.filter(p => currentUserAssignments.some(a => a.projectId === p.id));
@@ -191,7 +191,7 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
   const handlePhotoInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      form.setValue('photo', event.target.files, { shouldValidate: true }); 
+      form.setValue('photo', event.target.files ?? undefined, { shouldValidate: true });
       const reader = new FileReader();
       reader.onloadend = () => {
         setPhotoPreviewUrl(reader.result as string);

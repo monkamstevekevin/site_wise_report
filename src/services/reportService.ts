@@ -1,208 +1,179 @@
-
 'use server';
 
-import { db } from '@/lib/firebase';
+import { db } from '@/db';
+import { reports, reportAttachments } from '@/db/schema';
+import type { NewReport } from '@/db/schema';
+import { eq, desc, and } from 'drizzle-orm';
 import type { FieldReport } from '@/lib/types';
-import { collection, getDocs, Timestamp, query, where, orderBy, addDoc, serverTimestamp, doc, getDoc, updateDoc, deleteDoc, type FirestoreError, onSnapshot, type Unsubscribe } from 'firebase/firestore';
 import { addNotification } from './notificationService';
 
-/**
- * @fileOverview Report service for interacting with Firestore.
- *
- * - getReports - Fetches all reports from Firestore, ordered by creation date (desc).
- * - getReportsByTechnicianId - Fetches reports for a specific technician.
- * - getReportById - Fetches a single report by its ID.
- * - addReport - Adds a new report to Firestore.
- * - updateReport - Updates an existing report in Firestore.
- * - deleteReport - Deletes a report from Firestore.
- */
+// ─── Mapper DB → type applicatif ─────────────────────────────────────────────
 
-const formatTimestamp = (timestampField: any): string => {
-  if (!timestampField) {
-    return new Date().toISOString();
-  }
-  if (timestampField instanceof Timestamp) {
-    return timestampField.toDate().toISOString();
-  }
-  if (timestampField.seconds !== undefined && typeof timestampField.nanoseconds === 'number') {
-    return new Timestamp(timestampField.seconds, timestampField.nanoseconds).toDate().toISOString();
-  }
-  if (typeof timestampField === 'string' || typeof timestampField === 'number') {
-    const date = new Date(timestampField);
-    if (!isNaN(date.getTime())) {
-      return date.toISOString();
-    }
-  }
-  return new Date().toISOString();
-};
+async function mapToFieldReport(row: typeof reports.$inferSelect): Promise<FieldReport> {
+  const attachmentRows = await db
+    .select({ fileUrl: reportAttachments.fileUrl })
+    .from(reportAttachments)
+    .where(eq(reportAttachments.reportId, row.id));
 
-const mapDocToFieldReport = (docSnapshot: any): FieldReport => {
-  const data = docSnapshot.data();
   return {
-    id: docSnapshot.id,
-    projectId: data.projectId || 'N/A',
-    technicianId: data.technicianId || 'N/A', 
-    materialType: data.materialType || 'other',
-    temperature: typeof data.temperature === 'number' ? data.temperature : 0,
-    volume: typeof data.volume === 'number' ? data.volume : 0,
-    density: typeof data.density === 'number' ? data.density : 0,
-    humidity: typeof data.humidity === 'number' ? data.humidity : 0,
-    batchNumber: data.batchNumber || 'N/A',
-    supplier: data.supplier || 'N/A',
-    samplingMethod: data.samplingMethod || 'other',
-    notes: data.notes || '',
-    status: data.status || 'DRAFT',
-    attachments: Array.isArray(data.attachments) ? data.attachments : [],
-    photoDataUri: data.photoDataUri || undefined,
-    rejectionReason: data.rejectionReason || undefined,
-    aiIsAnomalous: data.aiIsAnomalous === undefined ? undefined : data.aiIsAnomalous,
-    aiAnomalyExplanation: data.aiAnomalyExplanation || undefined,
-    createdAt: formatTimestamp(data.createdAt),
-    updatedAt: formatTimestamp(data.updatedAt),
+    id: row.id,
+    projectId: row.projectId,
+    technicianId: row.technicianId,
+    materialType: row.materialType,
+    temperature: Number(row.temperature),
+    volume: Number(row.volume),
+    density: Number(row.density),
+    humidity: Number(row.humidity),
+    batchNumber: row.batchNumber,
+    supplier: row.supplier,
+    samplingMethod: row.samplingMethod,
+    notes: row.notes ?? undefined,
+    status: row.status,
+    attachments: attachmentRows.map((a) => a.fileUrl),
+    photoDataUri: row.photoUrl ?? undefined,
+    rejectionReason: row.rejectionReason ?? undefined,
+    aiIsAnomalous: row.aiIsAnomalous ?? undefined,
+    aiAnomalyExplanation: row.aiAnomalyExplanation ?? undefined,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
   };
-};
+}
+
+// ─── CRUD ─────────────────────────────────────────────────────────────────────
 
 export async function getReports(): Promise<FieldReport[]> {
-  try {
-    const reportsCollectionRef = collection(db, 'reports');
-    const q = query(reportsCollectionRef, orderBy('createdAt', 'desc'));
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(mapDocToFieldReport);
-  } catch (error) {
-    const firestoreError = error as FirestoreError;
-    if (firestoreError.code === 'failed-precondition') {
-      console.warn(`[Service/getReports] La requête Firestore pour tous les rapports (triés par createdAt) a échoué en raison d'un index manquant. Message Firebase : ${firestoreError.message}.`);
-      return []; 
-    }
-    console.error("[Service/getReports] Erreur lors de la récupération de tous les rapports : ", firestoreError);
-    throw new Error(`Échec de la récupération des rapports depuis la base de données. Erreur Firebase : ${firestoreError.code}.`);
-  }
+  const rows = await db.select().from(reports).orderBy(desc(reports.createdAt));
+  return Promise.all(rows.map(mapToFieldReport));
 }
 
 export async function getReportsByTechnicianId(technicianId: string): Promise<FieldReport[]> {
   if (!technicianId) return [];
-  try {
-    const reportsCollectionRef = collection(db, 'reports');
-    const q = query(reportsCollectionRef, where('technicianId', '==', technicianId), orderBy('createdAt', 'desc'));
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(mapDocToFieldReport);
-  } catch (error) {
-    const firestoreError = error as FirestoreError;
-    if (firestoreError.code === 'failed-precondition') {
-      console.warn(`[Service/getReportsByTechnicianId] La requête Firestore pour les rapports du technicien "${technicianId}" a échoué en raison d'un index composite manquant.`);
-      return [];
-    }
-    console.error(`[Service/getReportsByTechnicianId] Erreur pour le technicien ${technicianId}: `, firestoreError);
-    throw new Error(`Échec de la récupération des rapports pour le technicien ${technicianId}. Erreur Firebase : ${firestoreError.code}.`);
-  }
+  const rows = await db
+    .select()
+    .from(reports)
+    .where(eq(reports.technicianId, technicianId))
+    .orderBy(desc(reports.createdAt));
+  return Promise.all(rows.map(mapToFieldReport));
 }
-
 
 export async function getReportById(reportId: string): Promise<FieldReport | null> {
-  try {
-    const reportDocRef = doc(db, 'reports', reportId);
-    const docSnap = await getDoc(reportDocRef);
-    return docSnap.exists() ? mapDocToFieldReport(docSnap) : null;
-  } catch (error) {
-    const firestoreError = error as FirestoreError;
-    console.error(`[Service/getReportById] Erreur lors de la récupération du rapport par ID ${reportId}: `, firestoreError);
-    throw new Error(`Échec de la récupération du rapport ${reportId}. Erreur Firebase : ${firestoreError.code}.`);
-  }
+  const rows = await db.select().from(reports).where(eq(reports.id, reportId)).limit(1);
+  return rows.length > 0 ? mapToFieldReport(rows[0]) : null;
 }
-
 
 export async function addReport(
   reportData: Omit<FieldReport, 'id' | 'createdAt' | 'updatedAt'>
 ): Promise<string> {
-  try {
-    const reportsCollectionRef = collection(db, 'reports');
-    const reportPayload = {
-      ...reportData,
-      rejectionReason: reportData.rejectionReason || null, 
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    };
-    const docRef = await addDoc(reportsCollectionRef, reportPayload);
-    return docRef.id;
-  } catch (error) {
-    const firestoreError = error as FirestoreError;
-    console.error("[Service/addReport] Erreur lors de l'ajout du rapport : ", firestoreError);
-    throw new Error(`Échec de l'ajout du rapport. Erreur Firebase : ${firestoreError.code}.`);
+  const newReport: NewReport = {
+    projectId: reportData.projectId,
+    technicianId: reportData.technicianId,
+    materialType: reportData.materialType as NewReport['materialType'],
+    temperature: reportData.temperature.toString(),
+    volume: reportData.volume.toString(),
+    density: reportData.density.toString(),
+    humidity: reportData.humidity.toString(),
+    batchNumber: reportData.batchNumber,
+    supplier: reportData.supplier,
+    samplingMethod: reportData.samplingMethod as NewReport['samplingMethod'],
+    notes: reportData.notes ?? null,
+    status: reportData.status as NewReport['status'],
+    photoUrl: reportData.photoDataUri ?? null,
+    rejectionReason: reportData.rejectionReason ?? null,
+    aiIsAnomalous: reportData.aiIsAnomalous ?? null,
+    aiAnomalyExplanation: reportData.aiAnomalyExplanation ?? null,
+  };
+
+  const [created] = await db
+    .insert(reports)
+    .values(newReport)
+    .returning({ id: reports.id });
+
+  // Insérer les pièces jointes si présentes
+  if (reportData.attachments && reportData.attachments.length > 0) {
+    await db.insert(reportAttachments).values(
+      reportData.attachments.map((url) => ({
+        reportId: created.id,
+        fileUrl: url,
+        fileName: url.split('/').pop() ?? 'attachment',
+      }))
+    );
   }
+
+  return created.id;
 }
 
 export async function updateReport(
   reportId: string,
   reportData: Partial<Omit<FieldReport, 'id' | 'createdAt' | 'updatedAt' | 'technicianId' | 'projectId'>>
 ): Promise<void> {
-  try {
-    const reportDocRef = doc(db, 'reports', reportId);
-    
-    const currentReportSnap = await getDoc(reportDocRef);
-    if (!currentReportSnap.exists()) {
-      throw new Error(`Rapport avec ID ${reportId} non trouvé.`);
-    }
-    const currentReportData = currentReportSnap.data() as FieldReport;
-    const technicianId = currentReportData.technicianId;
-    const projectId = currentReportData.projectId;
+  // Récupérer le rapport actuel pour les notifications
+  const currentRows = await db.select().from(reports).where(eq(reports.id, reportId)).limit(1);
+  if (currentRows.length === 0) throw new Error(`Rapport avec ID ${reportId} non trouvé.`);
+  const current = currentRows[0];
 
-    const updatePayload: any = { ...reportData };
+  const updateData: Partial<typeof reports.$inferInsert> = { updatedAt: new Date() };
 
-    if (reportData.photoDataUri === undefined && Object.prototype.hasOwnProperty.call(reportData, 'photoDataUri')) {
-      updatePayload.photoDataUri = null; 
-    }
-    
-    if (reportData.status && reportData.status !== 'REJECTED') {
-      updatePayload.rejectionReason = null;
-    } else if (Object.prototype.hasOwnProperty.call(reportData, 'rejectionReason')) {
-      updatePayload.rejectionReason = reportData.rejectionReason || null;
-    }
-    
-    if (Object.prototype.hasOwnProperty.call(reportData, 'aiIsAnomalous') && reportData.aiIsAnomalous === undefined) {
-      updatePayload.aiIsAnomalous = null;
-    }
-    if (Object.prototype.hasOwnProperty.call(reportData, 'aiAnomalyExplanation') && reportData.aiAnomalyExplanation === undefined) {
-      updatePayload.aiAnomalyExplanation = null;
-    }
+  if (reportData.status !== undefined) updateData.status = reportData.status;
+  if (reportData.notes !== undefined) updateData.notes = reportData.notes ?? null;
+  if (reportData.temperature !== undefined) updateData.temperature = reportData.temperature.toString();
+  if (reportData.volume !== undefined) updateData.volume = reportData.volume.toString();
+  if (reportData.density !== undefined) updateData.density = reportData.density.toString();
+  if (reportData.humidity !== undefined) updateData.humidity = reportData.humidity.toString();
+  if (reportData.batchNumber !== undefined) updateData.batchNumber = reportData.batchNumber;
+  if (reportData.supplier !== undefined) updateData.supplier = reportData.supplier;
+  if (reportData.samplingMethod !== undefined) updateData.samplingMethod = reportData.samplingMethod as typeof updateData.samplingMethod;
+  if (reportData.photoDataUri !== undefined) updateData.photoUrl = reportData.photoDataUri ?? null;
+  if (reportData.aiIsAnomalous !== undefined) updateData.aiIsAnomalous = reportData.aiIsAnomalous ?? null;
+  if (reportData.aiAnomalyExplanation !== undefined) updateData.aiAnomalyExplanation = reportData.aiAnomalyExplanation ?? null;
 
-    await updateDoc(reportDocRef, {
-      ...updatePayload,
-      updatedAt: serverTimestamp(),
-    });
+  // Nettoyer la raison de rejet si le statut n'est plus REJECTED
+  if (reportData.status && reportData.status !== 'REJECTED') {
+    updateData.rejectionReason = null;
+  } else if (reportData.rejectionReason !== undefined) {
+    updateData.rejectionReason = reportData.rejectionReason ?? null;
+  }
 
-    if (technicianId && reportData.status) {
-      if (reportData.status === 'VALIDATED') {
-        await addNotification(technicianId, {
-          type: 'report_update',
-          message: `Votre rapport #${reportId.substring(0,6)}... pour le projet PJT-${projectId.substring(0,4)}... a été VALIDÉ.`,
-          targetId: reportId,
-          link: `/reports/view/${reportId}`,
-        });
-      } else if (reportData.status === 'REJECTED') {
-        const reason = reportData.rejectionReason || "Aucune raison spécifique fournie.";
-        await addNotification(technicianId, {
-          type: 'report_update',
-          message: `Votre rapport #${reportId.substring(0,6)}... pour le projet PJT-${projectId.substring(0,4)}... a été REJETÉ. Raison : ${reason}`,
-          targetId: reportId,
-          link: `/reports/edit/${reportId}`,
-        });
-      }
+  await db.update(reports).set(updateData).where(eq(reports.id, reportId));
+
+  // Mettre à jour les pièces jointes si fournies
+  if (reportData.attachments !== undefined) {
+    await db.delete(reportAttachments).where(eq(reportAttachments.reportId, reportId));
+    if (reportData.attachments.length > 0) {
+      await db.insert(reportAttachments).values(
+        reportData.attachments.map((url) => ({
+          reportId,
+          fileUrl: url,
+          fileName: url.split('/').pop() ?? 'attachment',
+        }))
+      );
     }
+  }
 
-  } catch (error) {
-    const firestoreError = error as FirestoreError;
-    console.error(`[Service/updateReport] Erreur lors de la mise à jour du rapport ${reportId}: `, firestoreError);
-    throw new Error(`Échec de la mise à jour du rapport ${reportId}. Erreur Firebase : ${firestoreError.code}.`);
+  // Notifications sur changement de statut
+  const technicianId = current.technicianId;
+  const projectId = current.projectId;
+
+  if (technicianId && reportData.status) {
+    if (reportData.status === 'VALIDATED') {
+      await addNotification(technicianId, {
+        type: 'report_update',
+        message: `Votre rapport #${reportId.substring(0, 6)}... pour le projet PJT-${projectId.substring(0, 4)}... a été VALIDÉ.`,
+        targetId: reportId,
+        link: `/reports/view/${reportId}`,
+      });
+    } else if (reportData.status === 'REJECTED') {
+      const reason = reportData.rejectionReason || 'Aucune raison spécifique fournie.';
+      await addNotification(technicianId, {
+        type: 'report_update',
+        message: `Votre rapport #${reportId.substring(0, 6)}... pour le projet PJT-${projectId.substring(0, 4)}... a été REJETÉ. Raison : ${reason}`,
+        targetId: reportId,
+        link: `/reports/edit/${reportId}`,
+      });
+    }
   }
 }
 
 export async function deleteReport(reportId: string): Promise<void> {
-  try {
-    const reportDocRef = doc(db, 'reports', reportId);
-    await deleteDoc(reportDocRef);
-  } catch (error) {
-    const firestoreError = error as FirestoreError;
-    console.error(`[Service/deleteReport] Erreur lors de la suppression du rapport ${reportId}: `, firestoreError);
-    throw new Error(`Échec de la suppression du rapport ${reportId}. Erreur Firebase : ${firestoreError.code}.`);
-  }
+  // Les pièces jointes sont supprimées en CASCADE
+  await db.delete(reports).where(eq(reports.id, reportId));
 }

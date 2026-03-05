@@ -3,6 +3,7 @@
 
 import { SiteWiseSidebar } from '@/components/common/Sidebar';
 import { Header } from '@/components/common/Header';
+import { TrialBanner } from '@/components/common/TrialBanner';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
@@ -38,7 +39,7 @@ export default function AppLayout({
   if (!user) {
     return (
        <div className="flex min-h-screen bg-background items-center justify-center">
-         <p>Redirecting to login...</p>
+         <p>Redirection en cours...</p>
        </div>
     );
   }
@@ -49,8 +50,9 @@ export default function AppLayout({
         <SiteWiseSidebar />
       </Sidebar>
       <SidebarInset>
+        <TrialBanner />
         <Header />
-        <main className="flex-1 p-3 sm:p-4 md:p-6 overflow-y-auto"> {/* Adjusted padding */}
+        <main className="flex-1 p-3 sm:p-4 md:p-6 overflow-y-auto">
           {children}
         </main>
       </SidebarInset>

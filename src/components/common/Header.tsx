@@ -58,10 +58,10 @@ export function Header() {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="relative h-10 w-10 rounded-full">
                 <Avatar className="h-9 w-9">
-                  <AvatarImage 
-                    src={user.photoURL || `https://placehold.co/100x100.png?text=${user.email?.[0]?.toUpperCase() || 'U'}`} 
-                    alt={user.displayName || user.email || "User Avatar"} 
-                    data-ai-hint="user avatar" 
+                  <AvatarImage
+                    src={user.avatarUrl || `https://placehold.co/100x100.png?text=${user.email?.[0]?.toUpperCase() || 'U'}`}
+                    alt={user.name || user.email || "User Avatar"}
+                    data-ai-hint="user avatar"
                   />
                   <AvatarFallback>{user.email?.[0]?.toUpperCase() || 'U'}</AvatarFallback>
                 </Avatar>
@@ -69,7 +69,7 @@ export function Header() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel>
-                <p className="font-medium">{user.displayName || 'Utilisateur'}</p>
+                <p className="font-medium">{user.name || 'Utilisateur'}</p>
                 <p className="text-xs text-muted-foreground">{user.email}</p>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />

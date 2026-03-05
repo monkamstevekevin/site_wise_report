@@ -15,12 +15,13 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import Image from 'next/image'; 
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { cn } from '@/lib/utils'; 
 import { RejectionReasonDialog } from '@/app/(app)/reports/components/RejectionReasonDialog';
 import { useToast } from '@/hooks/use-toast';
-import { MOCK_TECHNICIAN_EMAIL, MOCK_TECHNICIAN_REPORTS_ID } from '@/lib/constants';
+import { DownloadReportButton } from '@/components/pdf/DownloadReportButton';
+import { getProjectById } from '@/services/projectService';
+import { notifyReportValidated, notifyReportRejected } from '@/actions/notifications';
 
 
 const reportStatusBadgeVariant: Record<FieldReport['status'], "default" | "secondary" | "outline" | "destructive"> = {
@@ -59,16 +60,6 @@ const DetailItem: React.FC<{ icon: React.ElementType, label: string, value?: str
   </div>
 );
 
-const mapFirebaseUserToAppRole = (firebaseUser: any): UserRole => {
-  if (!firebaseUser || !firebaseUser.email) return 'TECHNICIAN'; 
-  if (firebaseUser.email === 'janesteve237@gmail.com') return 'ADMIN';
-  if (firebaseUser.email.includes('admin@example.com')) return 'ADMIN';
-  if (firebaseUser.email.includes('supervisor@example.com')) return 'SUPERVISOR';
-  if (firebaseUser.email === MOCK_TECHNICIAN_EMAIL) return 'TECHNICIAN';
-  return 'TECHNICIAN'; 
-};
-
-
 export default function ViewReportPage() {
   const params = useParams();
   const router = useRouter();
@@ -83,10 +74,12 @@ export default function ViewReportPage() {
 
   const [isRejectionDialogOpen, setIsRejectionDialogOpen] = useState(false);
   const [isProcessingAction, setIsProcessingAction] = useState(false);
+  const [projectName, setProjectName] = useState<string | undefined>();
+  const [projectLocation, setProjectLocation] = useState<string | undefined>();
 
   useEffect(() => {
     if (user) {
-      setCurrentUserRole(mapFirebaseUserToAppRole(user));
+      setCurrentUserRole(user.role as UserRole);
     }
   }, [user]);
 
@@ -98,6 +91,10 @@ export default function ViewReportPage() {
         const data = await getReportById(reportId);
         if (data) {
           setReport(data);
+          // Fetch project info for PDF
+          getProjectById(data.projectId).then(p => {
+            if (p) { setProjectName(p.name); setProjectLocation(p.location); }
+          }).catch(() => {});
         } else {
           setErrorLoadingReport(`Rapport avec ID ${reportId} non trouvé.`);
         }
@@ -123,6 +120,7 @@ export default function ViewReportPage() {
     setIsProcessingAction(true);
     try {
       await updateReport(report.id, { status: 'VALIDATED' });
+      notifyReportValidated(report.id).catch(() => {});
       toast({ title: 'Rapport Validé', description: `Le rapport ID: ${report.id} a été marqué comme VALIDÉ.` });
       router.push('/reports');
     } catch (err) {
@@ -137,7 +135,8 @@ export default function ViewReportPage() {
     setIsRejectionDialogOpen(false);
     try {
       await updateReport(id, { status: 'REJECTED', rejectionReason: reason });
-      toast({ 
+      notifyReportRejected(id, reason).catch(() => {});
+      toast({
         title: 'Rapport Rejeté', 
         description: (
           <div>
@@ -178,6 +177,16 @@ export default function ViewReportPage() {
             Rejeter
           </Button>
         </>
+      )}
+      {report && (
+        <DownloadReportButton
+          report={report}
+          projectName={projectName}
+          projectLocation={projectLocation}
+          variant="outline"
+          size="sm"
+          className="rounded-lg"
+        />
       )}
       <Button variant="outline" asChild className="rounded-lg">
         <Link href="/reports">
@@ -289,13 +298,11 @@ export default function ViewReportPage() {
               <CardTitle className="flex items-center"><ImageIcon className="mr-2 h-5 w-5 text-primary"/>Photo du Matériel/Site</CardTitle>
             </CardHeader>
             <CardContent className="flex justify-center items-center">
-              <Image 
-                src={report.photoDataUri} 
-                alt={`Photo pour le rapport ${report.id}`} 
-                width={600} 
-                height={400} 
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={report.photoDataUri}
+                alt={`Photo pour le rapport ${report.id}`}
                 className="rounded-lg object-contain max-h-[500px] shadow-md"
-                data-ai-hint="material sample construction" 
               />
             </CardContent>
           </Card>

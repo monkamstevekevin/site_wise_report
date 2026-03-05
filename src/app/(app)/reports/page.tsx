@@ -4,7 +4,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { PageTitle } from '@/components/common/PageTitle';
 import { Button } from '@/components/ui/button';
-import { FileText, PlusCircle, Filter, Loader2, AlertTriangleIcon, AlertTriangle } from 'lucide-react';
+import { FileText, PlusCircle, Filter, Loader2, AlertTriangleIcon, AlertTriangle, Download } from 'lucide-react';
 import Link from 'next/link';
 import { ReportTable } from './components/ReportTable';
 import { RejectionReasonDialog } from './components/RejectionReasonDialog';
@@ -16,10 +16,10 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { UserRole } from '@/lib/constants';
-import { MOCK_TECHNICIAN_EMAIL, MOCK_TECHNICIAN_REPORTS_ID } from '@/lib/constants';
 import { getReportsSubscription, getReportsByTechnicianIdSubscription } from '@/lib/reportClientService';
-import { deleteReport as deleteReportService, updateReport } from '@/services/reportService'; 
-import { useRouter } from 'next/navigation'; 
+import { deleteReport as deleteReportService, updateReport } from '@/services/reportService';
+import { notifyReportValidated, notifyReportRejected } from '@/actions/notifications';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -49,33 +49,69 @@ const materialTypeFilterOptions: { value: FieldReport['materialType'] | 'ALL'; l
   { value: 'other', label: 'Autre' },
 ];
 
+const materialTypeDisplay: Record<string, string> = {
+  cement: 'Ciment', asphalt: 'Asphalte', gravel: 'Gravier', sand: 'Sable', other: 'Autre',
+};
+
+function exportReportsToCSV(reports: FieldReport[]) {
+  const headers = [
+    'ID Rapport', 'ID Projet', 'ID Technicien', 'Matériau', 'Numéro de Lot',
+    'Fournisseur', 'Méthode Échantillonnage', 'Statut',
+    'Température (°C)', 'Volume (m³)', 'Densité (kg/m³)', 'Humidité (%)',
+    'Anomalie IA', 'Explication IA',
+    'Date Création', 'Date Mise à Jour',
+  ];
+
+  const rows = reports.map(r => [
+    r.id,
+    r.projectId,
+    r.technicianId,
+    materialTypeDisplay[r.materialType] || r.materialType,
+    r.batchNumber,
+    r.supplier ?? '',
+    r.samplingMethod,
+    r.status,
+    r.temperature,
+    r.volume,
+    r.density,
+    r.humidity,
+    r.aiIsAnomalous === true ? 'Oui' : r.aiIsAnomalous === false ? 'Non' : '',
+    (r.aiAnomalyExplanation ?? '').replace(/"/g, '""'),
+    new Date(r.createdAt).toLocaleDateString('fr-CA'),
+    new Date(r.updatedAt).toLocaleDateString('fr-CA'),
+  ]);
+
+  const csvContent = [headers, ...rows]
+    .map(row => row.map(cell => `"${cell}"`).join(','))
+    .join('\n');
+
+  const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `rapports-sitewise-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 interface MappedUserRoleAndId {
   role: UserRole;
   effectiveTechnicianId: string | null;
 }
 
-const mapFirebaseUserToAppRoleAndId = (firebaseUser: any): MappedUserRoleAndId => {
-  if (!firebaseUser) return { role: 'TECHNICIAN', effectiveTechnicianId: null };
-
-  if (firebaseUser.email === 'janesteve237@gmail.com') {
-    return { role: 'ADMIN', effectiveTechnicianId: null }; 
-  }
-  
-  if (firebaseUser.email?.includes('admin@example.com')) return { role: 'ADMIN', effectiveTechnicianId: null };
-  if (firebaseUser.email?.includes('supervisor@example.com')) return { role: 'SUPERVISOR', effectiveTechnicianId: null };
-
-  if (firebaseUser.email === MOCK_TECHNICIAN_EMAIL) { 
-    return { role: 'TECHNICIAN', effectiveTechnicianId: MOCK_TECHNICIAN_REPORTS_ID }; 
-  }
-
-  return { role: 'TECHNICIAN', effectiveTechnicianId: firebaseUser.uid };
+const mapUserToRoleAndId = (appUser: { id: string; role: string } | null): MappedUserRoleAndId => {
+  if (!appUser) return { role: 'TECHNICIAN', effectiveTechnicianId: null };
+  const role = appUser.role as UserRole;
+  const effectiveTechnicianId = role === 'TECHNICIAN' ? appUser.id : null;
+  return { role, effectiveTechnicianId };
 };
 
 
 export default function ReportsPage() {
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
-  const router = useRouter(); 
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [allFetchedReports, setAllFetchedReports] = useState<FieldReport[]>([]);
   const [isLoadingReports, setIsLoadingReports] = useState(true);
@@ -84,7 +120,7 @@ export default function ReportsPage() {
   const [currentUserRole, setCurrentUserRole] = useState<UserRole | null>(null);
   const [effectiveTechnicianId, setEffectiveTechnicianId] = useState<string | null>(null);
 
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(() => searchParams.get('projectId') ?? '');
   const [statusFilter, setStatusFilter] = useState<FieldReport['status'] | 'ALL'>('ALL');
   const [materialFilter, setMaterialFilter] = useState<FieldReport['materialType'] | 'ALL'>('ALL');
 
@@ -105,7 +141,7 @@ export default function ReportsPage() {
         return;
     }
 
-    const { role, effectiveTechnicianId: mappedTechId } = mapFirebaseUserToAppRoleAndId(user);
+    const { role, effectiveTechnicianId: mappedTechId } = mapUserToRoleAndId(user);
     setCurrentUserRole(role);
     setEffectiveTechnicianId(mappedTechId);
     
@@ -125,7 +161,7 @@ export default function ReportsPage() {
     if (role === 'TECHNICIAN' && mappedTechId) {
         unsubscribe = getReportsByTechnicianIdSubscription(mappedTechId, onUpdate, onError);
     } else if (role === 'ADMIN' || role === 'SUPERVISOR') {
-        unsubscribe = getReportsSubscription(onUpdate, onError);
+        unsubscribe = getReportsSubscription(user?.organizationId, onUpdate, onError);
     } else {
         setIsLoadingReports(false);
         setAllFetchedReports([]);
@@ -171,6 +207,7 @@ export default function ReportsPage() {
     }
     try {
       await updateReport(report.id, { status: 'VALIDATED' });
+      notifyReportValidated(report.id).catch(() => {});
       toast({ title: 'Rapport Validé', description: `Le rapport ID: ${report.id} a été marqué comme VALIDÉ.` });
     } catch (err) {
       toast({ variant: 'destructive', title: 'Erreur de Validation', description: (err as Error).message || "Une erreur s'est produite." });
@@ -190,8 +227,9 @@ export default function ReportsPage() {
     setIsRejectionDialogOpen(false); 
     try {
       await updateReport(reportId, { status: 'REJECTED', rejectionReason: reason });
-      toast({ 
-        title: 'Rapport Rejeté', 
+      notifyReportRejected(reportId, reason).catch(() => {});
+      toast({
+        title: 'Rapport Rejeté',
         description: (
           <div>
             <p>Le rapport ID: {reportId} a été marqué comme REJETÉ.</p>
@@ -253,11 +291,23 @@ export default function ReportsPage() {
         icon={FileText}
         subtitle={currentUserRole === 'TECHNICIAN' ? "Gérez et révisez vos rapports de terrain soumis." : "Gérez et révisez tous les rapports de terrain soumis."}
         actions={
-          <Button asChild className="rounded-lg">
-            <Link href="/reports/create">
-              <PlusCircle className="mr-2 h-4 w-4" /> Créer un Nouveau Rapport
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            {(currentUserRole === 'ADMIN' || currentUserRole === 'SUPERVISOR') && filteredReports.length > 0 && (
+              <Button
+                variant="outline"
+                className="rounded-lg"
+                onClick={() => exportReportsToCSV(filteredReports)}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Exporter CSV ({filteredReports.length})
+              </Button>
+            )}
+            <Button asChild className="rounded-lg">
+              <Link href="/reports/create">
+                <PlusCircle className="mr-2 h-4 w-4" /> Créer un Nouveau Rapport
+              </Link>
+            </Button>
+          </div>
         }
       />
 
@@ -326,7 +376,7 @@ export default function ReportsPage() {
             onDeleteReport={openDeleteDialog} 
             onValidateReport={handleValidateReport}
             onRejectReport={handleOpenRejectionDialog}
-            currentUserId={effectiveTechnicianId || user?.uid} 
+            currentUserId={effectiveTechnicianId || user?.id} 
             currentUserRole={currentUserRole}
           />
         </div>

@@ -14,11 +14,13 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
-import { UserCircle, Edit3, Save, Loader2, Camera as CameraIcon, Upload, XCircle } from 'lucide-react';
+import { UserCircle, Edit3, Save, Loader2, Camera as CameraIcon, Upload, XCircle, KeyRound } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import Image from 'next/image';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { uploadProfileImage } from '@/services/storageService';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 const profileFormSchema = z.object({
   displayName: z.string().min(1, 'Le nom d\'affichage est requis').max(50, 'Le nom d\'affichage est trop long'),
@@ -39,6 +41,36 @@ export default function ProfilePage() {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+
+  const handleChangePassword = async () => {
+    if (newPassword.length < 8) {
+      toast({ variant: 'destructive', title: 'Mot de passe trop court', description: 'Minimum 8 caractères requis.' });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast({ variant: 'destructive', title: 'Mots de passe différents', description: 'Les deux mots de passe ne correspondent pas.' });
+      return;
+    }
+    setIsChangingPassword(true);
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+      toast({ title: 'Mot de passe mis à jour', description: 'Votre mot de passe a été changé avec succès.' });
+      setShowPasswordDialog(false);
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (err) {
+      toast({ variant: 'destructive', title: 'Erreur', description: (err as Error).message });
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
+
   const [showCameraDialog, setShowCameraDialog] = useState(false);
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -55,9 +87,9 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (user && !isEditing) {
-      const currentPhoto = user.photoURL || '';
+      const currentPhoto = user.avatarUrl || '';
       form.reset({
-        displayName: user.displayName || '',
+        displayName: user.name || '',
         photoURL: currentPhoto,
       });
       setPhotoPreview(currentPhoto);
@@ -66,9 +98,9 @@ export default function ProfilePage() {
   
   const initializeFormForEditing = () => {
     if (user) {
-      const currentPhoto = user.photoURL || '';
+      const currentPhoto = user.avatarUrl || '';
       form.reset({
-        displayName: user.displayName || '',
+        displayName: user.name || '',
         photoURL: currentPhoto,
       });
       setPhotoPreview(currentPhoto);
@@ -160,9 +192,15 @@ export default function ProfilePage() {
     }
 
     try {
-      const finalSavedPhotoURL = await updateUserProfile({ 
-        displayName: data.displayName, 
-        photoURL: data.photoURL 
+      // Si c'est un data URI, on l'upload dans Supabase Storage d'abord
+      let avatarUrl: string | null = data.photoURL || null;
+      if (avatarUrl && avatarUrl.startsWith('data:image')) {
+        avatarUrl = await uploadProfileImage(user.id, avatarUrl, user.avatarUrl);
+      }
+
+      const finalSavedPhotoURL = await updateUserProfile({
+        name: data.displayName,
+        avatarUrl,
       });
       
       toast({
@@ -189,9 +227,9 @@ export default function ProfilePage() {
     }
   };
   
-  const currentAvatarSrc = isEditing 
-                           ? (photoPreview || user?.photoURL || `https://placehold.co/100x100.png?text=${user?.email?.[0]?.toUpperCase() || 'U'}`) 
-                           : (user?.photoURL || `https://placehold.co/100x100.png?text=${user?.email?.[0]?.toUpperCase() || 'U'}`);
+  const currentAvatarSrc = isEditing
+                           ? (photoPreview || user?.avatarUrl || `https://placehold.co/100x100.png?text=${user?.email?.[0]?.toUpperCase() || 'U'}`)
+                           : (user?.avatarUrl || `https://placehold.co/100x100.png?text=${user?.email?.[0]?.toUpperCase() || 'U'}`);
 
 
   if (authLoading) {
@@ -236,12 +274,14 @@ export default function ProfilePage() {
         subtitle="Afficher et gérer les détails de votre profil."
         actions={
           !isEditing && (
-            <Button onClick={() => {
-              setIsEditing(true);
-              initializeFormForEditing();
-            }} className="rounded-lg">
-              <Edit3 className="mr-2 h-4 w-4" /> Modifier le Profil
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setShowPasswordDialog(true)} className="rounded-lg">
+                <KeyRound className="mr-2 h-4 w-4" /> Changer le mot de passe
+              </Button>
+              <Button onClick={() => { setIsEditing(true); initializeFormForEditing(); }} className="rounded-lg">
+                <Edit3 className="mr-2 h-4 w-4" /> Modifier le Profil
+              </Button>
+            </div>
           )
         }
       />
@@ -249,14 +289,26 @@ export default function ProfilePage() {
       <Card className="shadow-xl">
         <CardHeader>
           <div className="flex flex-col sm:flex-row items-center sm:items-start space-y-4 sm:space-y-0 sm:space-x-6">
-            <Avatar className="h-24 w-24 sm:h-32 sm:w-32 border-2 border-primary shadow-md">
-              <AvatarImage src={currentAvatarSrc} alt={form.watch('displayName') || user.displayName || 'Utilisateur'} data-ai-hint="user avatar" />
-              <AvatarFallback className="text-3xl sm:text-4xl">{user.email?.[0]?.toUpperCase() || 'U'}</AvatarFallback>
-            </Avatar>
+            <div className="relative">
+              <Avatar className="h-32 w-32 sm:h-44 sm:w-44 ring-4 ring-primary/30 shadow-xl">
+                <AvatarImage src={currentAvatarSrc} alt={form.watch('displayName') || user.name || 'Utilisateur'} className="object-cover" data-ai-hint="user avatar" />
+                <AvatarFallback className="text-4xl sm:text-5xl">{user.email?.[0]?.toUpperCase() || 'U'}</AvatarFallback>
+              </Avatar>
+              {isEditing && (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="absolute bottom-1 right-1 bg-primary text-primary-foreground rounded-full p-2 shadow-md hover:bg-primary/90 transition-colors"
+                  title="Changer la photo"
+                >
+                  <CameraIcon className="h-4 w-4" />
+                </button>
+              )}
+            </div>
             <div className="text-center sm:text-left">
-              <CardTitle className="text-2xl sm:text-3xl">{isEditing ? form.watch('displayName') : (user.displayName || 'Nom d\'utilisateur')}</CardTitle>
+              <CardTitle className="text-2xl sm:text-3xl">{isEditing ? form.watch('displayName') : (user.name || 'Nom d\'utilisateur')}</CardTitle>
               <CardDescription className="text-base">{user.email}</CardDescription>
-              <CardDescription className="text-sm mt-1">UID: {user.uid}</CardDescription>
+              <CardDescription className="text-sm mt-1">ID: {user.id}</CardDescription>
             </div>
           </div>
         </CardHeader>
@@ -325,8 +377,9 @@ export default function ProfilePage() {
                 {photoPreview && (
                   <div className="space-y-2">
                     <Label>Aperçu de la photo actuelle :</Label>
-                    <div className="relative w-fit border p-2 rounded-md">
-                      <Image src={photoPreview} alt="Aperçu du profil" width={150} height={150} className="rounded-md object-cover max-h-48 w-auto" data-ai-hint="profile preview" />
+                    <div className="relative w-fit">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={photoPreview} alt="Aperçu du profil" className="h-32 w-32 rounded-full object-cover ring-4 ring-primary/30 shadow-md" />
                        <Button variant="ghost" size="icon" className="absolute -top-3 -right-3 h-7 w-7 bg-background rounded-full text-destructive hover:bg-destructive/10" 
                          onClick={() => { 
                             setPhotoPreview(null); 
@@ -344,8 +397,8 @@ export default function ProfilePage() {
                   <Button type="button" variant="outline" onClick={() => {
                     setIsEditing(false); 
                     if (user) {
-                        const currentPhoto = user.photoURL || '';
-                        form.reset({ displayName: user.displayName || '', photoURL: currentPhoto });
+                        const currentPhoto = user.avatarUrl || '';
+                        form.reset({ displayName: user.name || '', photoURL: currentPhoto });
                         setPhotoPreview(currentPhoto);
                     }
                     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -362,15 +415,18 @@ export default function ProfilePage() {
             <div className="space-y-4 py-4">
               <div>
                 <Label className="text-sm text-muted-foreground">Nom d'affichage</Label>
-                <p className="text-lg">{user.displayName || 'Non défini'}</p>
+                <p className="text-lg">{user.name || 'Non défini'}</p>
               </div>
               <div>
                 <Label className="text-sm text-muted-foreground">Photo URL</Label>
-                {user.photoURL ? (
-                  (user.photoURL.startsWith('data:image') || user.photoURL.startsWith('http')) ? (
-                     <Image src={user.photoURL} alt="Profil" width={100} height={100} className="rounded-md mt-1" data-ai-hint="profile image" />
+                {user.avatarUrl ? (
+                  user.avatarUrl.startsWith('http') ? (
+                    <Image src={user.avatarUrl} alt="Profil" width={128} height={128} className="rounded-full mt-1 object-cover ring-4 ring-primary/20 shadow-md" data-ai-hint="profile image" />
+                  ) : user.avatarUrl.startsWith('data:image') ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={user.avatarUrl} alt="Profil" className="h-32 w-32 rounded-full mt-1 object-cover ring-4 ring-primary/20 shadow-md" />
                   ) : (
-                     <p className="text-lg break-all">{user.photoURL}</p>
+                     <p className="text-lg break-all">{user.avatarUrl}</p>
                   )
                 ) : (
                   <p className="text-lg">Non définie</p>
@@ -380,6 +436,49 @@ export default function ProfilePage() {
           )}
         </CardContent>
       </Card>
+
+      {/* ── Password change dialog ────────────────────────────────────── */}
+      <Dialog open={showPasswordDialog} onOpenChange={(open) => { setShowPasswordDialog(open); if (!open) { setNewPassword(''); setConfirmPassword(''); } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><KeyRound className="h-5 w-5" /> Changer le mot de passe</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="new-password">Nouveau mot de passe</Label>
+              <Input
+                id="new-password"
+                type="password"
+                placeholder="Minimum 8 caractères"
+                value={newPassword}
+                onChange={e => setNewPassword(e.target.value)}
+                disabled={isChangingPassword}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirm-password">Confirmer le mot de passe</Label>
+              <Input
+                id="confirm-password"
+                type="password"
+                placeholder="Répétez le nouveau mot de passe"
+                value={confirmPassword}
+                onChange={e => setConfirmPassword(e.target.value)}
+                disabled={isChangingPassword}
+                onKeyDown={e => e.key === 'Enter' && handleChangePassword()}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline" disabled={isChangingPassword}>Annuler</Button>
+            </DialogClose>
+            <Button onClick={handleChangePassword} disabled={isChangingPassword} className="rounded-lg">
+              {isChangingPassword ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <KeyRound className="mr-2 h-4 w-4" />}
+              Mettre à jour
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={showCameraDialog} onOpenChange={(isOpen) => {
         setShowCameraDialog(isOpen);

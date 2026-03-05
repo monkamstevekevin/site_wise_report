@@ -32,7 +32,7 @@ export default function MySchedulePage() {
       try {
         const [fetchedProjects, fetchedCurrentUser] = await Promise.all([
           getProjects(),
-          getUserById(user.uid), 
+          getUserById(user.id), 
         ]);
         setAllProjects(fetchedProjects);
         setCurrentUserData(fetchedCurrentUser);

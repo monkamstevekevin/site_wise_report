@@ -1,6 +1,6 @@
 
 import type { LucideIcon } from 'lucide-react';
-import { LayoutDashboard, FileText, Users, HardHat, TestTube2, Settings, UserCircle, Briefcase, CalendarDays } from 'lucide-react';
+import { LayoutDashboard, FileText, Users, HardHat, TestTube2, Settings, UserCircle, Briefcase, CalendarDays, BarChart3, Settings2 } from 'lucide-react';
 
 export interface NavItem {
   href: string;
@@ -16,6 +16,7 @@ export const ALL_NAV_ITEMS: NavItem[] = [
   { href: '/reports', label: 'Rapports de Terrain', icon: FileText, roles: ['ADMIN', 'SUPERVISOR', 'TECHNICIAN'] },
   { href: '/reports/create', label: 'Créer un Rapport', icon: FileText, roles: ['ADMIN', 'SUPERVISOR', 'TECHNICIAN'] },
   { href: '/my-projects', label: 'Mes Projets', icon: Briefcase, roles: ['TECHNICIAN', 'SUPERVISOR'] },
+  { href: '/analytics', label: 'Analyses & Performance', icon: BarChart3, roles: ['ADMIN', 'SUPERVISOR'] },
   {
     href: '/admin',
     label: 'Panneau Admin',
@@ -27,6 +28,8 @@ export const ALL_NAV_ITEMS: NavItem[] = [
       { href: '/admin/materials', label: 'Gestion Matériaux', icon: TestTube2, roles: ['ADMIN'] },
     ]
   },
+  { href: '/settings', label: 'Paramètres', icon: Settings2, roles: ['ADMIN'] },
+  { href: '/settings/profile', label: 'Mon Profil', icon: UserCircle, roles: ['ADMIN', 'SUPERVISOR', 'TECHNICIAN'] },
 ];
 
 export const APP_NAME = "SiteWise Reports";

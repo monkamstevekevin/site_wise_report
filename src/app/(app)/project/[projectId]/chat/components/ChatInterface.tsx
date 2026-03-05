@@ -47,11 +47,11 @@ export function ChatInterface({ projectId }: ChatInterfaceProps) {
       (fetchedMessages) => {
         setMessages(fetchedMessages.map(msg => ({
             ...msg,
-            isOwnMessage: msg.senderId === user.uid
+            isOwnMessage: msg.senderId === user.id
         })));
         setIsLoadingMessages(false);
       },
-      user.uid
+      user.id
     );
 
     return () => unsubscribe();
@@ -72,9 +72,9 @@ export function ChatInterface({ projectId }: ChatInterfaceProps) {
 
     const messagePayload: NewChatMessagePayload = {
       projectId,
-      senderId: user.uid,
-      senderName: user.displayName || user.email || 'Utilisateur Actuel',
-      senderAvatar: user.photoURL || undefined,
+      senderId: user.id,
+      senderName: user.name || user.email || 'Utilisateur Actuel',
+      senderAvatar: user.avatarUrl || undefined,
       text: newMessage.trim(),
       imageUrl: null,
     };

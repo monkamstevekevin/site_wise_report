@@ -68,7 +68,7 @@ export function AssignProjectsDialog({
         ...allProjects.map(p => p.id)
       ]);
 
-      const initialAssignments = Array.from(allProjectIdsToShow).map(projectId => {
+      const initialAssignments: TempAssignment[] = Array.from(allProjectIdsToShow).map(projectId => {
         const existingAssignment = validUserAssignments.find(a => a.projectId === projectId);
         return {
           projectId: projectId,

@@ -10,12 +10,12 @@ import { MaterialReportsChart } from './components/MaterialReportsChart';
 import { SupplierUsageChart } from './components/SupplierUsageChart';
 import { ComplianceTrendChart } from './components/ComplianceTrendChart';
 import { ActivityLog } from './components/ActivityLog';
+import { MonthlyReportsChart } from './components/MonthlyReportsChart';
 import { ProjectAssignmentsCard } from './components/ProjectAssignmentsCard';
 import { AlertsCard } from './components/AlertsCard';
 import { ScheduleView } from './components/ScheduleView';
 import { useAuth } from '@/contexts/AuthContext'; 
 import type { UserRole } from '@/lib/constants';
-import { MOCK_TECHNICIAN_EMAIL, MOCK_TECHNICIAN_REPORTS_ID } from '@/lib/constants';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useEffect, useState, useMemo } from 'react';
@@ -40,19 +40,11 @@ interface MappedUserRoleAndId {
   effectiveTechnicianId: string | null;
 }
 
-const mapFirebaseUserToAppRoleAndId = (firebaseUser: any): MappedUserRoleAndId => {
-  if (!firebaseUser) return { role: 'TECHNICIAN', effectiveTechnicianId: null };
-  
-  if (firebaseUser.email === 'janesteve237@gmail.com') {
-    return { role: 'ADMIN', effectiveTechnicianId: null }; 
-  }
-  if (firebaseUser.email === MOCK_TECHNICIAN_EMAIL) {
-    return { role: 'TECHNICIAN', effectiveTechnicianId: MOCK_TECHNICIAN_REPORTS_ID };
-  }
-  if (firebaseUser.email?.includes('admin@example.com')) return { role: 'ADMIN', effectiveTechnicianId: null };
-  if (firebaseUser.email?.includes('supervisor@example.com')) return { role: 'SUPERVISOR', effectiveTechnicianId: null };
-  
-  return { role: 'TECHNICIAN', effectiveTechnicianId: firebaseUser.uid }; 
+const mapUserToRoleAndId = (appUser: { id: string; role: string } | null): MappedUserRoleAndId => {
+  if (!appUser) return { role: 'TECHNICIAN', effectiveTechnicianId: null };
+  const role = appUser.role as UserRole;
+  const effectiveTechnicianId = role === 'TECHNICIAN' ? appUser.id : null;
+  return { role, effectiveTechnicianId };
 };
 
 const reportStatusBadgeVariant: Record<FieldReport['status'], "default" | "secondary" | "outline" | "destructive"> = {
@@ -107,7 +99,7 @@ export default function DashboardPage() {
     to: startOfDay(new Date()),
   });
 
-  const { role, effectiveTechnicianId } = useMemo(() => mapFirebaseUserToAppRoleAndId(user), [user]);
+  const { role, effectiveTechnicianId } = useMemo(() => mapUserToRoleAndId(user), [user]);
 
 
   useEffect(() => {
@@ -133,14 +125,17 @@ export default function DashboardPage() {
     
     if (role === 'ADMIN' || role === 'SUPERVISOR') {
         subscriptions.push(getReportsSubscription(
+            user?.organizationId,
             (data) => active && setAllReportsData(data),
             handleSubscriptionError('reports')
         ));
         subscriptions.push(getProjectsSubscription(
+            user?.organizationId,
             (data) => active && setAllProjectsData(data),
             handleSubscriptionError('projects')
         ));
         subscriptions.push(getUsersSubscription(
+            user?.organizationId,
             (data) => active && setAllUsersData(data),
             handleSubscriptionError('users')
         ));
@@ -152,11 +147,12 @@ export default function DashboardPage() {
         ));
         // Technicians still need all projects for the schedule view
         subscriptions.push(getProjectsSubscription(
+            user?.organizationId,
             (data) => active && setAllProjectsData(data),
             handleSubscriptionError('projects')
         ));
         subscriptions.push(getUserByIdSubscription(
-            user.uid,
+            user.id,
             (data) => active && setCurrentUserDetails(data),
             handleSubscriptionError('current user details')
         ));
@@ -176,19 +172,28 @@ export default function DashboardPage() {
   }, [user, authLoading, role, effectiveTechnicianId]); 
 
   useEffect(() => {
-    if (role === 'ADMIN' || role === 'SUPERVISOR') {
+    if ((role === 'ADMIN' || role === 'SUPERVISOR') && allReportsData.length > 0) {
       const fetchCompliancePrediction = async () => {
         setIsLoadingCompliance(true);
         setComplianceError(null);
         try {
-          const mockHistoricalData = "3 derniers mois : 85% de conformité. Projet X précédent : 90% de conformité. Projet Y : 78% dans des conditions similaires.";
-          const mockCurrentConditions = "Projet actuel : Revêtement routier. Météo : Bonne, 25°C. Personnel : Équipe complète. Livraison matériel : À temps pour l'asphalte, léger retard pour les agrégats. Équipement : Tout opérationnel.";
-          const mockValidationRules = "Asphalte PG 64-22 : Plage de température 135-160°C. Densité : 92-97% de Marshall. Compactage : Min 8 passes. Affaissement béton : 75-125mm.";
-          
+          const total = allReportsData.length;
+          const validated = allReportsData.filter(r => r.status === 'VALIDATED').length;
+          const rejected = allReportsData.filter(r => r.status === 'REJECTED').length;
+          const submitted = allReportsData.filter(r => r.status === 'SUBMITTED').length;
+          const anomalies = allReportsData.filter(r => r.aiIsAnomalous === true).length;
+          const validationRate = total > 0 ? Math.round((validated / total) * 100) : 0;
+          const materials = [...new Set(allReportsData.map(r => r.materialType))].map(m => materialTypeDisplay[m] || m).join(', ');
+          const activeProjects = allProjectsData.filter(p => p.status === 'ACTIVE');
+
+          const historicalData = `Total rapports: ${total}. Validés: ${validated} (${validationRate}%). Rejetés: ${rejected}. En attente: ${submitted}. Anomalies IA: ${anomalies}. Taux de conformité actuel: ${validationRate}%.`;
+          const currentConditions = `Projets actifs: ${activeProjects.length} (${activeProjects.map(p => p.name).slice(0, 3).join(', ')}${activeProjects.length > 3 ? '...' : ''}). Matériaux utilisés: ${materials || 'N/A'}. Rapports soumis en attente de validation: ${submitted}.`;
+          const validationRules = "Asphalte: plage de température 135-165°C, densité 92-97% de Marshall. Béton: affaissement 75-125mm, résistance conforme classe. Gravier: granulométrie et propreté selon norme. Sable: teneur en eau < 5%, module de finesse 2.2-3.1.";
+
           const prediction = await predictCompliancePercentage({
-            historicalData: mockHistoricalData,
-            currentConditions: mockCurrentConditions,
-            validationRules: mockValidationRules,
+            historicalData,
+            currentConditions,
+            validationRules,
           });
           setCurrentCompliancePrediction(prediction);
         } catch (err) {
@@ -200,7 +205,7 @@ export default function DashboardPage() {
       };
       fetchCompliancePrediction();
     }
-  }, [role]);
+  }, [role, allReportsData, allProjectsData]);
   
   const adminKpiData = useMemo(() => {
     const predictedComplianceValue = currentCompliancePrediction?.predictedCompliancePercentage;
@@ -215,7 +220,7 @@ export default function DashboardPage() {
           value: isLoadingCompliance ? "..." : (predictedComplianceValue !== undefined ? `${predictedComplianceValue.toFixed(1)}%` : "N/A"), 
           icon: Bot, 
           trend: isLoadingCompliance ? "" : (complianceError ? "Erreur" : complianceTrend), 
-          trendDirection: complianceError ? "neutral" : (predictedComplianceValue && predictedComplianceValue > 90 ? "up" : "neutral" as const),
+          trendDirection: (complianceError ? "neutral" : (predictedComplianceValue && predictedComplianceValue > 90 ? "up" : "neutral")) as 'up' | 'down' | 'neutral',
           description: complianceError ? complianceError : (isLoadingCompliance ? "Calcul en cours..." : ""),
           tooltipContent: currentCompliancePrediction ? (
              <div className="text-xs p-1 max-w-xs">
@@ -285,6 +290,46 @@ export default function DashboardPage() {
       });
     }
     return chartData;
+  }, [allReportsData]);
+
+  const monthlyChartData = useMemo(() => {
+    const now = new Date();
+    const months: { key: string; label: string; validés: number; rejetés: number; soumis: number }[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      months.push({ key: format(d, 'yyyy-MM'), label: format(d, 'MMM', { locale: fr }), validés: 0, rejetés: 0, soumis: 0 });
+    }
+    allReportsData.forEach(report => {
+      const m = format(new Date(report.createdAt), 'yyyy-MM');
+      const entry = months.find(x => x.key === m);
+      if (entry) {
+        if (report.status === 'VALIDATED') entry.validés++;
+        else if (report.status === 'REJECTED') entry.rejetés++;
+        else if (report.status === 'SUBMITTED') entry.soumis++;
+      }
+    });
+    return months.map(({ label, validés, rejetés, soumis }) => ({ label, validés, rejetés, soumis }));
+  }, [allReportsData]);
+
+  const complianceTrendData = useMemo(() => {
+    const now = new Date();
+    const months: { key: string; label: string; validés: number; rejetés: number }[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      months.push({ key: format(d, 'yyyy-MM'), label: format(d, 'MMM', { locale: fr }), validés: 0, rejetés: 0 });
+    }
+    allReportsData.forEach(report => {
+      const m = format(new Date(report.updatedAt), 'yyyy-MM');
+      const entry = months.find(x => x.key === m);
+      if (entry) {
+        if (report.status === 'VALIDATED') entry.validés++;
+        else if (report.status === 'REJECTED') entry.rejetés++;
+      }
+    });
+    return months.map(({ label, validés, rejetés }) => {
+      const total = validés + rejetés;
+      return { label, conformité: total > 0 ? Math.round((validés / total) * 100) : 0 };
+    });
   }, [allReportsData]);
 
   const filteredProjectsForAssignments = useMemo(() => {
@@ -504,10 +549,13 @@ export default function DashboardPage() {
 
                 {!noReportsExistForUser && !noProjectsExistForAdmin && (
                     <>
-                        <MaterialReportsChart data={materialUsageData} /> 
+                        <div className="lg:col-span-2">
+                            <MonthlyReportsChart data={monthlyChartData} />
+                        </div>
+                        <MaterialReportsChart data={materialUsageData} />
                         <SupplierUsageChart data={supplierUsageData} />
-                        <ComplianceTrendChart />
-                        <ActivityLog />
+                        <ComplianceTrendChart data={complianceTrendData} />
+                        <ActivityLog reports={allReportsData} />
                     </>
                 )}
                  {noProjectsExistForAdmin && ( 
@@ -552,9 +600,14 @@ export default function DashboardPage() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <Card className="lg:col-span-1 shadow-lg rounded-lg">
-                <CardHeader>
-                    <CardTitle>Mes Rapports Récents (5 derniers)</CardTitle>
-                    <CardDescription>Aperçu rapide de votre dernière activité.</CardDescription>
+                <CardHeader className="flex flex-row items-start justify-between gap-2">
+                    <div>
+                      <CardTitle>Mes Rapports Récents</CardTitle>
+                      <CardDescription>Aperçu rapide de votre dernière activité.</CardDescription>
+                    </div>
+                    <Button variant="ghost" size="sm" asChild className="shrink-0 text-xs text-primary">
+                      <Link href="/reports">Voir tous →</Link>
+                    </Button>
                 </CardHeader>
                 <CardContent>
                     {sortedTechnicianReportsForDisplay.length > 0 ? sortedTechnicianReportsForDisplay.slice(0, 5).map(report => (

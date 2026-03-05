@@ -1,7 +1,7 @@
 
 'use client';
 
-import { Bell, MessageSquare, FileText, Briefcase, Settings, UserCheck, AlertCircle, UserCog, FileCheck2, FileX2, Check, X } from 'lucide-react';
+import { Bell, MessageSquare, FileText, Briefcase, Settings, UserCheck, AlertCircle, UserCog, FileCheck2, FileX2, Check, X, type LucideIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -66,7 +66,7 @@ export function NotificationBell() {
     }
 
     const unsubscribe = getNotificationsSubscription(
-      user.uid,
+      user.id,
       (fetchedNotifications) => {
         const displayNotifications = fetchedNotifications.map(n => ({
           ...n,
@@ -88,7 +88,7 @@ export function NotificationBell() {
     if (!user) return;
     try {
       if (!notification.isRead) {
-        await markNotificationAsRead(user.uid, notification.id);
+        await markNotificationAsRead(user.id, notification.id);
       }
       if (notification.link) {
         router.push(notification.link);
@@ -104,7 +104,7 @@ export function NotificationBell() {
   const handleMarkAllAsReadClick = async () => {
     if (!user || unreadCount === 0) return;
     try {
-      await markAllNotificationsAsRead(user.uid);
+      await markAllNotificationsAsRead(user.id);
       toast({ title: "Notifications mises à jour", description: "Toutes les notifications ont été marquées comme lues." });
     } catch (error) {
       console.error("Error marking all notifications as read:", error);
@@ -113,7 +113,7 @@ export function NotificationBell() {
   };
 
   const handleDeleteNotification = async (userIdToDeleteFor: string, notificationId: string) => {
-    if (!user || userIdToDeleteFor !== user.uid) {
+    if (!user || userIdToDeleteFor !== user.id) {
         toast({ variant: "destructive", title: "Erreur", description: "Action non autorisée." });
         return;
     }
@@ -191,7 +191,7 @@ export function NotificationBell() {
                       onClick={(e) => {
                           e.stopPropagation();
                           if (user) { // Ensure user is not null
-                            handleDeleteNotification(user.uid, notification.id);
+                            handleDeleteNotification(user.id, notification.id);
                           }
                       }}
                       title="Supprimer cette notification"

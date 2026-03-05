@@ -1,64 +1,75 @@
-// This file is for client-side project utilities, specifically for real-time subscriptions.
-import { db } from '@/lib/firebase';
+// Client-side project subscriptions using Supabase Realtime
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import type { Project } from '@/lib/types';
-import {
-  collection,
-  query,
-  orderBy,
-  onSnapshot,
-  Timestamp,
-  type Unsubscribe,
-} from 'firebase/firestore';
 
-const formatTimestamp = (timestampField: any): string => {
-  if (!timestampField) {
-    return new Date().toISOString();
-  }
-  if (timestampField instanceof Timestamp) {
-    return timestampField.toDate().toISOString();
-  }
-  if (timestampField.seconds !== undefined && typeof timestampField.nanoseconds === 'number') {
-    return new Timestamp(timestampField.seconds, timestampField.nanoseconds).toDate().toISOString();
-  }
-  if (typeof timestampField === 'string' || typeof timestampField === 'number') {
-    const date = new Date(timestampField);
-    if (!isNaN(date.getTime())) {
-      return date.toISOString();
-    }
-  }
-  return new Date().toISOString();
+type Unsubscribe = () => void;
+
+type ProjectRow = {
+  id: string;
+  name: string;
+  location: string;
+  description: string | null;
+  status: string;
+  start_date: string | null;
+  end_date: string | null;
+  created_at: string;
+  updated_at: string;
+  project_materials: { material_id: string }[];
 };
 
-const mapDocToProject = (docSnapshot: any): Project => {
-    const data = docSnapshot.data();
-    return {
-        id: docSnapshot.id,
-        name: data.name || 'Unnamed Project',
-        location: data.location || 'Unknown Location',
-        description: data.description || '',
-        status: data.status || 'INACTIVE',
-        startDate: data.startDate,
-        endDate: data.endDate,
-        assignedMaterialIds: data.assignedMaterialIds || [],
-        createdAt: formatTimestamp(data.createdAt),
-        updatedAt: formatTimestamp(data.updatedAt),
-    } as Project;
-};
+function mapRowToProject(row: ProjectRow): Project {
+  return {
+    id: row.id,
+    name: row.name,
+    location: row.location,
+    description: row.description ?? undefined,
+    status: row.status as Project['status'],
+    startDate: row.start_date ?? undefined,
+    endDate: row.end_date ?? undefined,
+    assignedMaterialIds: row.project_materials.map((pm) => pm.material_id),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
 
-/**
- * Subscribes to real-time updates for all projects.
- * @param onUpdate - Callback function to handle the updated projects list.
- * @returns An unsubscribe function to stop listening for updates.
- */
-export function getProjectsSubscription(onUpdate: (projects: Project[]) => void, onError: (error: Error) => void): Unsubscribe {
-  const projectsCollectionRef = collection(db, 'projects');
-  const q = query(projectsCollectionRef, orderBy('createdAt', 'desc'));
+async function fetchAll(
+  supabase: ReturnType<typeof createSupabaseBrowserClient>,
+  orgId?: string
+): Promise<Project[]> {
+  let query = supabase
+    .from('projects')
+    .select('*, project_materials(material_id)')
+    .order('created_at', { ascending: false });
 
-  return onSnapshot(q, (querySnapshot) => {
-    const projects = querySnapshot.docs.map(mapDocToProject);
-    onUpdate(projects);
-  }, (error) => {
-    console.error("Error with projects real-time subscription:", error);
-    onError(new Error("Failed to subscribe to projects updates."));
-  });
+  if (orgId) {
+    query = query.eq('organization_id', orgId);
+  }
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return (data as ProjectRow[]).map(mapRowToProject);
+}
+
+export function getProjectsSubscription(
+  orgId: string | null | undefined,
+  onUpdate: (projects: Project[]) => void,
+  onError: (error: Error) => void
+): Unsubscribe {
+  const supabase = createSupabaseBrowserClient();
+
+  fetchAll(supabase, orgId ?? undefined).then(onUpdate).catch(onError);
+
+  const channelFilter = orgId ? { filter: `organization_id=eq.${orgId}` } : {};
+
+  const channel = supabase
+    .channel(`projects-all-${orgId ?? 'global'}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'projects', ...channelFilter }, () => {
+      fetchAll(supabase, orgId ?? undefined).then(onUpdate).catch(onError);
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'project_materials' }, () => {
+      fetchAll(supabase, orgId ?? undefined).then(onUpdate).catch(onError);
+    })
+    .subscribe();
+
+  return () => { supabase.removeChannel(channel); };
 }

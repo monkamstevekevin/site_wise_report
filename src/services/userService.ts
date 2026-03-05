@@ -1,298 +1,200 @@
-
 'use server';
 
-import { auth, db } from '@/lib/firebase';
-import type { User, UserRole, Project, UserAssignment } from '@/lib/types'; // Added Project type
-import { collection, getDocs, doc, getDoc, Timestamp, query, setDoc, serverTimestamp, updateDoc, deleteDoc, onSnapshot, type Unsubscribe } from 'firebase/firestore';
-import { createUserWithEmailAndPassword, updateProfile as updateAuthProfile } from 'firebase/auth';
-import { addNotification } from './notificationService'; 
-import { getProjectById } from './projectService'; // For fetching project details
+import { db } from '@/db';
+import { users, userAssignments, organizations } from '@/db/schema';
+import { eq, and, count } from 'drizzle-orm';
+import { supabaseAdmin } from '@/lib/supabase/admin';
+import type { User, UserRole, UserAssignment } from '@/lib/types';
+import { addNotification } from './notificationService';
+import { getProjectById } from './projectService';
 
-/**
- * @fileOverview User service for interacting with Firestore 'users' collection and Firebase Auth.
- *
- * - getUsers - Fetches all users from Firestore.
- * - getUserById - Fetches a single user by their ID from Firestore.
- * - addUser - Creates a new user in Firebase Auth and Firestore.
- * - updateUser - Updates a user's information (name, role, avatarUrl) in Firestore.
- * - updateUserAssignments - Updates the assigned projects for a user in Firestore and sends notifications.
- * - deleteUserFirestoreRecord - Deletes a user's document from Firestore.
- */
+// ─── Mapper DB → type applicatif ─────────────────────────────────────────────
 
-const formatTimestamp = (timestampField: any): string => {
-  if (!timestampField) {
-    return new Date().toISOString();
-  }
-  if (timestampField instanceof Timestamp) {
-    return timestampField.toDate().toISOString();
-  }
-  if (timestampField.seconds !== undefined && typeof timestampField.nanoseconds === 'number') {
-    return new Timestamp(timestampField.seconds, timestampField.nanoseconds).toDate().toISOString();
-  }
-  if (typeof timestampField === 'string' || typeof timestampField === 'number') {
-    const date = new Date(timestampField);
-    if (!isNaN(date.getTime())) {
-      return date.toISOString();
-    }
-  }
-  return new Date().toISOString();
-};
+async function mapToUser(row: typeof users.$inferSelect): Promise<User> {
+  const assignmentRows = await db
+    .select()
+    .from(userAssignments)
+    .where(eq(userAssignments.userId, row.id));
 
-const mapDocToUser = (docSnapshot: any): User => {
-    const data = docSnapshot.data();
-    return {
-        id: docSnapshot.id,
-        name: data.name || 'Unnamed User',
-        email: data.email || 'no-email@example.com',
-        role: data.role || 'TECHNICIAN',
-        avatarUrl: data.avatarUrl || undefined,
-        assignments: Array.isArray(data.assignments) ? data.assignments : [], 
-        createdAt: formatTimestamp(data.createdAt),
-        updatedAt: formatTimestamp(data.updatedAt),
-    } as User;
-};
-
-/**
- * Fetches all users from the 'users' collection in Firestore.
- * @returns {Promise<User[]>} A promise that resolves to an array of User objects.
- * @throws Will throw an error if fetching users fails.
- */
-export async function getUsers(): Promise<User[]> {
-  try {
-    const usersCollectionRef = collection(db, 'users');
-    const q = query(usersCollectionRef);
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(mapDocToUser);
-  } catch (error) {
-    console.error("Error fetching users (see details below): ", error);
-    throw new Error("Échec de la récupération des utilisateurs depuis la base de données. Vérifiez les journaux du serveur pour les détails de l'erreur Firebase.");
-  }
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    role: row.role as UserRole,
+    avatarUrl: row.avatarUrl ?? undefined,
+    assignments: assignmentRows.map((a) => ({
+      projectId: a.projectId,
+      assignmentType: a.assignmentType,
+    })),
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
 }
 
-/**
- * Fetches a single user by their ID from Firestore.
- * @param {string} userId The ID of the user to fetch.
- * @returns {Promise<User | null>} A promise that resolves to the User object or null if not found.
- */
+// ─── CRUD ─────────────────────────────────────────────────────────────────────
+
+export async function getUsers(orgId?: string): Promise<User[]> {
+  const rows = orgId
+    ? await db.select().from(users).where(eq(users.organizationId, orgId))
+    : await db.select().from(users);
+  return Promise.all(rows.map(mapToUser));
+}
+
 export async function getUserById(userId: string): Promise<User | null> {
-  try {
-    const userDocRef = doc(db, 'users', userId);
-    const docSnap = await getDoc(userDocRef);
-
-    if (docSnap.exists()) {
-      return mapDocToUser(docSnap);
-    } else {
-      console.log("No such user document with ID:", userId);
-      return null;
-    }
-  } catch (error) {
-    console.error(`Error fetching user by ID ${userId}: `, error);
-    throw new Error(`Échec de la récupération de l'utilisateur ${userId} depuis la base de données.`);
-  }
+  const rows = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  return rows.length > 0 ? mapToUser(rows[0]) : null;
 }
 
-
 /**
- * Adds a new user to Firebase Authentication and creates a corresponding document in Firestore.
- * @param userData The basic user data (displayName, email, role).
- * @param password The user's password.
- * @returns {Promise<string>} A promise that resolves to the UID of the newly created user.
- * @throws Will throw an error if adding the user fails in Auth or Firestore.
+ * Crée un utilisateur dans Supabase Auth ET dans notre table PostgreSQL.
  */
+const PLAN_USER_LIMITS: Record<string, number | null> = {
+  TRIAL: null,      // illimité pendant l'essai
+  STARTER: 5,
+  PRO: null,        // illimité
+  ENTERPRISE: null, // illimité
+};
+
 export async function addUser(
   userData: { displayName: string; email: string; role: UserRole },
-  password?: string
+  password?: string,
+  orgId?: string | null
 ): Promise<string> {
-  if (!password) {
-    throw new Error('Le mot de passe est requis pour la création d\'un nouvel utilisateur.');
-  }
-  try {
-    const userCredential = await createUserWithEmailAndPassword(auth, userData.email, password);
-    const firebaseUser = userCredential.user;
+  if (!password) throw new Error("Le mot de passe est requis pour créer un nouvel utilisateur.");
 
-    await updateAuthProfile(firebaseUser, {
-      displayName: userData.displayName,
-    });
-
-    const userDocRef = doc(db, 'users', firebaseUser.uid);
-    await setDoc(userDocRef, {
-      name: userData.displayName, 
-      email: firebaseUser.email,
-      role: userData.role,
-      avatarUrl: firebaseUser.photoURL || '', 
-      assignments: [], 
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-
-    return firebaseUser.uid;
-  } catch (error: any) {
-    console.error("Error adding user: ", error);
-    const errorMessage = error.message || "Échec de l'ajout de l'utilisateur. Assurez-vous que l'e-mail n'est pas déjà utilisé et que le mot de passe est valide.";
-    if (error.code === 'auth/email-already-in-use') {
-      throw new Error('Cette adresse e-mail est déjà utilisée par un autre compte.');
+  // Vérifier la limite d'utilisateurs selon le plan
+  if (orgId) {
+    const orgRows = await db.select().from(organizations).where(eq(organizations.id, orgId)).limit(1);
+    const org = orgRows[0];
+    if (org) {
+      const limit = PLAN_USER_LIMITS[org.plan];
+      if (limit !== null) {
+        const [{ value: currentCount }] = await db
+          .select({ value: count() })
+          .from(users)
+          .where(eq(users.organizationId, orgId));
+        if (Number(currentCount) >= limit) {
+          throw new Error(`Limite atteinte : le plan ${org.plan} autorise ${limit} utilisateurs maximum. Passez au plan Pro pour des utilisateurs illimités.`);
+        }
+      }
     }
-    if (error.code === 'auth/weak-password') {
-      throw new Error('Le mot de passe doit comporter au moins 6 caractères.');
-    }
-    throw new Error(errorMessage);
   }
+
+  const { data, error } = await supabaseAdmin.auth.admin.createUser({
+    email: userData.email,
+    password,
+    user_metadata: { full_name: userData.displayName },
+    email_confirm: true,
+  });
+
+  if (error) {
+    if (error.message.includes('already been registered')) {
+      throw new Error("Cette adresse e-mail est déjà utilisée par un autre compte.");
+    }
+    throw new Error(error.message);
+  }
+
+  const uid = data.user.id;
+
+  await db.insert(users).values({
+    id: uid,
+    email: userData.email,
+    name: userData.displayName,
+    role: userData.role,
+    avatarUrl: null,
+    organizationId: orgId ?? null,
+  });
+
+  return uid;
 }
 
 /**
- * Updates a user's information (name, role, avatarUrl) in Firestore.
- * @param {string} userId The ID of the user to update.
- * @param {object} data The data to update, can include `name`, `role`, and/or `avatarUrl`.
- *                     `avatarUrl` can be a string (URL) or `null` to clear.
- * @returns {Promise<User | null>} A promise that resolves to the updated User object or null if the user was not found.
- * @throws Will throw an error if updating the user fails.
+ * Met à jour le nom, rôle ou avatar d'un utilisateur.
  */
-export async function updateUser(userId: string, data: { name?: string; role?: UserRole; avatarUrl?: string | null }): Promise<User | null> {
-  try {
-    const userDocRef = doc(db, 'users', userId);
-    const updateData: any = {};
+export async function updateUser(
+  userId: string,
+  data: { name?: string; role?: UserRole; avatarUrl?: string | null }
+): Promise<User | null> {
+  if (Object.keys(data).length === 0) return getUserById(userId);
 
-    if (data.name !== undefined) {
-      updateData.name = data.name;
-    }
-    if (data.role !== undefined) {
-      updateData.role = data.role;
-    }
-    if (data.avatarUrl !== undefined) { 
-      updateData.avatarUrl = data.avatarUrl; // This can be string (URL) or null
-    }
+  await db
+    .update(users)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(users.id, userId));
 
-    if (Object.keys(updateData).length === 0) {
-      console.log("Aucune donnée fournie pour mettre à jour l'utilisateur dans Firestore. Retour des données utilisateur actuelles.");
-      return getUserById(userId); // Return current data if no updates
-    }
-
-    updateData.updatedAt = serverTimestamp();
-    await updateDoc(userDocRef, updateData);
-    
-    // Fetch and return the updated user document
-    const updatedDocSnap = await getDoc(userDocRef);
-    if (updatedDocSnap.exists()) {
-        return mapDocToUser(updatedDocSnap);
-    }
-    return null; // Should not happen if update was successful on an existing doc
-  } catch (error) {
-    console.error(`Error updating user ${userId} in Firestore: `, error);
-    throw new Error(`Échec de la mise à jour de l'utilisateur ${userId} dans la base de données.`);
-  }
+  return getUserById(userId);
 }
 
-function isProjectActive(project: Project): boolean {
+function isProjectActive(project: { status: string; endDate?: string }): boolean {
   if (project.status !== 'ACTIVE') return false;
-  if (!project.endDate) return true; // No end date means it's ongoing
-  return new Date(project.endDate) >= new Date(); // Active if end date is today or in the future
+  if (!project.endDate) return true;
+  return new Date(project.endDate) >= new Date();
 }
 
 /**
- * Updates the assigned projects for a user in Firestore and sends notifications.
- * Includes logic to prevent over-assignment for FULL_TIME technicians.
- * @param {string} userId The ID of the user to update.
- * @param {UserAssignment[]} newAssignments An array of project assignments.
- * @returns {Promise<void>} A promise that resolves when the user's projects are successfully updated.
- * @throws Will throw an error if updating fails or if there's an assignment conflict.
+ * Met à jour les assignations de projet d'un utilisateur.
  */
-export async function updateUserAssignments(userId: string, newAssignments: UserAssignment[]): Promise<void> {
-  const userDocRef = doc(db, 'users', userId);
-  const userDocSnap = await getDoc(userDocRef);
-  if (!userDocSnap.exists()) {
-    throw new Error(`Utilisateur avec l'ID ${userId} non trouvé.`);
-  }
-  const currentUserData = userDocSnap.data() as User;
-  const oldAssignments = currentUserData.assignments || [];
+export async function updateUserAssignments(
+  userId: string,
+  newAssignments: UserAssignment[]
+): Promise<void> {
+  const oldAssignmentRows = await db
+    .select()
+    .from(userAssignments)
+    .where(eq(userAssignments.userId, userId));
+  const oldAssignments: UserAssignment[] = oldAssignmentRows.map((a) => ({
+    projectId: a.projectId,
+    assignmentType: a.assignmentType,
+  }));
 
-  const fullTimeNewAssignments = newAssignments.filter(a => a.assignmentType === 'FULL_TIME');
-  if (fullTimeNewAssignments.length > 0) {
-    const existingFullTimeAssignments = oldAssignments.filter(
-      a => a.assignmentType === 'FULL_TIME' && !fullTimeNewAssignments.find(na => na.projectId === a.projectId)
+  const fullTimeNew = newAssignments.filter((a) => a.assignmentType === 'FULL_TIME');
+  if (fullTimeNew.length > 1) {
+    const activeCount = await Promise.all(
+      fullTimeNew.map(async (a) => {
+        const p = await getProjectById(a.projectId);
+        return p && isProjectActive(p) ? a.projectId : null;
+      })
     );
-    
-    let activeFullTimeProjectIds: string[] = [];
-
-    for (const assignment of fullTimeNewAssignments) {
-        const project = await getProjectById(assignment.projectId);
-        if (project && isProjectActive(project)) {
-            activeFullTimeProjectIds.push(project.id);
-        }
-    }
-     if (activeFullTimeProjectIds.length > 1) {
-        throw new Error(`Le technicien ne peut pas être assigné à TEMPS PLEIN à plusieurs projets actifs simultanément. Conflit avec les nouvelles assignations pour les projets : ${activeFullTimeProjectIds.join(', ')}.`);
-    }
-
-    for (const newFtAssignment of fullTimeNewAssignments) {
-      const newProject = await getProjectById(newFtAssignment.projectId);
-      if (newProject && isProjectActive(newProject)) {
-        for (const existingFtAssignment of existingFullTimeAssignments) {
-          const existingProject = await getProjectById(existingFtAssignment.projectId);
-          if (existingProject && isProjectActive(existingProject)) {
-            throw new Error(
-              `Le technicien est déjà assigné à TEMPS PLEIN au projet actif "${existingProject.name}" (se termine le ${existingProject.endDate || 'N/A'}). Impossible de l'assigner également à TEMPS PLEIN au projet actif "${newProject.name}" (se termine le ${newProject.endDate || 'N/A'}).`
-            );
-          }
-        }
-      }
+    const activeIds = activeCount.filter(Boolean);
+    if (activeIds.length > 1) {
+      throw new Error(
+        `Le technicien ne peut pas être assigné à TEMPS PLEIN à plusieurs projets actifs simultanément. Projets en conflit : ${activeIds.join(', ')}.`
+      );
     }
   }
 
+  await db.delete(userAssignments).where(eq(userAssignments.userId, userId));
 
-  try {
-    await updateDoc(userDocRef, {
-      assignments: newAssignments,
-      updatedAt: serverTimestamp(),
-    });
+  if (newAssignments.length > 0) {
+    await db.insert(userAssignments).values(
+      newAssignments.map((a) => ({
+        userId,
+        projectId: a.projectId,
+        assignmentType: a.assignmentType,
+      }))
+    );
+  }
 
-    const oldProjectIdsSet = new Set(oldAssignments.map(a => a.projectId));
-    const newlyAssignedProjectDetails: { project: Project; assignmentType: UserAssignment['assignmentType'] }[] = [];
-
-    for (const newAssignment of newAssignments) {
-      if (!oldProjectIdsSet.has(newAssignment.projectId)) {
-        const project = await getProjectById(newAssignment.projectId);
-        if (project) {
-          newlyAssignedProjectDetails.push({ project, assignmentType: newAssignment.assignmentType });
-        }
-      }
-    }
-    
-    for (const { project, assignmentType } of newlyAssignedProjectDetails) {
-      try {
-        const assignmentTypeDisplay = assignmentType === 'FULL_TIME' ? 'à temps plein' : 'à temps partiel';
+  const oldProjectIds = new Set(oldAssignments.map((a) => a.projectId));
+  for (const assignment of newAssignments) {
+    if (!oldProjectIds.has(assignment.projectId)) {
+      const project = await getProjectById(assignment.projectId);
+      if (project) {
+        const typeDisplay = assignment.assignmentType === 'FULL_TIME' ? 'à temps plein' : 'à temps partiel';
         await addNotification(userId, {
           type: 'project_assignment',
-          message: `Vous avez été assigné(e) ${assignmentTypeDisplay} au projet : ${project.name} (Lieu: ${project.location}).`,
+          message: `Vous avez été assigné(e) ${typeDisplay} au projet : ${project.name} (Lieu: ${project.location}).`,
           targetId: project.id,
-          link: `/my-projects`, 
+          link: '/my-projects',
         });
-      } catch (projectError) {
-        console.error(`Error fetching project ${project.id} or sending notification for user ${userId}:`, projectError);
       }
     }
-
-  } catch (error) {
-    console.error(`Error updating assigned projects for user ${userId}: `, error);
-    if (error instanceof Error) { 
-        throw error;
-    }
-    throw new Error(`Échec de la mise à jour des projets assignés pour l'utilisateur ${userId} dans la base de données.`);
   }
 }
 
 /**
- * Deletes a user's document from the 'users' collection in Firestore.
- * Note: This does NOT delete the user from Firebase Authentication.
- * @param {string} userId The ID of the user document to delete from Firestore.
- * @returns {Promise<void>} A promise that resolves when the user's Firestore document is successfully deleted.
- * @throws Will throw an error if deleting the Firestore document fails.
+ * Supprime le record utilisateur de PostgreSQL.
  */
 export async function deleteUserFirestoreRecord(userId: string): Promise<void> {
-  try {
-    const userDocRef = doc(db, 'users', userId);
-    await deleteDoc(userDocRef);
-  } catch (error) {
-    console.error(`Error deleting user Firestore record ${userId}: `, error);
-    throw new Error(`Failed to delete user record ${userId} from database.`);
-  }
+  await db.delete(users).where(eq(users.id, userId));
 }
