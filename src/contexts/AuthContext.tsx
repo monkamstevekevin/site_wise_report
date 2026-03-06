@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
@@ -32,7 +32,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const pathname = usePathname();
+  const pathnameRef = useRef(pathname);
   const { toast } = useToast();
+
+  // Keep ref in sync so onAuthStateChange always sees the current pathname
+  useEffect(() => { pathnameRef.current = pathname; });
 
   /**
    * Charge ou crée le profil PostgreSQL à partir d'un user Supabase Auth
@@ -67,18 +71,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        await syncUserProfile(session.user);
-        if (pathname.startsWith('/auth/')) {
-          router.push('/dashboard');
+      try {
+        if (session?.user) {
+          await syncUserProfile(session.user);
+          if (pathnameRef.current.startsWith('/auth/')) {
+            router.push('/dashboard');
+          }
+        } else {
+          setUser(null);
+          if (!pathnameRef.current.startsWith('/auth') && pathnameRef.current !== '/') {
+            router.push('/auth/login');
+          }
         }
-      } else {
-        setUser(null);
-        if (!pathname.startsWith('/auth') && pathname !== '/') {
-          router.push('/auth/login');
-        }
+      } catch (e) {
+        console.error('Auth state sync error:', e);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
@@ -108,6 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw error;
     }
     toast({ title: 'Connexion Réussie', description: 'Redirection vers le tableau de bord...' });
+    router.push('/dashboard');
   };
 
   const signUpWithEmail = async (email: string, password: string, name?: string, companyName?: string) => {
