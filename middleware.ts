@@ -34,12 +34,13 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
   const isAuthRoute = pathname.startsWith('/auth');
+  const isApiRoute = pathname.startsWith('/api');
   const isPublicRoute = pathname === '/'
     || pathname.startsWith('/auth/callback')
     || pathname.startsWith('/auth/join');
 
-  // Non connecté → redirige vers login (sauf routes publiques)
-  if (!user && !isAuthRoute && !isPublicRoute) {
+  // Non connecté → redirige vers login (sauf routes publiques et API)
+  if (!user && !isAuthRoute && !isPublicRoute && !isApiRoute) {
     return NextResponse.redirect(new URL('/auth/login', request.url));
   }
 

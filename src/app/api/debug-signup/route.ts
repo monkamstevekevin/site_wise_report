@@ -14,7 +14,11 @@ export async function GET() {
     await db.select().from(organizations).limit(1);
     results.db_connection = 'OK';
   } catch (e) {
-    results.db_connection = 'FAIL: ' + (e as Error).message;
+    const err = e as any;
+    results.db_connection = 'FAIL: ' + err.message;
+    results.db_cause = err.cause?.message ?? err.cause ?? 'none';
+    results.db_code = err.code ?? err.cause?.code ?? 'none';
+    results.db_detail = JSON.stringify(err.cause ?? {});
     return NextResponse.json(results);
   }
 
