@@ -8,6 +8,13 @@ import { NextResponse, type NextRequest } from 'next/server';
  * Rafraîchit aussi automatiquement les tokens de session expirés.
  */
 export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  // Laisser passer le callback OAuth sans interférer avec la session
+  if (pathname.startsWith('/auth/callback')) {
+    return NextResponse.next({ request });
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -32,7 +39,6 @@ export async function middleware(request: NextRequest) {
   // Récupère l'utilisateur (rafraîchit le token si besoin)
   const { data: { user } } = await supabase.auth.getUser();
 
-  const { pathname } = request.nextUrl;
   const isAuthRoute = pathname.startsWith('/auth');
   const isApiRoute = pathname.startsWith('/api');
   const isPublicRoute = pathname === '/'
