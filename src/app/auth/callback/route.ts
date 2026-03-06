@@ -1,4 +1,5 @@
 import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
@@ -9,19 +10,20 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL('/auth/login?error=no_code', origin));
   }
 
-  // Debug: vérifier que le cookie verifier est bien présent côté serveur
-  const allCookies = request.cookies.getAll();
-  const verifierCookie = allCookies.find(c => c.name.includes('code-verifier'));
+  const cookieStore = await cookies();
 
-  if (!verifierCookie) {
-    const keys = encodeURIComponent(allCookies.map(c => c.name).join(','));
+  // Debug : vérifier que le verifier est présent côté serveur
+  const allCookieNames = cookieStore.getAll().map(c => c.name);
+  const hasVerifier = allCookieNames.some(n => n.includes('code-verifier'));
+
+  if (!hasVerifier) {
     return NextResponse.redirect(
-      new URL(`/auth/login?error=no_verifier_server&keys=${keys}`, origin)
+      new URL(
+        `/auth/login?error=no_verifier_server&keys=${encodeURIComponent(allCookieNames.join(','))}`,
+        origin
+      )
     );
   }
-
-  // Préparer la réponse de redirection pour y attacher les cookies de session
-  const response = NextResponse.redirect(new URL('/dashboard', origin));
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -29,11 +31,11 @@ export async function GET(request: NextRequest) {
     {
       cookies: {
         getAll() {
-          return request.cookies.getAll();
+          return cookieStore.getAll();
         },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value, options }) => {
-            response.cookies.set(name, value, options ?? {});
+            cookieStore.set(name, value, options);
           });
         },
       },
@@ -51,5 +53,5 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  return response;
+  return NextResponse.redirect(new URL('/dashboard', origin));
 }
