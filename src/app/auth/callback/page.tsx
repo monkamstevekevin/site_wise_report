@@ -5,55 +5,26 @@ import { useRouter } from 'next/navigation';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { Loader2 } from 'lucide-react';
 
-/**
- * Page de callback OAuth.
- * Gère les deux cas :
- * - Implicit flow : tokens dans le hash (#access_token=...)
- * - PKCE flow    : code dans les query params (?code=...)
- */
 export default function AuthCallbackPage() {
   const router = useRouter();
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
+    const code = new URLSearchParams(window.location.search).get('code');
 
-    async function handleCallback() {
-      // Cas 1 : implicit flow — tokens dans le hash
-      const hash = window.location.hash.slice(1);
-      const hashParams = new URLSearchParams(hash);
-      const accessToken = hashParams.get('access_token');
-      const refreshToken = hashParams.get('refresh_token');
-
-      if (accessToken && refreshToken) {
-        const { error } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken,
-        });
-        if (!error) {
-          router.push('/dashboard');
-          return;
-        }
-        router.push('/auth/login?error=session_failed');
-        return;
-      }
-
-      // Cas 2 : PKCE flow — code dans les query params
-      const code = new URLSearchParams(window.location.search).get('code');
-      if (code) {
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
-        if (!error) {
-          router.push('/dashboard');
-          return;
-        }
-        router.push('/auth/login?error=code_exchange_failed');
-        return;
-      }
-
-      // Aucun token trouvé
-      router.push('/auth/login?error=no_tokens');
+    if (!code) {
+      router.push('/auth/login?error=no_code');
+      return;
     }
 
-    handleCallback();
+    supabase.auth.exchangeCodeForSession(code).then(({ data, error }) => {
+      if (error || !data.session) {
+        console.error('[callback] exchangeCodeForSession failed:', error?.message);
+        router.push('/auth/login?error=exchange_failed&msg=' + encodeURIComponent(error?.message ?? 'no session'));
+      } else {
+        router.push('/dashboard');
+      }
+    });
   }, [router]);
 
   return (
