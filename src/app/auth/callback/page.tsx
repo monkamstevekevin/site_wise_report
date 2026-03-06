@@ -6,31 +6,33 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { Loader2 } from 'lucide-react';
 
 /**
- * Page de callback OAuth — gérée côté client pour que le browser
- * puisse accéder au PKCE verifier stocké en localStorage.
+ * Page de callback OAuth (implicit flow).
+ * Supabase met les tokens dans le hash de l'URL (#access_token=...).
+ * Le client browser les détecte automatiquement via onAuthStateChange.
  */
 export default function AuthCallbackPage() {
   const router = useRouter();
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
-    const code = new URLSearchParams(window.location.search).get('code');
 
-    if (code) {
-      supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
-        if (error) {
-          console.error('Callback OAuth error:', error.message);
-          router.push('/auth/login?error=auth_callback_failed');
-        } else {
-          router.push('/dashboard');
-        }
-      });
-    } else {
-      // Implicit flow — session déjà dans le hash URL, attendre onAuthStateChange
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        router.push(session ? '/dashboard' : '/auth/login?error=no_session');
-      });
-    }
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        subscription.unsubscribe();
+        router.push('/dashboard');
+      }
+    });
+
+    // Timeout de sécurité : si rien ne se passe en 5s, retour login
+    const timeout = setTimeout(() => {
+      subscription.unsubscribe();
+      router.push('/auth/login?error=timeout');
+    }, 5000);
+
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(timeout);
+    };
   }, [router]);
 
   return (
