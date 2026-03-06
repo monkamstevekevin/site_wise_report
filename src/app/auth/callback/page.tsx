@@ -28,12 +28,14 @@ export default function AuthCallbackPage() {
       return;
     }
 
-    // Décoder le verifier (base64url → string)
+    // @supabase/ssr stocke le verifier brut par défaut.
+    // Seulement si cookieEncoding='base64url', il ajoute le préfixe "base64-".
     let verifier: string;
-    try {
-      verifier = atob(rawVerifier.replace(/-/g, '+').replace(/_/g, '/'));
-    } catch {
-      // Peut-être pas encodé en base64 — essayer raw
+    if (rawVerifier.startsWith('base64-')) {
+      const b64 = rawVerifier.slice(7).replace(/-/g, '+').replace(/_/g, '/');
+      const padded = b64.padEnd(b64.length + (4 - b64.length % 4) % 4, '=');
+      verifier = atob(padded);
+    } else {
       verifier = rawVerifier;
     }
 
