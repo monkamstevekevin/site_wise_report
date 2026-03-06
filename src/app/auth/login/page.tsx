@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -29,11 +28,11 @@ export default function LoginPage() {
   const [isLoadingGoogle, setIsLoadingGoogle] = useState(false);
   const { signInWithEmail, signInWithGoogle, loading: authLoading } = useAuth();
   const { toast } = useToast();
-  const searchParams = useSearchParams();
 
   useEffect(() => {
-    const error = searchParams.get('error');
-    const msg = searchParams.get('msg');
+    const params = new URLSearchParams(window.location.search);
+    const error = params.get('error');
+    const msg = params.get('msg');
     if (error) {
       toast({
         variant: 'destructive',
@@ -42,7 +41,7 @@ export default function LoginPage() {
         duration: 15000,
       });
     }
-  }, [searchParams, toast]);
+  }, [toast]);
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
