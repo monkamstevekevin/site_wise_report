@@ -9,7 +9,6 @@ export default function AuthCallbackPage() {
   const router = useRouter();
 
   useEffect(() => {
-    const supabase = createSupabaseBrowserClient();
     const code = new URLSearchParams(window.location.search).get('code');
 
     if (!code) {
@@ -17,9 +16,26 @@ export default function AuthCallbackPage() {
       return;
     }
 
+    // DEBUG: lister les noms des cookies disponibles
+    const cookieNames = document.cookie
+      .split(';')
+      .map(c => c.trim().split('=')[0])
+      .join(',');
+
+    const hasVerifier = document.cookie.includes('code-verifier');
+
+    if (!hasVerifier) {
+      // Le cookie verifier n'existe pas — redirect avec les noms de cookies présents
+      router.push(
+        '/auth/login?error=no_verifier_cookie&cookies=' +
+        encodeURIComponent(cookieNames || 'EMPTY')
+      );
+      return;
+    }
+
+    const supabase = createSupabaseBrowserClient();
     supabase.auth.exchangeCodeForSession(code).then(({ data, error }) => {
       if (error || !data.session) {
-        console.error('[callback] exchangeCodeForSession failed:', error?.message);
         router.push('/auth/login?error=exchange_failed&msg=' + encodeURIComponent(error?.message ?? 'no session'));
       } else {
         router.push('/dashboard');
