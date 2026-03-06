@@ -6,9 +6,10 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { Loader2 } from 'lucide-react';
 
 /**
- * Page de callback OAuth (implicit flow).
- * Supabase met les tokens dans le hash de l'URL (#access_token=...).
- * Le client browser les détecte automatiquement via onAuthStateChange.
+ * Page de callback OAuth.
+ * Gère les deux cas :
+ * - Implicit flow : tokens dans le hash (#access_token=...)
+ * - PKCE flow    : code dans les query params (?code=...)
  */
 export default function AuthCallbackPage() {
   const router = useRouter();
@@ -16,23 +17,43 @@ export default function AuthCallbackPage() {
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' && session) {
-        subscription.unsubscribe();
-        router.push('/dashboard');
+    async function handleCallback() {
+      // Cas 1 : implicit flow — tokens dans le hash
+      const hash = window.location.hash.slice(1);
+      const hashParams = new URLSearchParams(hash);
+      const accessToken = hashParams.get('access_token');
+      const refreshToken = hashParams.get('refresh_token');
+
+      if (accessToken && refreshToken) {
+        const { error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+        if (!error) {
+          router.push('/dashboard');
+          return;
+        }
+        router.push('/auth/login?error=session_failed');
+        return;
       }
-    });
 
-    // Timeout de sécurité : si rien ne se passe en 5s, retour login
-    const timeout = setTimeout(() => {
-      subscription.unsubscribe();
-      router.push('/auth/login?error=timeout');
-    }, 5000);
+      // Cas 2 : PKCE flow — code dans les query params
+      const code = new URLSearchParams(window.location.search).get('code');
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (!error) {
+          router.push('/dashboard');
+          return;
+        }
+        router.push('/auth/login?error=code_exchange_failed');
+        return;
+      }
 
-    return () => {
-      subscription.unsubscribe();
-      clearTimeout(timeout);
-    };
+      // Aucun token trouvé
+      router.push('/auth/login?error=no_tokens');
+    }
+
+    handleCallback();
   }, [router]);
 
   return (
