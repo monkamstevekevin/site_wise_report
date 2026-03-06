@@ -20,6 +20,7 @@ interface AuthContextType {
   logout: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signUpWithEmail: (email: string, password: string, name?: string, companyName?: string) => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
   updateUserProfile: (data: { name?: string; avatarUrl?: string | null }) => Promise<string | null>;
 }
 
@@ -165,6 +166,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const signInWithGoogle = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+    if (error) {
+      toast({ variant: 'destructive', title: 'Échec Google', description: error.message });
+      throw error;
+    }
+  };
+
   const updateUserProfile = async (data: { name?: string; avatarUrl?: string | null }): Promise<string | null> => {
     if (!user) throw new Error('Utilisateur non authentifié.');
 
@@ -191,7 +205,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const value = { user, loading, logout, signInWithEmail, signUpWithEmail, updateUserProfile };
+  const value = { user, loading, logout, signInWithEmail, signUpWithEmail, signInWithGoogle, updateUserProfile };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
