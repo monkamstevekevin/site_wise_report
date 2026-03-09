@@ -42,7 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   /**
    * Charge ou crée le profil PostgreSQL à partir d'un user Supabase Auth
    */
-  const syncUserProfile = async (authUser: { id: string; email?: string | null; user_metadata?: Record<string, string> }) => {
+  const syncUserProfile = async (authUser: { id: string; email?: string | null; user_metadata?: Record<string, string> }): Promise<AppUser | null> => {
     let profile = await getUserProfile(authUser.id);
 
     if (!profile) {
@@ -61,6 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     setUser(profile);
+    return profile;
   };
 
   useEffect(() => {
@@ -77,9 +78,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(true);
       try {
         if (session?.user) {
-          await syncUserProfile(session.user);
+          const profile = await syncUserProfile(session.user);
           if (pathnameRef.current.startsWith('/auth/')) {
-            router.push('/dashboard');
+            // Google OAuth users arrive via /auth/callback without an org.
+            // Send them to create-org; everyone else goes to dashboard.
+            const fromCallback = pathnameRef.current === '/auth/callback';
+            if (fromCallback && profile && !profile.organizationId) {
+              router.push('/auth/create-org');
+            } else {
+              router.push('/dashboard');
+            }
           }
         } else {
           setUser(null);

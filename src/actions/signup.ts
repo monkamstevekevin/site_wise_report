@@ -60,6 +60,29 @@ export async function createOrgAndSignUp(params: {
 }
 
 /**
+ * Crée une organisation pour un utilisateur Google OAuth (sans org existante).
+ * Appelé depuis /auth/create-org après le premier sign-in Google.
+ */
+export async function setupGoogleUserOrg(params: {
+  userId: string;
+  companyName: string;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const org = await createOrganization(params.companyName);
+
+    await db
+      .update(users)
+      .set({ organizationId: org.id, role: 'ADMIN', updatedAt: new Date() })
+      .where(eq(users.id, params.userId));
+
+    return { success: true };
+  } catch (err) {
+    console.error('[setupGoogleUserOrg]', err);
+    return { success: false, error: (err as Error).message || 'Erreur lors de la création de l\'organisation.' };
+  }
+}
+
+/**
  * Crée un utilisateur TECHNICIAN via lien d'invitation.
  */
 export async function createUserViaInvite(params: {

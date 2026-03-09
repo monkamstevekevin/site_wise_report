@@ -51,7 +51,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Connecté sur une page auth → redirige vers dashboard
-  if (user && isAuthRoute && !pathname.startsWith('/auth/callback') && !pathname.startsWith('/auth/reset-password')) {
+  if (user && isAuthRoute && !pathname.startsWith('/auth/callback') && !pathname.startsWith('/auth/reset-password') && !pathname.startsWith('/auth/create-org')) {
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 
