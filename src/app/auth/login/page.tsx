@@ -30,6 +30,19 @@ export default function LoginPage() {
   const { toast } = useToast();
 
   useEffect(() => {
+    // Read error persisted in localStorage by the callback page
+    const stored = localStorage.getItem('__oauth_error');
+    if (stored) {
+      localStorage.removeItem('__oauth_error');
+      toast({
+        variant: 'destructive',
+        title: 'Erreur OAuth',
+        description: stored,
+        duration: 60000,
+      });
+    }
+
+    // Also handle legacy URL param errors
     const params = new URLSearchParams(window.location.search);
     const error = params.get('error');
     const msg = params.get('msg');
@@ -38,7 +51,7 @@ export default function LoginPage() {
         variant: 'destructive',
         title: `Erreur OAuth : ${error}`,
         description: msg ? decodeURIComponent(msg) : 'Une erreur est survenue lors de la connexion Google.',
-        duration: 15000,
+        duration: 60000,
       });
     }
   }, [toast]);

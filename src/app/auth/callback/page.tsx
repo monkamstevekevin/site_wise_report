@@ -25,11 +25,15 @@ export default function AuthCallbackPage() {
       // 1. Exchange the OAuth code for a session
       const { data, error } = await supabase.auth.exchangeCodeForSession(code);
       if (error) {
-        setErrorMsg(`Erreur échange : ${error.name} — ${error.message}`);
+        const msg = `Erreur échange : ${error.name} — ${error.message}`;
+        localStorage.setItem('__oauth_error', msg);
+        setErrorMsg(msg);
         return;
       }
       if (!data.session) {
-        setErrorMsg('Échange réussi mais aucune session retournée.');
+        const msg = 'Échange réussi mais aucune session retournée.';
+        localStorage.setItem('__oauth_error', msg);
+        setErrorMsg(msg);
         return;
       }
 
