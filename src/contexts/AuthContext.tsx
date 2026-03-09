@@ -79,7 +79,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         if (session?.user) {
           await syncUserProfile(session.user);
-          if (pathnameRef.current.startsWith('/auth/')) {
+          const onAuthPage = pathnameRef.current.startsWith('/auth/');
+          const onCreateOrg = pathnameRef.current.startsWith('/auth/create-org');
+          if (onAuthPage && !onCreateOrg) {
             router.push('/dashboard');
           }
         } else {
