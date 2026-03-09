@@ -1,12 +1,11 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { createUserProfile, getUserProfile } from '@/actions/users';
 import { Loader2, AlertCircle } from 'lucide-react';
 
 export default function AuthCallbackPage() {
-  const router = useRouter();
   const hasRun = useRef(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -20,19 +19,48 @@ export default function AuthCallbackPage() {
       return;
     }
 
-    const supabase = createSupabaseBrowserClient();
-    supabase.auth.exchangeCodeForSession(code).then(({ data, error }) => {
+    const run = async () => {
+      const supabase = createSupabaseBrowserClient();
+
+      // 1. Exchange the OAuth code for a session
+      const { data, error } = await supabase.auth.exchangeCodeForSession(code);
       if (error) {
         setErrorMsg(`Erreur échange : ${error.name} — ${error.message}`);
-      } else if (!data.session) {
-        setErrorMsg('Échange réussi mais aucune session retournée.');
+        return;
       }
-      // Success: AuthContext's onAuthStateChange fires, loads the user profile,
-      // then navigates to /dashboard — no manual navigation needed here.
-    }).catch((e: unknown) => {
+      if (!data.session) {
+        setErrorMsg('Échange réussi mais aucune session retournée.');
+        return;
+      }
+
+      // 2. Ensure a DB profile exists (idempotent — onConflictDoNothing)
+      const authUser = data.session.user;
+      let profile = await getUserProfile(authUser.id);
+      if (!profile) {
+        profile = await createUserProfile({
+          id: authUser.id,
+          email: authUser.email ?? '',
+          name:
+            authUser.user_metadata?.full_name ??
+            authUser.user_metadata?.name ??
+            authUser.email?.split('@')[0] ??
+            'Utilisateur',
+          avatarUrl: authUser.user_metadata?.avatar_url ?? null,
+        });
+      }
+
+      // 3. Hard navigation so AuthContext re-initialises with fresh cookies
+      if (profile?.organizationId) {
+        window.location.href = '/dashboard';
+      } else {
+        window.location.href = '/auth/create-org';
+      }
+    };
+
+    run().catch((e: unknown) => {
       setErrorMsg(`Exception : ${e instanceof Error ? e.message : String(e)}`);
     });
-  }, [router]);
+  }, []);
 
   if (errorMsg) {
     return (
@@ -41,7 +69,7 @@ export default function AuthCallbackPage() {
         <p className="text-destructive font-semibold">Erreur de connexion Google</p>
         <p className="text-sm text-muted-foreground break-all">{errorMsg}</p>
         <button
-          onClick={() => router.replace('/auth/login')}
+          onClick={() => { window.location.href = '/auth/login'; }}
           className="text-sm text-primary underline"
         >
           Retour à la connexion

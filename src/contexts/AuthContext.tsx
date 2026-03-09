@@ -78,16 +78,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(true);
       try {
         if (session?.user) {
-          const profile = await syncUserProfile(session.user);
+          await syncUserProfile(session.user);
           if (pathnameRef.current.startsWith('/auth/')) {
-            // Google OAuth users arrive via /auth/callback without an org.
-            // Send them to create-org; everyone else goes to dashboard.
-            const fromCallback = pathnameRef.current === '/auth/callback';
-            if (fromCallback && profile && !profile.organizationId) {
-              router.push('/auth/create-org');
-            } else {
-              router.push('/dashboard');
-            }
+            router.push('/dashboard');
           }
         } else {
           setUser(null);
