@@ -13,57 +13,58 @@ export default function AuthCallbackPage() {
     if (hasRun.current) return;
     hasRun.current = true;
 
-    const code = new URLSearchParams(window.location.search).get('code');
-    if (!code) {
-      setErrorMsg('Aucun code OAuth reçu dans l\'URL.');
-      return;
-    }
+    const supabase = createSupabaseBrowserClient();
 
-    const run = async () => {
-      const supabase = createSupabaseBrowserClient();
+    // @supabase/ssr automatically detects ?code= in the URL, exchanges it,
+    // and fires onAuthStateChange(SIGNED_IN). We just wait for that event.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === 'SIGNED_IN' && session) {
+          subscription.unsubscribe();
 
-      // 1. Exchange the OAuth code for a session
-      const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-      if (error) {
-        const msg = `Erreur échange : ${error.name} — ${error.message}`;
-        localStorage.setItem('__oauth_error', msg);
-        setErrorMsg(msg);
-        return;
-      }
-      if (!data.session) {
-        const msg = 'Échange réussi mais aucune session retournée.';
-        localStorage.setItem('__oauth_error', msg);
-        setErrorMsg(msg);
-        return;
-      }
+          const authUser = session.user;
 
-      // 2. Ensure a DB profile exists (idempotent — onConflictDoNothing)
-      const authUser = data.session.user;
-      let profile = await getUserProfile(authUser.id);
-      if (!profile) {
-        profile = await createUserProfile({
-          id: authUser.id,
-          email: authUser.email ?? '',
-          name:
-            authUser.user_metadata?.full_name ??
-            authUser.user_metadata?.name ??
-            authUser.email?.split('@')[0] ??
-            'Utilisateur',
-          avatarUrl: authUser.user_metadata?.avatar_url ?? null,
-        });
-      }
+          // Ensure DB profile exists
+          let profile = await getUserProfile(authUser.id);
+          if (!profile) {
+            profile = await createUserProfile({
+              id: authUser.id,
+              email: authUser.email ?? '',
+              name:
+                authUser.user_metadata?.full_name ??
+                authUser.user_metadata?.name ??
+                authUser.email?.split('@')[0] ??
+                'Utilisateur',
+              avatarUrl: authUser.user_metadata?.avatar_url ?? null,
+            });
+          }
 
-      // 3. Hard navigation so AuthContext re-initialises with fresh cookies
-      if (profile?.organizationId) {
-        window.location.href = '/dashboard';
-      } else {
-        window.location.href = '/auth/create-org';
+          // Hard navigation — fresh page load with session in cookies
+          if (profile?.organizationId) {
+            window.location.href = '/dashboard';
+          } else {
+            window.location.href = '/auth/create-org';
+          }
+        }
+
+        if (event === 'SIGNED_OUT') {
+          subscription.unsubscribe();
+          localStorage.setItem('__oauth_error', 'Connexion annulée ou expirée.');
+          window.location.href = '/auth/login';
+        }
       }
+    );
+
+    // Fallback: if no event after 15s, show error
+    const timeout = setTimeout(() => {
+      subscription.unsubscribe();
+      setErrorMsg('Délai dépassé — aucune session reçue. Réessayez.');
+    }, 15000);
+
+    return () => {
+      clearTimeout(timeout);
+      subscription.unsubscribe();
     };
-
-    run().catch((e: unknown) => {
-      setErrorMsg(`Exception : ${e instanceof Error ? e.message : String(e)}`);
-    });
   }, []);
 
   if (errorMsg) {
