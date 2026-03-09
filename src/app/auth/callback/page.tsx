@@ -26,9 +26,9 @@ export default function AuthCallbackPage() {
         setErrorMsg(`Erreur échange : ${error.name} — ${error.message}`);
       } else if (!data.session) {
         setErrorMsg('Échange réussi mais aucune session retournée.');
-      } else {
-        router.replace('/dashboard');
       }
+      // Success: AuthContext's onAuthStateChange fires, loads the user profile,
+      // then navigates to /dashboard — no manual navigation needed here.
     }).catch((e: unknown) => {
       setErrorMsg(`Exception : ${e instanceof Error ? e.message : String(e)}`);
     });

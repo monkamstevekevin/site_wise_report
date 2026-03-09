@@ -72,6 +72,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // Keep loading=true while syncing profile to prevent (app)/layout from
+      // redirecting to login before the user state is ready.
+      setLoading(true);
       try {
         if (session?.user) {
           await syncUserProfile(session.user);
