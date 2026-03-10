@@ -1,36 +1,43 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Building2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useAuth } from '@/contexts/AuthContext';
 import { setupGoogleUserOrg } from '@/actions/signup';
 import { useToast } from '@/hooks/use-toast';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 export default function CreateOrgPage() {
-  const { user } = useAuth();
-  const router = useRouter();
   const { toast } = useToast();
   const [companyName, setCompanyName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !companyName.trim()) return;
+    if (!companyName.trim()) return;
 
     setIsLoading(true);
     try {
+      // Get the current user directly from Supabase — don't rely on AuthContext
+      // which may not have finished initializing after the hard navigation.
+      const supabase = createSupabaseBrowserClient();
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) {
+        toast({ variant: 'destructive', title: 'Session expirée', description: 'Reconnectez-vous.' });
+        window.location.href = '/auth/login';
+        return;
+      }
+
       const result = await setupGoogleUserOrg({ userId: user.id, companyName: companyName.trim() });
       if (!result.success) {
         toast({ variant: 'destructive', title: 'Erreur', description: result.error });
         return;
       }
-      // Hard navigation forces AuthContext to re-fetch the profile from DB,
-      // picking up the new organizationId set by setupGoogleUserOrg.
+
       window.location.href = '/dashboard';
     } finally {
       setIsLoading(false);
