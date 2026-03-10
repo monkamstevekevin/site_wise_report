@@ -82,8 +82,11 @@ export async function createUserProfile(data: {
     .returning();
 
   if (!created) {
+    // Could be an ID conflict (same user) OR an email conflict (stale row with
+    // different auth ID). Try by ID first, then fall back to null so the
+    // caller can still redirect to /auth/create-org safely.
     const existing = await getUserProfile(data.id);
-    return existing!;
+    return existing as AppUser; // may be null if email conflict — caller handles it
   }
 
   return getUserProfile(created.id) as Promise<AppUser>;

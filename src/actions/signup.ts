@@ -82,7 +82,13 @@ export async function setupGoogleUserOrg(params: {
       .returning({ id: users.id });
 
     if (updated.length === 0) {
-      // Profile doesn't exist yet — insert fresh row.
+      // No row by this auth ID. A stale row with the same email (different auth ID)
+      // can exist after test runs or if the Supabase auth user was recreated.
+      // Delete it first — FK RESTRICT on reports/chat will raise an error if real
+      // production data is attached, protecting users who already have data.
+      await db.delete(users).where(eq(users.email, params.email));
+
+      // Insert fresh row linked to the current auth user.
       await db.insert(users).values({
         id: params.userId,
         email: params.email,
