@@ -37,7 +37,9 @@ export async function POST(request: Request) {
     }
 
     const orgId = userRows[0].organizationId;
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+    // Derive origin from the incoming request so it always matches the deployment URL,
+    // with NEXT_PUBLIC_APP_URL as an optional override.
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? new URL(request.url).origin).replace(/\/$/, '');
 
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
