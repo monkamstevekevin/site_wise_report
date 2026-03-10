@@ -38,13 +38,11 @@ export async function POST(request: Request) {
 
     const orgId = userRows[0].organizationId;
 
-    // Always use the request origin — reliable in Vercel regardless of env vars.
-    // NEXT_PUBLIC_APP_URL is only used if explicitly set AND looks like a valid https URL.
-    const envUrl = process.env.NEXT_PUBLIC_APP_URL;
-    const requestOrigin = new URL(request.url).origin;
-    const appUrl = (envUrl && envUrl.startsWith('http') && envUrl !== 'undefined')
-      ? envUrl.replace(/\/$/, '')
-      : requestOrigin;
+    // Build the public origin from Vercel proxy headers (request.url may be internal).
+    const host = request.headers.get('x-forwarded-host') ?? request.headers.get('host') ?? '';
+    const proto = request.headers.get('x-forwarded-proto') ?? 'https';
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '')
+      ?? `${proto}://${host}`;
 
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
