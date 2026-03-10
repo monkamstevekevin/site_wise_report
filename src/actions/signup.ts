@@ -73,26 +73,35 @@ export async function setupGoogleUserOrg(params: {
   try {
     const org = await createOrganization(params.companyName);
 
-    // UPSERT — works whether or not the profile row exists yet
-    await db
-      .insert(users)
-      .values({
+    // Try UPDATE first (user profile already exists — handles both the
+    // normal case and re-attempts after a failed previous try).
+    const updated = await db
+      .update(users)
+      .set({ organizationId: org.id, role: 'ADMIN', updatedAt: new Date() })
+      .where(eq(users.id, params.userId))
+      .returning({ id: users.id });
+
+    if (updated.length === 0) {
+      // Profile doesn't exist yet — insert fresh row.
+      await db.insert(users).values({
         id: params.userId,
         email: params.email,
         name: params.name,
         role: 'ADMIN',
         avatarUrl: params.avatarUrl ?? null,
         organizationId: org.id,
-      })
-      .onConflictDoUpdate({
-        target: users.id,
-        set: { organizationId: org.id, role: 'ADMIN', updatedAt: new Date() },
       });
+    }
 
     return { success: true };
   } catch (err) {
     console.error('[setupGoogleUserOrg]', err);
-    return { success: false, error: (err as Error).message || 'Erreur lors de la création de l\'organisation.' };
+    // Extract the real Postgres error (Drizzle wraps it in err.cause)
+    const message =
+      (err as any)?.cause?.message ??
+      (err as Error).message ??
+      'Erreur lors de la création de l\'organisation.';
+    return { success: false, error: message };
   }
 }
 
