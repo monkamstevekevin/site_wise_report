@@ -37,9 +37,14 @@ export async function POST(request: Request) {
     }
 
     const orgId = userRows[0].organizationId;
-    // Derive origin from the incoming request so it always matches the deployment URL,
-    // with NEXT_PUBLIC_APP_URL as an optional override.
-    const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? new URL(request.url).origin).replace(/\/$/, '');
+
+    // Always use the request origin — reliable in Vercel regardless of env vars.
+    // NEXT_PUBLIC_APP_URL is only used if explicitly set AND looks like a valid https URL.
+    const envUrl = process.env.NEXT_PUBLIC_APP_URL;
+    const requestOrigin = new URL(request.url).origin;
+    const appUrl = (envUrl && envUrl.startsWith('http') && envUrl !== 'undefined')
+      ? envUrl.replace(/\/$/, '')
+      : requestOrigin;
 
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
