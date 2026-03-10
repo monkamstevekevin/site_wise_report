@@ -65,16 +65,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user) {
-        await syncUserProfile(session.user);
-      }
-      setLoading(false);
-    });
-
+    // onAuthStateChange fires immediately with INITIAL_SESSION on mount —
+    // this is the single source of truth for session state, avoiding the
+    // race condition where getSession() + setLoading(false) would briefly
+    // show loading=false / user=null before onAuthStateChange fires.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      // Keep loading=true while syncing profile to prevent (app)/layout from
-      // redirecting to login before the user state is ready.
       setLoading(true);
       try {
         if (session?.user) {

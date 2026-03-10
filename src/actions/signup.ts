@@ -65,15 +65,29 @@ export async function createOrgAndSignUp(params: {
  */
 export async function setupGoogleUserOrg(params: {
   userId: string;
+  email: string;
+  name: string;
+  avatarUrl?: string | null;
   companyName: string;
 }): Promise<{ success: boolean; error?: string }> {
   try {
     const org = await createOrganization(params.companyName);
 
+    // UPSERT — works whether or not the profile row exists yet
     await db
-      .update(users)
-      .set({ organizationId: org.id, role: 'ADMIN', updatedAt: new Date() })
-      .where(eq(users.id, params.userId));
+      .insert(users)
+      .values({
+        id: params.userId,
+        email: params.email,
+        name: params.name,
+        role: 'ADMIN',
+        avatarUrl: params.avatarUrl ?? null,
+        organizationId: org.id,
+      })
+      .onConflictDoUpdate({
+        target: users.id,
+        set: { organizationId: org.id, role: 'ADMIN', updatedAt: new Date() },
+      });
 
     return { success: true };
   } catch (err) {

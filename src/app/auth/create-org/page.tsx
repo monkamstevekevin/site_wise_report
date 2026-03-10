@@ -32,7 +32,13 @@ export default function CreateOrgPage() {
         return;
       }
 
-      const result = await setupGoogleUserOrg({ userId: user.id, companyName: companyName.trim() });
+      const result = await setupGoogleUserOrg({
+        userId: user.id,
+        email: user.email ?? '',
+        name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? user.email?.split('@')[0] ?? 'Utilisateur',
+        avatarUrl: user.user_metadata?.avatar_url ?? null,
+        companyName: companyName.trim(),
+      });
       if (!result.success) {
         toast({ variant: 'destructive', title: 'Erreur', description: result.error });
         return;
