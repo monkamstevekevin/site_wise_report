@@ -38,11 +38,25 @@ export async function POST(request: Request) {
 
     const orgId = userRows[0].organizationId;
 
-    // Build the public origin from Vercel proxy headers (request.url may be internal).
-    const host = request.headers.get('x-forwarded-host') ?? request.headers.get('host') ?? '';
-    const proto = request.headers.get('x-forwarded-proto') ?? 'https';
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '')
-      ?? `${proto}://${host}`;
+    // Build the public origin — take only the first value of each header (proxies can chain them).
+    const rawProto = request.headers.get('x-forwarded-proto') ?? 'https';
+    const proto = rawProto.split(',')[0].trim();
+    const rawHost = request.headers.get('x-forwarded-host') ?? request.headers.get('host') ?? '';
+    const host = rawHost.split(',')[0].trim();
+
+    const envUrl = process.env.NEXT_PUBLIC_APP_URL;
+    const appUrl = (envUrl && envUrl.startsWith('http'))
+      ? envUrl.replace(/\/$/, '')
+      : `${proto}://${host}`;
+
+    const successUrl = `${appUrl}/settings/billing?success=true`;
+    const cancelUrl = `${appUrl}/settings/billing?canceled=true`;
+
+    // DIAGNOSTIC TEMPORAIRE — à retirer après débogage
+    return NextResponse.json({
+      error: `DEBUG successUrl="${successUrl}" | cancelUrl="${cancelUrl}" | envUrl="${process.env.NEXT_PUBLIC_APP_URL ?? 'non défini'}"`,
+    }, { status: 500 });
+    // FIN DIAGNOSTIC
 
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
@@ -57,9 +71,9 @@ export async function POST(request: Request) {
         organizationId: orgId,
         plan,
       },
-      success_url: `${appUrl}/settings/billing?success=true`,
-      cancel_url: `${appUrl}/settings/billing?canceled=true`,
-      customer_email: authUser.email,
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+      customer_email: authUser?.email,
     });
 
     return NextResponse.json({ url: session.url });
