@@ -7,10 +7,19 @@ import { eq } from 'drizzle-orm';
 
 export async function POST(request: Request) {
   try {
+    if (!process.env.STRIPE_SECRET_KEY) {
+      return NextResponse.json({ error: 'Stripe non configuré (STRIPE_SECRET_KEY manquant dans les variables d\'environnement Vercel).' }, { status: 500 });
+    }
+
     const { plan } = await request.json() as { plan: StripePlan };
 
     if (!STRIPE_PLANS[plan]) {
       return NextResponse.json({ error: 'Plan invalide.' }, { status: 400 });
+    }
+
+    const planConfig = STRIPE_PLANS[plan];
+    if (!planConfig.priceId) {
+      return NextResponse.json({ error: `Price ID Stripe manquant pour le plan ${plan}. Vérifiez STRIPE_${plan}_PRICE_ID dans Vercel.` }, { status: 500 });
     }
 
     // Get authenticated user
@@ -28,7 +37,6 @@ export async function POST(request: Request) {
     }
 
     const orgId = userRows[0].organizationId;
-    const planConfig = STRIPE_PLANS[plan];
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
 
     const session = await stripe.checkout.sessions.create({
@@ -52,6 +60,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ url: session.url });
   } catch (err) {
     console.error('[create-checkout]', err);
-    return NextResponse.json({ error: 'Erreur lors de la création de la session de paiement.' }, { status: 500 });
+    const message = (err as any)?.message ?? 'Erreur lors de la création de la session de paiement.';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
