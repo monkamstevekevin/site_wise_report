@@ -22,10 +22,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `Price ID Stripe manquant pour le plan ${plan}. Vérifiez STRIPE_${plan}_PRICE_ID dans Vercel.` }, { status: 500 });
     }
 
-    // DIAGNOSTIC TEMPORAIRE
-    return NextResponse.json({
-      error: `DEBUG plan="${plan}" | priceId="${planConfig.priceId}" | STARTER_ID="${process.env.STRIPE_STARTER_PRICE_ID}" | PRO_ID="${process.env.STRIPE_PRO_PRICE_ID}"`,
-    }, { status: 500 });
 
     // Get authenticated user
     const supabase = await createSupabaseServerClient();
