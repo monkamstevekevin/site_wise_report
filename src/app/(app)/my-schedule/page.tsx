@@ -31,8 +31,8 @@ export default function MySchedulePage() {
       setError(null);
       try {
         const [fetchedProjects, fetchedCurrentUser] = await Promise.all([
-          getProjects(),
-          getUserById(user.id), 
+          getProjects(user.organizationId ?? undefined),
+          getUserById(user.id),
         ]);
         setAllProjects(fetchedProjects);
         setCurrentUserData(fetchedCurrentUser);

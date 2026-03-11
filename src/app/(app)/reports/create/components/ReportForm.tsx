@@ -129,7 +129,7 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
       }
       setIsLoadingProjectsData(true);
       try {
-        const allFetchedProjects = await getProjects();
+        const allFetchedProjects = await getProjects(user.organizationId ?? undefined);
         const userProfile = await getUserById(user.id);
         const currentUserAssignments = userProfile?.assignments || [];
         
