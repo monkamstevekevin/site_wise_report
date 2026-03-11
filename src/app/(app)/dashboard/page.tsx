@@ -14,6 +14,7 @@ import { MonthlyReportsChart } from './components/MonthlyReportsChart';
 import { ProjectAssignmentsCard } from './components/ProjectAssignmentsCard';
 import { AlertsCard } from './components/AlertsCard';
 import { ScheduleView } from './components/ScheduleView';
+import { OnboardingChecklist } from './components/OnboardingChecklist';
 import { useAuth } from '@/contexts/AuthContext'; 
 import type { UserRole } from '@/lib/constants';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -423,6 +424,14 @@ export default function DashboardPage() {
           </Button>
         }
       />
+
+      {role === 'ADMIN' && (
+        <OnboardingChecklist
+          hasProjects={allProjectsData.length > 0}
+          hasTeamMembers={allUsersData.length > 1}
+          hasReports={allReportsData.length > 0}
+        />
+      )}
 
       { (role === 'ADMIN' || role === 'SUPERVISOR') && (
         <>
