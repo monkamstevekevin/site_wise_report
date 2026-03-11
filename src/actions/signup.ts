@@ -162,6 +162,8 @@ export async function createUserViaInvite(params: {
     const uid = data.user.id;
 
     // 2. Créer le profil utilisateur PostgreSQL
+    // Supprimer d'abord toute ligne stale avec le même email (id différent)
+    await db.delete(users).where(eq(users.email, params.email));
     await db.insert(users).values({
       id: uid,
       email: params.email,
