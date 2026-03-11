@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { stripe, STRIPE_PLANS, type StripePlan } from '@/lib/stripe';
+import { getStripe, STRIPE_PLANS, type StripePlan } from '@/lib/stripe';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { db } from '@/db';
 import { users } from '@/db/schema';
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
     const successUrl = `${appUrl}/settings/billing?success=true`;
     const cancelUrl = `${appUrl}/settings/billing?canceled=true`;
 
-    const session = await stripe.checkout.sessions.create({
+    const session = await getStripe().checkout.sessions.create({
       mode: 'subscription',
       payment_method_types: ['card'],
       line_items: [
