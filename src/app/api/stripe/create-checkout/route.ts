@@ -49,6 +49,9 @@ export async function POST(request: Request) {
       ? envUrl.trim().replace(/\/$/, '')
       : `${proto}://${host}`.trim();
 
+    const successUrl = `${appUrl}/settings/billing?success=true`;
+    const cancelUrl = `${appUrl}/settings/billing?canceled=true`;
+
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       payment_method_types: ['card'],
