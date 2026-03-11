@@ -42,7 +42,10 @@ export async function createOrgAndSignUp(params: {
     // 2. Créer l'organisation
     const org = await createOrganization(params.companyName);
 
-    // 3. Créer le profil utilisateur PostgreSQL avec rôle ADMIN et orgId
+    // 3. Créer le profil utilisateur PostgreSQL avec rôle ADMIN et orgId.
+    // Supprimer d'abord toute ligne stale avec le même email (id différent issu
+    // d'une tentative précédente avortée) pour éviter la violation de contrainte unique.
+    await db.delete(users).where(eq(users.email, params.email));
     await db.insert(users).values({
       id: uid,
       email: params.email,
@@ -55,7 +58,11 @@ export async function createOrgAndSignUp(params: {
     return { success: true };
   } catch (err) {
     console.error('[createOrgAndSignUp]', err);
-    return { success: false, error: (err as Error).message || 'Une erreur inattendue s\'est produite.' };
+    const message =
+      (err as any)?.cause?.message ??
+      (err as Error).message ??
+      'Une erreur inattendue s\'est produite.';
+    return { success: false, error: message };
   }
 }
 
