@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { organizations, users } from '@/db/schema';
 import { eq, and, gt, lte } from 'drizzle-orm';
-import { resend, FROM_EMAIL } from '@/lib/email/client';
+import { sendEmail } from '@/lib/email/client';
 import { emailTrialExpiring } from '@/lib/email/templates';
 
 export const dynamic = 'force-dynamic';
@@ -14,10 +14,6 @@ export async function GET(request: Request) {
 
   if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  if (!resend) {
-    return NextResponse.json({ error: 'Email service not configured.' }, { status: 503 });
   }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
@@ -63,16 +59,11 @@ export async function GET(request: Request) {
     });
 
     for (const admin of admins) {
-      try {
-        await resend.emails.send({
-          from: FROM_EMAIL,
-          to: [admin.email],
-          subject,
-          html,
-        });
+      const { error: sendError } = await sendEmail({ to: admin.email, subject, html });
+      if (sendError) {
+        errors.push(`${admin.email}: ${sendError}`);
+      } else {
         sent++;
-      } catch (err) {
-        errors.push(`${admin.email}: ${(err as Error).message}`);
       }
     }
   }

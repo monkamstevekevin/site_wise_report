@@ -1,6 +1,6 @@
 'use server';
 
-import { resend, FROM_EMAIL } from '@/lib/email/client';
+import { sendEmail } from '@/lib/email/client';
 import {
   emailReportSubmitted,
   emailReportValidated,
@@ -44,17 +44,11 @@ async function getReportById(reportId: string) {
 }
 
 async function send(to: string[], subject: string, html: string) {
-  if (!resend) {
-    console.warn('[email] RESEND_API_KEY non configurée — email non envoyé:', subject);
-    return;
-  }
   if (to.length === 0) return;
-
-  try {
-    await resend.emails.send({ from: FROM_EMAIL, to, subject, html });
-    console.log(`[email] Envoyé: "${subject}" → ${to.join(', ')}`);
-  } catch (err) {
-    console.error('[email] Erreur d\'envoi:', err);
+  for (const email of to) {
+    const { error } = await sendEmail({ to: email, subject, html });
+    if (error) console.error(`[email] Erreur envoi à ${email}:`, error);
+    else console.log(`[email] Envoyé: "${subject}" → ${email}`);
   }
 }
 

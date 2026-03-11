@@ -1,6 +1,6 @@
 'use server';
 
-import { resend, FROM_EMAIL } from '@/lib/email/client';
+import { sendEmail } from '@/lib/email/client';
 import { emailInvitation } from '@/lib/email/templates';
 import { getOrganizationById } from '@/services/organizationService';
 
@@ -23,22 +23,8 @@ export async function sendInviteEmail(params: {
       inviterName: params.inviterName,
     });
 
-    if (!resend) {
-      console.warn('[invite] RESEND_API_KEY non configurée — email non envoyé');
-      return { success: false, error: 'Service email non configuré.' };
-    }
-
-    const { error: sendError } = await resend.emails.send({
-      from: FROM_EMAIL,
-      to: [params.toEmail],
-      subject,
-      html,
-    });
-
-    if (sendError) {
-      console.error('[sendInviteEmail] Resend error:', sendError);
-      return { success: false, error: sendError.message };
-    }
+    const { error } = await sendEmail({ to: params.toEmail, subject, html });
+    if (error) return { success: false, error };
 
     return { success: true };
   } catch (err) {
