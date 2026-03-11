@@ -28,12 +28,17 @@ export async function sendInviteEmail(params: {
       return { success: false, error: 'Service email non configuré.' };
     }
 
-    await resend.emails.send({
+    const { error: sendError } = await resend.emails.send({
       from: FROM_EMAIL,
       to: [params.toEmail],
       subject,
       html,
     });
+
+    if (sendError) {
+      console.error('[sendInviteEmail] Resend error:', sendError);
+      return { success: false, error: sendError.message };
+    }
 
     return { success: true };
   } catch (err) {
