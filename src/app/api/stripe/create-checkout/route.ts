@@ -46,17 +46,8 @@ export async function POST(request: Request) {
 
     const envUrl = process.env.NEXT_PUBLIC_APP_URL;
     const appUrl = (envUrl && envUrl.startsWith('http'))
-      ? envUrl.replace(/\/$/, '')
-      : `${proto}://${host}`;
-
-    const successUrl = `${appUrl}/settings/billing?success=true`;
-    const cancelUrl = `${appUrl}/settings/billing?canceled=true`;
-
-    // DIAGNOSTIC TEMPORAIRE — à retirer après débogage
-    return NextResponse.json({
-      error: `DEBUG successUrl="${successUrl}" | cancelUrl="${cancelUrl}" | envUrl="${process.env.NEXT_PUBLIC_APP_URL ?? 'non défini'}"`,
-    }, { status: 500 });
-    // FIN DIAGNOSTIC
+      ? envUrl.trim().replace(/\/$/, '')
+      : `${proto}://${host}`.trim();
 
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
