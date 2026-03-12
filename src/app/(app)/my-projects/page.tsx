@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { PageTitle } from '@/components/common/PageTitle';
 import { Briefcase, Loader2, AlertTriangle, Search } from 'lucide-react';
 import type { Project, User, UserAssignment } from '@/lib/types';
@@ -20,6 +20,7 @@ export default function MyProjectsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const loadedRef = useRef({ projects: false, user: false });
 
   useEffect(() => {
     if (authLoading) return;
@@ -30,11 +31,14 @@ export default function MyProjectsPage() {
     }
 
     setIsLoading(true);
+    loadedRef.current = { projects: false, user: false };
+
     const unsubProjects = getProjectsSubscription(
       user?.organizationId,
       (fetchedProjects) => {
         setAllProjects(fetchedProjects);
-        if (currentUserData) setIsLoading(false);
+        loadedRef.current.projects = true;
+        if (loadedRef.current.user) setIsLoading(false);
       },
       (err) => {
         setError((err as Error).message || "Échec du chargement des projets.");
@@ -46,7 +50,8 @@ export default function MyProjectsPage() {
       user.id,
       (fetchedCurrentUser) => {
         setCurrentUserData(fetchedCurrentUser);
-        if (allProjects.length > 0 || !isLoading) setIsLoading(false);
+        loadedRef.current.user = true;
+        if (loadedRef.current.projects) setIsLoading(false);
       },
       (err) => {
         setError((err as Error).message || "Échec du chargement des données utilisateur.");
