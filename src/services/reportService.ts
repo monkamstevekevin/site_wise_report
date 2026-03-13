@@ -34,6 +34,8 @@ async function mapToFieldReport(row: typeof reports.$inferSelect): Promise<Field
     rejectionReason: row.rejectionReason ?? undefined,
     aiIsAnomalous: row.aiIsAnomalous ?? undefined,
     aiAnomalyExplanation: row.aiAnomalyExplanation ?? undefined,
+    testTypeId: row.testTypeId ?? null,
+    testData: (row.testData as Record<string, unknown> | null) ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -62,7 +64,11 @@ export async function getReportById(reportId: string): Promise<FieldReport | nul
 }
 
 export async function addReport(
-  reportData: Omit<FieldReport, 'id' | 'createdAt' | 'updatedAt'>
+  reportData: Omit<FieldReport, 'id' | 'createdAt' | 'updatedAt'> & {
+    testTypeId?: string | null;
+    testData?: Record<string, unknown> | null;
+    organizationId?: string | null;
+  }
 ): Promise<string> {
   const newReport: NewReport = {
     projectId: reportData.projectId,
@@ -81,6 +87,9 @@ export async function addReport(
     rejectionReason: reportData.rejectionReason ?? null,
     aiIsAnomalous: reportData.aiIsAnomalous ?? null,
     aiAnomalyExplanation: reportData.aiAnomalyExplanation ?? null,
+    testTypeId: reportData.testTypeId ?? null,
+    testData: reportData.testData ?? null,
+    organizationId: reportData.organizationId ?? null,
   };
 
   const [created] = await db

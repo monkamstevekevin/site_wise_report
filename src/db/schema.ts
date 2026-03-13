@@ -8,6 +8,7 @@ import {
   index,
   unique,
   pgEnum,
+  jsonb,
 } from 'drizzle-orm/pg-core';
 
 // ─── Enums ───────────────────────────────────────────────────────────────────
@@ -41,6 +42,22 @@ export const samplingMethodEnum = pgEnum('sampling_method', [
   'composite',
   'core',
   'other',
+]);
+
+export const testCategoryEnum = pgEnum('test_category', [
+  'CONCRETE',
+  'SOIL',
+  'ASPHALT',
+  'GRANULAT',
+  'CEMENT',
+  'FIELD',
+]);
+
+export const testFieldTypeEnum = pgEnum('test_field_type', [
+  'number',
+  'text',
+  'select',
+  'boolean',
 ]);
 
 export const notificationTypeEnum = pgEnum('notification_type', [
@@ -144,6 +161,50 @@ export const materials = pgTable('materials', {
 });
 
 /**
+ * test_types — templates de tests de laboratoire / terrain
+ * organizationId = null → template global partagé par toutes les orgs
+ */
+export const testTypes = pgTable(
+  'test_types',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: text('name').notNull(),
+    category: testCategoryEnum('category').notNull(),
+    description: text('description'),
+    // fields: JSON array de TestFieldDef
+    // [{ key, label, type, unit?, min?, max?, required, options? }]
+    fields: jsonb('fields').notNull().default([]),
+    isDefault: boolean('is_default').notNull().default(false),
+    organizationId: uuid('organization_id').references(() => organizations.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('tt_org_id_idx').on(table.organizationId),
+    index('tt_category_idx').on(table.category),
+  ]
+);
+
+/**
+ * project_test_types — types de tests disponibles sur un projet
+ */
+export const projectTestTypes = pgTable(
+  'project_test_types',
+  {
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    testTypeId: uuid('test_type_id')
+      .notNull()
+      .references(() => testTypes.id, { onDelete: 'cascade' }),
+  },
+  (table) => [
+    unique('project_test_type_unique').on(table.projectId, table.testTypeId),
+    index('ptt_project_id_idx').on(table.projectId),
+  ]
+);
+
+/**
  * project_materials — table de jonction projets ↔ matériaux
  */
 export const projectMaterials = pgTable(
@@ -189,6 +250,9 @@ export const reports = pgTable(
     rejectionReason: text('rejection_reason'),
     aiIsAnomalous: boolean('ai_is_anomalous'),
     aiAnomalyExplanation: text('ai_anomaly_explanation'),
+    // Nouveaux champs pour les tests dynamiques
+    testTypeId: uuid('test_type_id').references(() => testTypes.id, { onDelete: 'set null' }),
+    testData: jsonb('test_data'), // { [fieldKey]: value }
     organizationId: uuid('organization_id').references(() => organizations.id, { onDelete: 'cascade' }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
@@ -297,6 +361,27 @@ export type Material = typeof materials.$inferSelect;
 export type NewMaterial = typeof materials.$inferInsert;
 
 export type ProjectMaterial = typeof projectMaterials.$inferSelect;
+
+// ── TestType ──────────────────────────────────────────────────────────────────
+
+/** Définition d'un champ dans un template de test */
+export interface TestFieldDef {
+  key: string;           // ex: 'slump_mm'
+  label: string;         // ex: 'Affaissement (mm)'
+  type: 'number' | 'text' | 'select' | 'boolean';
+  unit?: string;         // ex: 'mm', '°C', '%', 'MPa'
+  min?: number;
+  max?: number;
+  required: boolean;
+  options?: string[];    // pour type === 'select'
+  hint?: string;         // texte d'aide affiché sous le champ
+}
+
+export type TestType = typeof testTypes.$inferSelect & {
+  fields: TestFieldDef[];
+};
+export type NewTestType = typeof testTypes.$inferInsert;
+export type ProjectTestType = typeof projectTestTypes.$inferSelect;
 
 export type Report = typeof reports.$inferSelect;
 export type NewReport = typeof reports.$inferInsert;

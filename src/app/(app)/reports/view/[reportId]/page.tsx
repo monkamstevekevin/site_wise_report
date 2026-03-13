@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { PageTitle } from '@/components/common/PageTitle';
-import { FileText, ArrowLeft, Loader2, AlertTriangleIcon, Image as ImageIcon, CalendarDays, User, Tag, Thermometer, Beaker, BarChart3, AlignLeft, Paperclip, ShieldCheck, ShieldX, HardHat, Users as UsersIcon, ClipboardList, Scale, Droplets, CalendarClock, Sparkles, Cpu, CheckCircle, XCircle } from 'lucide-react';
+import { FileText, ArrowLeft, Loader2, AlertTriangleIcon, Image as ImageIcon, CalendarDays, User, Tag, Thermometer, Beaker, BarChart3, AlignLeft, Paperclip, ShieldCheck, ShieldX, HardHat, Users as UsersIcon, ClipboardList, Scale, Droplets, CalendarClock, Sparkles, Cpu, CheckCircle, XCircle, FlaskConical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
@@ -22,6 +22,8 @@ import { useToast } from '@/hooks/use-toast';
 import { DownloadReportButton } from '@/components/pdf/DownloadReportButton';
 import { getProjectById } from '@/services/projectService';
 import { notifyReportValidated, notifyReportRejected } from '@/actions/notifications';
+import { getTestTypeById } from '@/services/testTypeService';
+import type { TestType } from '@/db/schema';
 
 
 const reportStatusBadgeVariant: Record<FieldReport['status'], "default" | "secondary" | "outline" | "destructive"> = {
@@ -76,6 +78,7 @@ export default function ViewReportPage() {
   const [isProcessingAction, setIsProcessingAction] = useState(false);
   const [projectName, setProjectName] = useState<string | undefined>();
   const [projectLocation, setProjectLocation] = useState<string | undefined>();
+  const [testType, setTestType] = useState<TestType | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -95,6 +98,9 @@ export default function ViewReportPage() {
           getProjectById(data.projectId).then(p => {
             if (p) { setProjectName(p.name); setProjectLocation(p.location); }
           }).catch(() => {});
+          if (data.testTypeId) {
+            getTestTypeById(data.testTypeId).then(setTestType).catch(() => {});
+          }
         } else {
           setErrorLoadingReport(`Rapport avec ID ${reportId} non trouvé.`);
         }
@@ -329,6 +335,45 @@ export default function ViewReportPage() {
             </Card>
         )}
 
+
+        {/* ── Données de test structurées ── */}
+        {testType && report.testData && Object.keys(report.testData).length > 0 && (
+          <Card className="lg:col-span-3 shadow-xl border-blue-200">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FlaskConical className="h-5 w-5 text-blue-600" />
+                {testType.name}
+                <Badge variant="secondary" className="text-xs ml-1">
+                  {testType.category === 'CONCRETE' ? 'Béton'
+                    : testType.category === 'SOIL' ? 'Sol'
+                    : testType.category === 'ASPHALT' ? 'Asphalte'
+                    : testType.category === 'GRANULAT' ? 'Granulats'
+                    : testType.category === 'CEMENT' ? 'Ciment'
+                    : 'Terrain'}
+                </Badge>
+              </CardTitle>
+              {testType.description && (
+                <CardDescription>{testType.description}</CardDescription>
+              )}
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {testType.fields.map((fieldDef) => {
+                  const val = (report.testData as Record<string, unknown>)?.[fieldDef.key];
+                  if (val === undefined || val === null || val === '') return null;
+                  return (
+                    <div key={fieldDef.key} className="bg-muted/40 rounded-lg p-3">
+                      <p className="text-xs text-muted-foreground mb-0.5">{fieldDef.label}</p>
+                      <p className="text-sm font-semibold">
+                        {String(val)}{fieldDef.unit ? ` ${fieldDef.unit}` : ''}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {(report.notes || (report.attachments && report.attachments.length > 0)) && (
             <Card className="lg:col-span-3 shadow-xl">

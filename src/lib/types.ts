@@ -4,9 +4,11 @@ import type { LucideIcon } from 'lucide-react';
 
 // Re-exporting or aligning with AIFieldReport to ensure consistency
 export type FieldReport = AIFieldReport & {
-  rejectionReason?: string; // Added for rejection feedback
-  aiIsAnomalous?: boolean; // Added for AI assessment result
-  aiAnomalyExplanation?: string; // Added for AI assessment explanation
+  rejectionReason?: string;
+  aiIsAnomalous?: boolean;
+  aiAnomalyExplanation?: string;
+  testTypeId?: string | null;
+  testData?: Record<string, unknown> | null;
 };
 
 export type UserRole = 'ADMIN' | 'SUPERVISOR' | 'TECHNICIAN';
