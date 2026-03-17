@@ -1,6 +1,6 @@
 
 import type { LucideIcon } from 'lucide-react';
-import { LayoutDashboard, FileText, Users, HardHat, TestTube2, Settings, UserCircle, Briefcase, CalendarDays, BarChart3, Settings2 } from 'lucide-react';
+import { LayoutDashboard, FileText, Users, HardHat, TestTube2, Settings, UserCircle, Briefcase, CalendarDays, BarChart3, Settings2, FlaskConical } from 'lucide-react';
 
 export interface NavItem {
   href: string;
@@ -26,6 +26,7 @@ export const ALL_NAV_ITEMS: NavItem[] = [
       { href: '/admin/users', label: 'Gestion Utilisateurs', icon: Users, roles: ['ADMIN'] },
       { href: '/admin/projects', label: 'Gestion Projets', icon: HardHat, roles: ['ADMIN'] },
       { href: '/admin/materials', label: 'Gestion Matériaux', icon: TestTube2, roles: ['ADMIN'] },
+      { href: '/admin/test-types', label: 'Types de Tests', icon: FlaskConical, roles: ['ADMIN'] },
     ]
   },
   { href: '/settings', label: 'Paramètres', icon: Settings2, roles: ['ADMIN'] },

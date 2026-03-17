@@ -12,16 +12,20 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
-import type { AnomalyAssessment, FieldReport } from '@/ai/flows/report-anomaly-detection';
+import type { AnomalyAssessment } from '@/ai/flows/report-anomaly-detection';
+import type { FieldReport } from '@/lib/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, Sparkles, AlertTriangleIcon, Camera, Paperclip, Save, Send, X } from 'lucide-react';
+import { Loader2, Sparkles, AlertTriangleIcon, Camera, Paperclip, Save, Send, X, FlaskConical, Info } from 'lucide-react';
 import Image from 'next/image';
 import { getProjects } from '@/services/projectService';
 import type { Project, MaterialType, SamplingMethod } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getUserById } from '@/services/userService';
+import { getTestTypesForProject } from '@/services/testTypeService';
+import type { TestType, TestFieldDef } from '@/db/schema';
+import { Badge } from '@/components/ui/badge';
 
 const MAX_FILE_SIZE_MB = 5;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
@@ -58,7 +62,15 @@ const reportFormSchema = z.object({
 
 export type ReportFormData = z.infer<typeof reportFormSchema>;
 
-export type ReportSubmitPayload = Omit<FieldReport, 'id' | 'createdAt' | 'updatedAt' | 'technicianId' | 'photoDataUri'> & {};
+export type ReportSubmitPayload = Omit<FieldReport, 'id' | 'createdAt' | 'updatedAt' | 'technicianId' | 'photoDataUri'> & {
+  testTypeId?: string | null;
+  testData?: Record<string, unknown> | null;
+};
+
+const CATEGORY_LABELS: Record<string, string> = {
+  CONCRETE: 'Béton', SOIL: 'Sol', ASPHALT: 'Asphalte',
+  GRANULAT: 'Granulats', CEMENT: 'Ciment', FIELD: 'Terrain',
+};
 
 const initialReportFormValues: ReportFormData = {
   projectId: '',
@@ -112,6 +124,13 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
   const [assignedProjectsList, setAssignedProjectsList] = useState<Project[]>([]);
   const [isLoadingProjectsData, setIsLoadingProjectsData] = useState(true);
 
+  // Test types dynamiques
+  const [projectTestTypes, setProjectTestTypes] = useState<TestType[]>([]);
+  const [testTypesLoaded, setTestTypesLoaded] = useState(false);
+  const [selectedTestTypeId, setSelectedTestTypeId] = useState<string>('');
+  const [testData, setTestData] = useState<Record<string, string>>({});
+  const selectedTestType = projectTestTypes.find((t) => t.id === selectedTestTypeId) ?? null;
+
   const isEditMode = !!reportToEdit;
 
   const form = useForm<ReportFormData>({
@@ -137,7 +156,12 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
         setAssignedProjectsList(userProjects);
         
         if (!isEditMode && userProjects.length > 0 && !form.getValues('projectId')) {
-            form.setValue('projectId', userProjects[0].id); 
+            const firstId = userProjects[0].id;
+            form.setValue('projectId', firstId);
+            setTestTypesLoaded(false);
+            getTestTypesForProject(firstId)
+              .then(types => { setProjectTestTypes(types); setTestTypesLoaded(true); })
+              .catch(() => setTestTypesLoaded(true));
         } else if (!isEditMode && userProjects.length === 0) {
              form.setValue('projectId', '');
         }
@@ -168,7 +192,7 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
         supplier: reportToEdit.supplier,
         samplingMethod: reportToEdit.samplingMethod as ReportFormData['samplingMethod'],
         notes: reportToEdit.notes || '',
-        photo: undefined, 
+        photo: undefined,
         attachmentUrls: reportToEdit.attachments.join(', ') || '',
       });
       if (reportToEdit.photoDataUri) {
@@ -176,9 +200,29 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
       } else {
         setPhotoPreviewUrl(null);
       }
+      // Restaurer le type de test et les données
+      if (reportToEdit.testTypeId) {
+        setSelectedTestTypeId(reportToEdit.testTypeId);
+        if (reportToEdit.testData) {
+          const restored: Record<string, string> = {};
+          for (const [k, v] of Object.entries(reportToEdit.testData)) {
+            restored[k] = v !== null && v !== undefined ? String(v) : '';
+          }
+          setTestData(restored);
+        }
+        setTestTypesLoaded(false);
+        getTestTypesForProject(reportToEdit.projectId)
+          .then(types => { setProjectTestTypes(types); setTestTypesLoaded(true); })
+          .catch(() => setTestTypesLoaded(true));
+      } else {
+        setSelectedTestTypeId('');
+        setTestData({});
+      }
     } else if (!isEditMode) {
         form.reset(initialReportFormValues);
         setPhotoPreviewUrl(null);
+        setSelectedTestTypeId('');
+        setTestData({});
         if(photoInputRef.current) photoInputRef.current.value = '';
         if (assignedProjectsList.length > 0) {
             form.setValue('projectId', assignedProjectsList[0].id);
@@ -214,9 +258,32 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
       toast({ variant: 'destructive', title: 'Erreur d\'Authentification', description: 'Vous devez être connecté.' });
       return;
     }
+    // Validation des champs dynamiques du type de test
+    if (selectedTestType) {
+      const fieldErrors: string[] = [];
+      for (const fieldDef of selectedTestType.fields) {
+        const val = testData[fieldDef.key];
+        if (fieldDef.required && (!val || val.trim() === '')) {
+          fieldErrors.push(`"${fieldDef.label}" est requis`);
+        } else if (fieldDef.type === 'number' && val && val.trim() !== '') {
+          const num = parseFloat(val);
+          if (!isNaN(num)) {
+            if (fieldDef.min !== undefined && num < fieldDef.min)
+              fieldErrors.push(`"${fieldDef.label}" doit être ≥ ${fieldDef.min}${fieldDef.unit ? ' ' + fieldDef.unit : ''}`);
+            if (fieldDef.max !== undefined && num > fieldDef.max)
+              fieldErrors.push(`"${fieldDef.label}" doit être ≤ ${fieldDef.max}${fieldDef.unit ? ' ' + fieldDef.unit : ''}`);
+          }
+        }
+      }
+      if (fieldErrors.length > 0) {
+        toast({ variant: 'destructive', title: 'Champs de test invalides', description: fieldErrors.join('\n'), duration: 8000 });
+        return;
+      }
+    }
+
     setIsSubmittingForm(true);
     setSubmitActionType(status);
-    setCurrentAnomalyResult(null); 
+    setCurrentAnomalyResult(null);
 
     const reportPayload: ReportSubmitPayload = {
       projectId: data.projectId,
@@ -229,8 +296,10 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
       supplier: data.supplier,
       samplingMethod: data.samplingMethod,
       notes: data.notes || '',
-      status: status, 
+      status: status,
       attachments: data.attachmentUrls ? data.attachmentUrls.split(',').map(url => url.trim()).filter(url => url) : [],
+      testTypeId: selectedTestTypeId || null,
+      testData: selectedTestTypeId && Object.keys(testData).length > 0 ? testData : null,
     };
     
     let photoFileArg: File | null | undefined = undefined;
@@ -324,9 +393,17 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Projet (auquel vous êtes assigné)</FormLabel>
-                    <Select 
-                      onValueChange={field.onChange} 
-                      value={field.value || ""} 
+                    <Select
+                      onValueChange={(val) => {
+                        field.onChange(val);
+                        setSelectedTestTypeId('');
+                        setTestData({});
+                        setTestTypesLoaded(false);
+                        getTestTypesForProject(val)
+                          .then(types => { setProjectTestTypes(types); setTestTypesLoaded(true); })
+                          .catch(() => setTestTypesLoaded(true));
+                      }}
+                      value={field.value || ""}
                       disabled={assignedProjectsList.length === 0 || !user || isSubmittingForm}
                     >
                       <FormControl>
@@ -337,7 +414,7 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
                       <SelectContent>
                         {assignedProjectsList.length === 0 && <SelectItem value="-" disabled>{user ? "Aucun projet ne vous est assigné" : "Connectez-vous pour voir les projets"}</SelectItem>}
                         {assignedProjectsList.map(project => (
-                          <SelectItem key={project.id} value={project.id}>{project.name} ({project.id})</SelectItem>
+                          <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -345,6 +422,52 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
                   </FormItem>
                 )}
               />
+
+              {/* ── Feedback : aucun type de test sur ce projet ── */}
+              {form.watch('projectId') && testTypesLoaded && projectTestTypes.length === 0 && (
+                <FormItem>
+                  <p className="text-xs text-muted-foreground flex items-start gap-1.5 pt-1">
+                    <Info className="h-3.5 w-3.5 mt-0.5 shrink-0 text-blue-400" />
+                    Aucun type de test assigné à ce projet. Un administrateur peut en assigner via <strong className="mx-0.5">Panneau Admin → Types de Tests</strong>.
+                  </p>
+                </FormItem>
+              )}
+
+              {/* ── Sélecteur de type de test ── */}
+              {projectTestTypes.length > 0 && (
+                <FormItem>
+                  <FormLabel className="flex items-center gap-1.5">
+                    <FlaskConical className="h-4 w-4 text-blue-500" />
+                    Type de test (optionnel)
+                  </FormLabel>
+                  <Select
+                    value={selectedTestTypeId}
+                    onValueChange={(val) => {
+                      setSelectedTestTypeId(val === 'none' ? '' : val);
+                      setTestData({});
+                    }}
+                    disabled={isSubmittingForm}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sélectionner le type de test effectué" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">— Aucun type spécifique —</SelectItem>
+                      {projectTestTypes.map((tt) => (
+                        <SelectItem key={tt.id} value={tt.id}>
+                          <span className="flex items-center gap-2">
+                            {tt.name}
+                            <span className="text-xs text-muted-foreground">({CATEGORY_LABELS[tt.category] ?? tt.category})</span>
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    Associe ce rapport à un template de test normalisé pour une meilleure traçabilité.
+                  </FormDescription>
+                </FormItem>
+              )}
               <FormField
                 control={form.control}
                 name="batchNumber"
@@ -531,9 +654,42 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
               />
             </div>
 
+            {/* ── Champs dynamiques du type de test ── */}
+            {selectedTestType && (
+              <Card className="border-blue-200 bg-blue-50/40">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center gap-2">
+                    <FlaskConical className="h-4 w-4 text-blue-600" />
+                    <CardTitle className="text-sm font-semibold text-blue-800">
+                      {selectedTestType.name}
+                    </CardTitle>
+                    <Badge variant="secondary" className="text-xs">
+                      {CATEGORY_LABELS[selectedTestType.category] ?? selectedTestType.category}
+                    </Badge>
+                  </div>
+                  {selectedTestType.description && (
+                    <CardDescription className="text-xs mt-0.5">{selectedTestType.description}</CardDescription>
+                  )}
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {selectedTestType.fields.map((fieldDef: TestFieldDef) => (
+                      <DynamicField
+                        key={fieldDef.key}
+                        fieldDef={fieldDef}
+                        value={testData[fieldDef.key] ?? ''}
+                        onChange={(val) => setTestData((prev) => ({ ...prev, [fieldDef.key]: val }))}
+                        disabled={isSubmittingForm}
+                      />
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             <div className="flex flex-col sm:flex-row gap-3 pt-4">
-                <Button 
-                    type="button" 
+                <Button
+                    type="button"
                     onClick={form.handleSubmit(data => handleSubmitClick(data, 'DRAFT'))} 
                     variant="outline" 
                     className="w-full sm:w-auto rounded-lg" 
@@ -577,3 +733,80 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
   );
 }
 
+// ─── Composant champ dynamique ────────────────────────────────────────────────
+
+function DynamicField({
+  fieldDef,
+  value,
+  onChange,
+  disabled,
+}: {
+  fieldDef: TestFieldDef;
+  value: string;
+  onChange: (v: string) => void;
+  disabled?: boolean;
+}) {
+  const id = `dynamic-${fieldDef.key}`;
+  const isTextArea = fieldDef.type === 'text';
+  return (
+    <div className={`space-y-1.5 ${isTextArea ? 'md:col-span-2' : ''}`}>
+      <Label htmlFor={id} className="text-sm">
+        {fieldDef.label}
+        {fieldDef.unit && <span className="text-muted-foreground ml-1 text-xs">({fieldDef.unit})</span>}
+        {fieldDef.required && <span className="text-red-400 ml-0.5">*</span>}
+      </Label>
+
+      {fieldDef.type === 'number' && (
+        <Input
+          id={id}
+          type="number"
+          step="any"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+          placeholder={
+            fieldDef.min !== undefined && fieldDef.max !== undefined
+              ? `${fieldDef.min} – ${fieldDef.max}`
+              : undefined
+          }
+          className="h-9"
+        />
+      )}
+
+      {fieldDef.type === 'text' && (
+        <Textarea
+          id={id}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+          rows={2}
+          className="text-sm"
+        />
+      )}
+
+      {(fieldDef.type === 'select' || fieldDef.type === 'boolean') && (
+        <Select value={value} onValueChange={onChange} disabled={disabled}>
+          <SelectTrigger className="h-9">
+            <SelectValue placeholder="Sélectionner…" />
+          </SelectTrigger>
+          <SelectContent>
+            {fieldDef.type === 'boolean' ? (
+              <>
+                <SelectItem value="oui">Oui</SelectItem>
+                <SelectItem value="non">Non</SelectItem>
+              </>
+            ) : (
+              (fieldDef.options ?? []).map((opt) => (
+                <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+              ))
+            )}
+          </SelectContent>
+        </Select>
+      )}
+
+      {fieldDef.hint && (
+        <p className="text-xs text-muted-foreground">{fieldDef.hint}</p>
+      )}
+    </div>
+  );
+}

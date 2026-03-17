@@ -269,7 +269,30 @@ async function seedDemo() {
   }
   console.log(`   ✓ ${assignments.length} assignations créées`);
 
-  // ── 7. Rapports ────────────────────────────────────────────────────────────
+  // ── 7a. Types de tests associés aux projets ────────────────────────────────
+  console.log('\n🔬 Association des types de tests aux projets...');
+
+  const allTestTypes = await db.select().from(schema.testTypes);
+  const ttByName: Record<string, string> = {};
+  allTestTypes.forEach(tt => { ttByName[tt.name] = tt.id; });
+
+  const slumpId    = ttByName['Affaissement (Slump Test)'] ?? null;
+  const proctorId  = ttByName['Essai Proctor Standard']    ?? null;
+  const cylId      = ttByName['Résistance à la compression (Cylindres)'] ?? null;
+
+  const ptEntries = [
+    slumpId  && { projectId: proj2.id, testTypeId: slumpId  },
+    cylId    && { projectId: proj2.id, testTypeId: cylId    },
+    proctorId && { projectId: proj3.id, testTypeId: proctorId },
+    slumpId  && { projectId: proj1.id, testTypeId: slumpId  },
+  ].filter(Boolean) as { projectId: string; testTypeId: string }[];
+
+  for (const entry of ptEntries) {
+    await db.insert(schema.projectTestTypes).values(entry).onConflictDoNothing();
+  }
+  console.log(`   ✓ ${ptEntries.length} association(s) créées`);
+
+  // ── 7b. Rapports ───────────────────────────────────────────────────────────
   console.log('\n📋 Création des rapports...');
 
   type ReportInsert = typeof schema.reports.$inferInsert;
@@ -356,6 +379,8 @@ async function seedDemo() {
       notes: 'Affaissement 90mm. Teneur en air 5,8%. Conforme devis structural.',
       aiIsAnomalous: false,
       aiAnomalyExplanation: 'Béton conforme aux exigences de durabilité.',
+      testTypeId: slumpId,
+      testData: slumpId ? { slump_mm: '90', temperature_c: '19', air_content_pct: '5.8', w_c_ratio: '0.45', batch_number: 'G-2025-023', supplier: 'Béton Provincial', notes: 'Conforme devis structural P-30 MRC' } : null,
       createdAt: daysAgo(18), updatedAt: daysAgo(16),
     },
     {
@@ -376,6 +401,8 @@ async function seedDemo() {
       notes: 'Coulée des longrines. Vibration au pervibrateur. Bon remplissage coffrage.',
       aiIsAnomalous: false,
       aiAnomalyExplanation: 'Aucune anomalie. Conditions de bétonnage normales.',
+      testTypeId: slumpId,
+      testData: slumpId ? { slump_mm: '85', temperature_c: '18.5', air_content_pct: '6.1', w_c_ratio: '0.44', batch_number: 'G-2025-031', supplier: 'Béton Provincial', notes: 'Longrines axe B. Bonne fluidité.' } : null,
       createdAt: daysAgo(5), updatedAt: daysAgo(5),
     },
 
@@ -398,6 +425,8 @@ async function seedDemo() {
       notes: 'Couche de fondation granulaire MG-20. Mise en place en 2 couches de 15 cm.',
       aiIsAnomalous: false,
       aiAnomalyExplanation: 'Valeurs normales. Granulat bien gradué.',
+      testTypeId: proctorId,
+      testData: proctorId ? { sample_id: 'ECH-MG20-001', soil_description: 'MG-20 concassé calcaire, Carrière Beaudette', max_dry_density: '2150', optimum_moisture_pct: '6.2', in_situ_density: '2082', in_situ_moisture: '5.8', compaction_pct: '96.8', notes: 'Couche 1 de 2 — station 0+380' } : null,
       createdAt: daysAgo(4), updatedAt: daysAgo(4),
     },
     {

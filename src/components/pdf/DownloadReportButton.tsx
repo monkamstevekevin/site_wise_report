@@ -6,12 +6,14 @@ import { ReportPDFDocument } from './ReportPDFDocument';
 import { Button } from '@/components/ui/button';
 import { Download, Loader2 } from 'lucide-react';
 import type { FieldReport } from '@/lib/types';
+import type { TestType } from '@/db/schema';
 
 interface DownloadReportButtonProps {
   report: FieldReport;
   projectName?: string;
   projectLocation?: string;
   technicianName?: string;
+  testType?: TestType | null;
   variant?: 'default' | 'outline' | 'ghost';
   size?: 'default' | 'sm' | 'lg' | 'icon';
   className?: string;
@@ -22,6 +24,7 @@ export function DownloadReportButton({
   projectName,
   projectLocation,
   technicianName,
+  testType,
   variant = 'outline',
   size = 'sm',
   className,
@@ -48,6 +51,7 @@ export function DownloadReportButton({
           projectName={projectName}
           projectLocation={projectLocation}
           technicianName={technicianName}
+          testType={testType}
         />
       }
       fileName={fileName}
