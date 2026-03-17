@@ -3,7 +3,7 @@
 
 import { PageTitle } from '@/components/common/PageTitle';
 import { KpiCard } from './components/KpiCard';
-import { FileText, CheckCircle, AlertTriangle as KpiAlertTriangle, LayoutDashboard, ListChecks, UserCheck, Clock, Bot, Users as UsersIconLucide, HardHat, AlertCircle as AlertCircleIcon, Calendar as CalendarIconLucide, Filter as FilterIcon } from 'lucide-react';
+import { FileText, CheckCircle, AlertTriangle as KpiAlertTriangle, LayoutDashboard, ListChecks, UserCheck, Clock, Bot, Users as UsersIconLucide, HardHat, AlertCircle as AlertCircleIcon, Calendar as CalendarIconLucide, Filter as FilterIcon, FlaskConical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { MaterialReportsChart } from './components/MaterialReportsChart';
@@ -211,16 +211,19 @@ export default function DashboardPage() {
   const adminKpiData = useMemo(() => {
     const predictedComplianceValue = currentCompliancePrediction?.predictedCompliancePercentage;
     const complianceTrend = currentCompliancePrediction ? (predictedComplianceValue && predictedComplianceValue > 90 ? "En amélioration" : "Stable") : "N/A";
+    const thisMonth = format(new Date(), 'yyyy-MM');
+    const testsThisMonth = allReportsData.filter(r => r.testTypeId && format(new Date(r.createdAt), 'yyyy-MM') === thisMonth).length;
 
     return [
-        { title: "Total Rapports", value: allReportsData.length, icon: FileText, trend: "", trendDirection: "neutral" as const }, 
+        { title: "Total Rapports", value: allReportsData.length, icon: FileText, trend: "", trendDirection: "neutral" as const },
         { title: "En Attente de Validation", value: allReportsData.filter(r => r.status === 'SUBMITTED').length, icon: KpiAlertTriangle, trend: "", trendDirection: "neutral" as const },
         { title: "Rapports Validés", value: allReportsData.filter(r => r.status === 'VALIDATED').length, icon: CheckCircle, trend: "", trendDirection: "neutral" as const },
-        { 
-          title: "Prédiction Conformité IA", 
-          value: isLoadingCompliance ? "..." : (predictedComplianceValue !== undefined ? `${predictedComplianceValue.toFixed(1)}%` : "N/A"), 
-          icon: Bot, 
-          trend: isLoadingCompliance ? "" : (complianceError ? "Erreur" : complianceTrend), 
+        { title: "Tests Spécialisés ce Mois", value: testsThisMonth, icon: FlaskConical, trend: "", trendDirection: "neutral" as const, description: "Rapports avec type de test spécialisé ce mois." },
+        {
+          title: "Prédiction Conformité IA",
+          value: isLoadingCompliance ? "..." : (predictedComplianceValue !== undefined ? `${predictedComplianceValue.toFixed(1)}%` : "N/A"),
+          icon: Bot,
+          trend: isLoadingCompliance ? "" : (complianceError ? "Erreur" : complianceTrend),
           trendDirection: (complianceError ? "neutral" : (predictedComplianceValue && predictedComplianceValue > 90 ? "up" : "neutral")) as 'up' | 'down' | 'neutral',
           description: complianceError ? complianceError : (isLoadingCompliance ? "Calcul en cours..." : ""),
           tooltipContent: currentCompliancePrediction ? (
@@ -231,17 +234,22 @@ export default function DashboardPage() {
                 <p className="whitespace-pre-wrap">{currentCompliancePrediction.suggestedActions}</p>
              </div>
           ) : (complianceError ? <p className="text-xs">{complianceError}</p> : undefined),
-        }, 
+        },
     ];
   }, [allReportsData, currentCompliancePrediction, isLoadingCompliance, complianceError]);
 
 
-  const technicianKpiData = useMemo(() => [
-    { title: "Mes Rapports Soumis", value: allReportsData.filter(r => r.status !== 'DRAFT').length, icon: FileText, description: "Total des rapports que vous avez soumis." },
-    { title: "En Attente de Mon Examen", value: allReportsData.filter(r => r.status === 'SUBMITTED' || r.status === 'REJECTED').length, icon: ListChecks, description: "Rapports nécessitant une action ou soumis." },
-    { title: "Mes Rapports Validés", value: allReportsData.filter(r => r.status === 'VALIDATED').length, icon: UserCheck, description: "Rapports approuvés." },
-    { title: "Rapports en Brouillon", value: allReportsData.filter(r => r.status === 'DRAFT').length, icon: Clock, description: "Rapports sauvegardés comme brouillons." },
-  ], [allReportsData]);
+  const technicianKpiData = useMemo(() => {
+    const thisMonth = format(new Date(), 'yyyy-MM');
+    const testsThisMonth = allReportsData.filter(r => r.testTypeId && format(new Date(r.createdAt), 'yyyy-MM') === thisMonth).length;
+    return [
+      { title: "Mes Rapports Soumis", value: allReportsData.filter(r => r.status !== 'DRAFT').length, icon: FileText, description: "Total des rapports que vous avez soumis." },
+      { title: "En Attente de Mon Examen", value: allReportsData.filter(r => r.status === 'SUBMITTED' || r.status === 'REJECTED').length, icon: ListChecks, description: "Rapports nécessitant une action ou soumis." },
+      { title: "Mes Rapports Validés", value: allReportsData.filter(r => r.status === 'VALIDATED').length, icon: UserCheck, description: "Rapports approuvés." },
+      { title: "Rapports en Brouillon", value: allReportsData.filter(r => r.status === 'DRAFT').length, icon: Clock, description: "Rapports sauvegardés comme brouillons." },
+      { title: "Tests Spécialisés ce Mois", value: testsThisMonth, icon: FlaskConical, description: "Vos rapports avec un type de test spécialisé ce mois." },
+    ];
+  }, [allReportsData]);
   
   const sortedTechnicianReportsForDisplay = useMemo(() => {
     return [...allReportsData].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -435,7 +443,7 @@ export default function DashboardPage() {
 
       { (role === 'ADMIN' || role === 'SUPERVISOR') && (
         <>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5 mb-8">
               {adminKpiData.map((kpi) => (
                 kpi.tooltipContent ? (
                   <Tooltip key={kpi.title} delayDuration={100}>
@@ -596,7 +604,7 @@ export default function DashboardPage() {
           )}
           {!noReportsExistForUser && (
             <>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5 mb-8">
                 {technicianKpiData.map((kpi) => (
                 <KpiCard
                     key={kpi.title}

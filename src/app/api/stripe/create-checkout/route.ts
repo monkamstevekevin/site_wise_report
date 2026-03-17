@@ -31,10 +31,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Non authentifié.' }, { status: 401 });
     }
 
-    // Get user's organization
+    // Get user's organization + verify ADMIN role
     const userRows = await db.select().from(users).where(eq(users.id, authUser.id)).limit(1);
     if (!userRows[0]?.organizationId) {
       return NextResponse.json({ error: 'Organisation introuvable.' }, { status: 404 });
+    }
+    if (userRows[0].role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Seuls les administrateurs peuvent initier un abonnement.' }, { status: 403 });
     }
 
     const orgId = userRows[0].organizationId;

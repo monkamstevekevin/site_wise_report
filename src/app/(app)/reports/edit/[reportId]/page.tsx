@@ -19,14 +19,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import type { UserRole } from '@/lib/constants';
 
 
-const readFileAsDataURL = (file: File): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = (error) => reject(error);
-    reader.readAsDataURL(file);
-  });
-};
+import { uploadReportPhoto } from '@/lib/uploadPhoto';
 
 
 export default function EditReportPage() {
@@ -45,7 +38,7 @@ export default function EditReportPage() {
     if (reportId && user) { 
       setIsLoadingReport(true);
       setErrorLoadingReport(null);
-      getReportById(reportId)
+      getReportById(reportId, user.organizationId)
         .then(data => {
           if (data) {
             const currentUserRole = user.role as UserRole;
@@ -95,12 +88,12 @@ export default function EditReportPage() {
 
     if (photoFile === null) { 
       finalPhotoDataUri = undefined;
-    } else if (photoFile) { 
+    } else if (photoFile) {
       try {
-        finalPhotoDataUri = await readFileAsDataURL(photoFile);
+        finalPhotoDataUri = await uploadReportPhoto(photoFile);
       } catch (error) {
-        console.error("Erreur de lecture du fichier photo pour mise à jour:", error);
-        toast({ variant: 'destructive', title: 'Erreur Photo', description: 'Impossible de traiter la nouvelle photo.' });
+        console.error("Erreur d'upload de la photo:", error);
+        toast({ variant: 'destructive', title: 'Erreur Photo', description: 'Impossible d\'uploader la photo. Vérifiez que le bucket Supabase Storage "report-photos" est configuré.' });
         return { success: false };
       }
     }

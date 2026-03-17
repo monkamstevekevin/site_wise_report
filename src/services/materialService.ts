@@ -5,6 +5,7 @@ import { materials } from '@/db/schema';
 import { eq, asc } from 'drizzle-orm';
 import type { Material, MaterialType } from '@/lib/types';
 import type { MaterialSubmitData } from '@/app/(app)/admin/materials/components/MaterialFormDialog';
+import { requireRole } from '@/lib/auth/serverAuth';
 
 // ─── Mapper DB → type applicatif ─────────────────────────────────────────────
 
@@ -37,6 +38,7 @@ export async function getMaterialById(materialId: string): Promise<Material | nu
 }
 
 export async function addMaterial(materialData: MaterialSubmitData): Promise<string> {
+  await requireRole(['ADMIN', 'SUPERVISOR']);
   const [created] = await db
     .insert(materials)
     .values({
@@ -52,6 +54,7 @@ export async function addMaterial(materialData: MaterialSubmitData): Promise<str
 }
 
 export async function updateMaterial(materialId: string, materialData: MaterialSubmitData): Promise<void> {
+  await requireRole(['ADMIN', 'SUPERVISOR']);
   await db
     .update(materials)
     .set({
@@ -67,5 +70,6 @@ export async function updateMaterial(materialId: string, materialData: MaterialS
 }
 
 export async function deleteMaterial(materialId: string): Promise<void> {
+  await requireRole(['ADMIN']);
   await db.delete(materials).where(eq(materials.id, materialId));
 }

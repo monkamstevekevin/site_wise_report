@@ -5,6 +5,7 @@ import { projects, projectMaterials, userAssignments } from '@/db/schema';
 import { eq, desc } from 'drizzle-orm';
 import type { Project } from '@/lib/types';
 import type { ProjectFormData } from '@/app/(app)/admin/projects/components/ProjectFormDialog';
+import { requireRole } from '@/lib/auth/serverAuth';
 
 export type ProjectSubmitData = Omit<ProjectFormData, 'assignedMaterialTypes'> & {
   assignedMaterialIds?: string[];
@@ -43,9 +44,9 @@ async function getMaterialIdsForProject(projectId: string): Promise<string[]> {
 // ─── CRUD ─────────────────────────────────────────────────────────────────────
 
 export async function getProjects(orgId?: string): Promise<Project[]> {
-  const rows = orgId
-    ? await db.select().from(projects).where(eq(projects.organizationId, orgId)).orderBy(desc(projects.createdAt))
-    : await db.select().from(projects).orderBy(desc(projects.createdAt));
+  // Sans orgId, on ne retourne rien pour éviter la fuite cross-tenant
+  if (!orgId) return [];
+  const rows = await db.select().from(projects).where(eq(projects.organizationId, orgId)).orderBy(desc(projects.createdAt));
 
   return Promise.all(
     rows.map(async (row) => {
@@ -64,6 +65,7 @@ export async function getProjectById(projectId: string): Promise<Project | null>
 }
 
 export async function addProject(projectData: ProjectSubmitData, orgId?: string | null): Promise<string> {
+  await requireRole(['ADMIN', 'SUPERVISOR']);
   const [created] = await db
     .insert(projects)
     .values({
@@ -93,6 +95,7 @@ export async function updateProject(
   projectId: string,
   projectData: Partial<ProjectSubmitData>
 ): Promise<void> {
+  await requireRole(['ADMIN', 'SUPERVISOR']);
   await db
     .update(projects)
     .set({
@@ -125,6 +128,7 @@ export async function updateProject(
 }
 
 export async function deleteProject(projectId: string): Promise<void> {
+  await requireRole(['ADMIN']);
   if (!projectId) throw new Error("L'ID du projet est requis pour supprimer un projet.");
   await db.delete(projects).where(eq(projects.id, projectId));
 }

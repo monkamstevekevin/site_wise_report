@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
 import type Stripe from 'stripe';
-import { getStripe } from '@/lib/stripe';
+import { getStripe, STRIPE_PLANS, type StripePlan } from '@/lib/stripe';
 import { updateOrgSubscription, getOrganizationById } from '@/services/organizationService';
 import { getOrganizationByStripeSubscriptionId } from '@/services/organizationService';
+import { db } from '@/db';
+import { webhookEvents } from '@/db/schema';
+import { eq } from 'drizzle-orm';
 
-// In-memory idempotency store (survives process lifetime, cleared on restart)
-// For multi-instance deployments, replace with a Redis SET or DB table.
-const processedEvents = new Set<string>();
+const VALID_PLANS = Object.keys(STRIPE_PLANS) as StripePlan[];
 
 export const dynamic = 'force-dynamic';
 
@@ -36,22 +37,35 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Webhook signature invalide.' }, { status: 400 });
   }
 
-  // Idempotency: skip already-processed events
-  if (processedEvents.has(event.id)) {
+  // Idempotency via DB — safe pour les déploiements multi-instances (Vercel)
+  const existing = await db
+    .select({ id: webhookEvents.id })
+    .from(webhookEvents)
+    .where(eq(webhookEvents.id, event.id))
+    .limit(1);
+
+  if (existing.length > 0) {
     return NextResponse.json({ received: true, skipped: true });
   }
-  processedEvents.add(event.id);
-  // Trim set to avoid unbounded growth (keep last 1000 events)
-  if (processedEvents.size > 1000) {
-    processedEvents.delete(processedEvents.values().next().value!);
-  }
+
+  // Enregistrer l'événement avant traitement (évite les races conditions)
+  await db.insert(webhookEvents).values({ id: event.id }).onConflictDoNothing();
 
   try {
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
         const orgId = session.metadata?.organizationId;
-        const plan = session.metadata?.plan as 'STARTER' | 'PRO' | undefined;
+        const planStr = session.metadata?.plan;
+
+        // Valider le plan contre les plans connus — évite qu'un attaquant injecte un plan arbitraire
+        const plan: StripePlan | undefined = planStr && VALID_PLANS.includes(planStr as StripePlan)
+          ? (planStr as StripePlan)
+          : undefined;
+
+        if (!plan) {
+          console.error('[webhook] Plan invalide dans les métadonnées:', planStr);
+        }
 
         if (orgId && plan && session.subscription && session.customer) {
           const org = await getOrganizationById(orgId);

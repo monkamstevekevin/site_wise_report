@@ -14,15 +14,7 @@ import { detectReportAnomaly, type AnomalyAssessment } from '@/ai/flows/report-a
 import { notifyReportSubmitted } from '@/actions/notifications';
 import type { FieldReport } from '@/lib/types';
 import { useRouter } from 'next/navigation';
-
-const readFileAsDataURL = (file: File): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = (error) => reject(error);
-    reader.readAsDataURL(file);
-  });
-};
+import { uploadReportPhoto } from '@/lib/uploadPhoto';
 
 export default function CreateReportPage() {
   const { toast } = useToast();
@@ -45,10 +37,10 @@ export default function CreateReportPage() {
     let photoDataUriInSubmit: string | undefined = undefined;
     if (photoFile) {
       try {
-        photoDataUriInSubmit = await readFileAsDataURL(photoFile);
+        photoDataUriInSubmit = await uploadReportPhoto(photoFile);
       } catch (error) {
-        console.error("Erreur de lecture du fichier photo pour le nouveau rapport:", error);
-        toast({ variant: 'destructive', title: 'Erreur Photo', description: 'Impossible de traiter la photo.' });
+        console.error("Erreur d'upload de la photo:", error);
+        toast({ variant: 'destructive', title: 'Erreur Photo', description: 'Impossible d\'uploader la photo. Vérifiez que le bucket Supabase Storage "report-photos" est configuré.' });
         return { success: false };
       }
     }

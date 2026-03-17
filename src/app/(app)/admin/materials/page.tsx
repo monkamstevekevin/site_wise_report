@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { addMaterial, updateMaterial, deleteMaterial } from '@/services/materialService';
 import { getMaterialsSubscription } from '@/lib/materialClientService';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,6 +37,7 @@ const materialTypeFilterOptions: { value: MaterialType | 'ALL'; label: string }[
 
 export default function MaterialManagementPage() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [materials, setMaterials] = useState<Material[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -61,11 +63,12 @@ export default function MaterialManagementPage() {
         setError((err as Error).message || "Échec du chargement des matériaux. Veuillez réessayer plus tard.");
         console.error(err);
         setIsLoading(false);
-      }
+      },
+      user?.organizationId
     );
 
     return () => unsubscribe();
-  }, []);
+  }, [user?.organizationId]);
 
   const handleAddNewMaterial = () => {
     setEditingMaterial(undefined);

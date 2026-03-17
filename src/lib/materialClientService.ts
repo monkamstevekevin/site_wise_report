@@ -32,27 +32,36 @@ function mapRowToMaterial(row: MaterialRow): Material {
   };
 }
 
-async function fetchAll(supabase: ReturnType<typeof createSupabaseBrowserClient>): Promise<Material[]> {
-  const { data, error } = await supabase
-    .from('materials')
-    .select('*')
-    .order('name', { ascending: true });
+async function fetchAll(
+  supabase: ReturnType<typeof createSupabaseBrowserClient>,
+  orgId?: string | null
+): Promise<Material[]> {
+  let query = supabase.from('materials').select('*').order('name', { ascending: true });
+  // Matériaux globaux (organizationId IS NULL) + matériaux de l'org courante
+  if (orgId) {
+    query = query.or(`organization_id.is.null,organization_id.eq.${orgId}`);
+  } else {
+    query = query.is('organization_id', null);
+  }
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
   return (data as MaterialRow[]).map(mapRowToMaterial);
 }
 
 export function getMaterialsSubscription(
   onUpdate: (materials: Material[]) => void,
-  onError: (error: Error) => void
+  onError: (error: Error) => void,
+  orgId?: string | null
 ): Unsubscribe {
   const supabase = createSupabaseBrowserClient();
 
-  fetchAll(supabase).then(onUpdate).catch(onError);
+  fetchAll(supabase, orgId).then(onUpdate).catch(onError);
 
+  const channelName = orgId ? `materials-org-${orgId}` : 'materials-global';
   const channel = supabase
-    .channel('materials-all')
+    .channel(channelName)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'materials' }, () => {
-      fetchAll(supabase).then(onUpdate).catch(onError);
+      fetchAll(supabase, orgId).then(onUpdate).catch(onError);
     })
     .subscribe();
 

@@ -4,6 +4,7 @@ import { db } from '@/db';
 import { testTypes, projectTestTypes } from '@/db/schema';
 import type { TestType, NewTestType } from '@/db/schema';
 import { eq, or, isNull, and } from 'drizzle-orm';
+import { requireRole } from '@/lib/auth/serverAuth';
 
 // ─── Queries ──────────────────────────────────────────────────────────────────
 
@@ -51,6 +52,7 @@ export async function getTestTypesForProject(projectId: string): Promise<TestTyp
 export async function createTestType(
   data: Omit<NewTestType, 'id' | 'createdAt' | 'updatedAt'>
 ): Promise<TestType> {
+  await requireRole(['ADMIN', 'SUPERVISOR']);
   const [row] = await db
     .insert(testTypes)
     .values({ ...data })
@@ -62,6 +64,7 @@ export async function updateTestType(
   id: string,
   data: Partial<Omit<NewTestType, 'id' | 'createdAt' | 'updatedAt'>>
 ): Promise<TestType | null> {
+  await requireRole(['ADMIN', 'SUPERVISOR']);
   const [row] = await db
     .update(testTypes)
     .set({ ...data, updatedAt: new Date() })
@@ -71,6 +74,7 @@ export async function updateTestType(
 }
 
 export async function deleteTestType(id: string): Promise<void> {
+  await requireRole(['ADMIN']);
   await db.delete(testTypes).where(eq(testTypes.id, id));
 }
 

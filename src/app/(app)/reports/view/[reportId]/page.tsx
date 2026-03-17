@@ -93,7 +93,7 @@ export default function ViewReportPage() {
       setIsLoadingReport(true);
       setErrorLoadingReport(null);
       try {
-        const data = await getReportById(reportId);
+        const data = await getReportById(reportId, user.organizationId);
         if (data) {
           setReport(data);
           // Fetch project info for PDF

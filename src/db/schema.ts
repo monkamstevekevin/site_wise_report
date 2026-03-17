@@ -343,6 +343,14 @@ export const notifications = pgTable(
   ]
 );
 
+/**
+ * webhook_events — idempotency pour les webhooks Stripe (multi-instance safe)
+ */
+export const webhookEvents = pgTable('webhook_events', {
+  id: text('id').primaryKey(), // Stripe event ID (evt_xxx)
+  processedAt: timestamp('processed_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
 // ─── Types inférés (utilisables dans le reste de l'app) ──────────────────────
 
 export type Organization = typeof organizations.$inferSelect;

@@ -4,7 +4,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { PageTitle } from '@/components/common/PageTitle';
 import { Button } from '@/components/ui/button';
-import { FileText, PlusCircle, Filter, Loader2, AlertTriangleIcon, AlertTriangle, Download } from 'lucide-react';
+import { FileText, PlusCircle, Filter, Loader2, AlertTriangleIcon, AlertTriangle, Download, FlaskConical } from 'lucide-react';
 import Link from 'next/link';
 import { ReportTable } from './components/ReportTable';
 import { RejectionReasonDialog } from './components/RejectionReasonDialog';
@@ -19,6 +19,8 @@ import type { UserRole } from '@/lib/constants';
 import { getReportsSubscription, getReportsByTechnicianIdSubscription } from '@/lib/reportClientService';
 import { deleteReport as deleteReportService, updateReport } from '@/services/reportService';
 import { notifyReportValidated, notifyReportRejected } from '@/actions/notifications';
+import { getTestTypes } from '@/services/testTypeService';
+import type { TestType } from '@/db/schema';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   AlertDialog,
@@ -123,12 +125,19 @@ export default function ReportsPage() {
   const [searchTerm, setSearchTerm] = useState(() => searchParams.get('projectId') ?? '');
   const [statusFilter, setStatusFilter] = useState<FieldReport['status'] | 'ALL'>('ALL');
   const [materialFilter, setMaterialFilter] = useState<FieldReport['materialType'] | 'ALL'>('ALL');
+  const [testTypeFilter, setTestTypeFilter] = useState<string>('ALL');
+  const [availableTestTypes, setAvailableTestTypes] = useState<TestType[]>([]);
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [reportToDelete, setReportToDelete] = useState<FieldReport | null>(null);
 
   const [isRejectionDialogOpen, setIsRejectionDialogOpen] = useState(false);
   const [reportToReject, setReportToReject] = useState<FieldReport | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    getTestTypes(user.organizationId).then(setAvailableTestTypes).catch(() => {});
+  }, [user]);
 
   useEffect(() => {
     if (authLoading) {
@@ -255,10 +264,15 @@ export default function ReportsPage() {
         report.batchNumber.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesStatus = statusFilter === 'ALL' || report.status === statusFilter;
       const matchesMaterial = materialFilter === 'ALL' || report.materialType === materialFilter;
+      const matchesTestType =
+        testTypeFilter === 'ALL' ? true :
+        testTypeFilter === 'WITH_TEST' ? !!report.testTypeId :
+        testTypeFilter === 'WITHOUT_TEST' ? !report.testTypeId :
+        report.testTypeId === testTypeFilter;
 
-      return matchesSearchTerm && matchesStatus && matchesMaterial;
+      return matchesSearchTerm && matchesStatus && matchesMaterial && matchesTestType;
     });
-  }, [allFetchedReports, searchTerm, statusFilter, materialFilter]);
+  }, [allFetchedReports, searchTerm, statusFilter, materialFilter, testTypeFilter]);
 
   if (authLoading || (user && currentUserRole === null && !isLoadingReports) ) {
     return (
@@ -350,7 +364,25 @@ export default function ReportsPage() {
               </SelectContent>
             </Select>
           </div>
-          <Button variant="outline" onClick={() => { setSearchTerm(''); setStatusFilter('ALL'); setMaterialFilter('ALL'); }} className="h-10 w-full lg:w-auto rounded-lg">
+          <div>
+            <Label htmlFor="report-testtype-filter" className="mb-1 block text-sm font-medium flex items-center gap-1">
+              <FlaskConical className="h-3.5 w-3.5" /> Type de Test
+            </Label>
+            <Select value={testTypeFilter} onValueChange={setTestTypeFilter}>
+              <SelectTrigger className="w-full" id="report-testtype-filter">
+                <SelectValue placeholder="Tous les types de test" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Tous les types de test</SelectItem>
+                <SelectItem value="WITH_TEST">Avec test spécialisé</SelectItem>
+                <SelectItem value="WITHOUT_TEST">Sans test spécialisé</SelectItem>
+                {availableTestTypes.map(tt => (
+                  <SelectItem key={tt.id} value={tt.id}>{tt.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Button variant="outline" onClick={() => { setSearchTerm(''); setStatusFilter('ALL'); setMaterialFilter('ALL'); setTestTypeFilter('ALL'); }} className="h-10 w-full lg:w-auto rounded-lg">
             <Filter className="mr-2 h-4 w-4" /> Tout Effacer
           </Button>
         </div>

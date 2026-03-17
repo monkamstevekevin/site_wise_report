@@ -11,6 +11,36 @@ const PLAN_USER_LIMITS: Record<string, number | null> = {
   TRIAL: null, STARTER: 5, PRO: null, ENTERPRISE: null,
 };
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function validateSignupInputs(params: {
+  email: string;
+  password: string;
+  name: string;
+  extra?: string; // companyName or orgId
+  extraIsUuid?: boolean;
+}): string | null {
+  if (!params.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(params.email.trim())) {
+    return 'Adresse e-mail invalide.';
+  }
+  if (!params.password || params.password.length < 8) {
+    return 'Le mot de passe doit contenir au moins 8 caractères.';
+  }
+  if (!params.name || params.name.trim().length < 2 || params.name.length > 100) {
+    return 'Le nom doit contenir entre 2 et 100 caractères.';
+  }
+  if (params.extra !== undefined) {
+    if (params.extraIsUuid) {
+      if (!UUID_RE.test(params.extra)) return 'Identifiant d\'organisation invalide.';
+    } else {
+      if (!params.extra || params.extra.trim().length < 2 || params.extra.length > 100) {
+        return 'Le nom de l\'entreprise doit contenir entre 2 et 100 caractères.';
+      }
+    }
+  }
+  return null;
+}
+
 /**
  * Crée une organisation + un utilisateur ADMIN en une seule opération atomique.
  * Utilise l'API Admin Supabase pour éviter les race conditions avec onAuthStateChange.
@@ -21,6 +51,14 @@ export async function createOrgAndSignUp(params: {
   name: string;
   companyName: string;
 }): Promise<{ success: boolean; error?: string }> {
+  const validationError = validateSignupInputs({
+    email: params.email,
+    password: params.password,
+    name: params.name,
+    extra: params.companyName,
+  });
+  if (validationError) return { success: false, error: validationError };
+
   try {
     // 1. Créer l'utilisateur dans Supabase Auth via Admin API
     const { data, error: authError } = await supabaseAdmin.auth.admin.createUser({
@@ -127,6 +165,15 @@ export async function createUserViaInvite(params: {
   name: string;
   orgId: string;
 }): Promise<{ success: boolean; error?: string }> {
+  const validationError = validateSignupInputs({
+    email: params.email,
+    password: params.password,
+    name: params.name,
+    extra: params.orgId,
+    extraIsUuid: true,
+  });
+  if (validationError) return { success: false, error: validationError };
+
   try {
     // Vérifier la limite d'utilisateurs
     const orgRows = await db.select().from(organizations).where(eq(organizations.id, params.orgId)).limit(1);

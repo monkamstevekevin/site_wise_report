@@ -7,6 +7,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { User, UserRole, UserAssignment } from '@/lib/types';
 import { addNotification } from './notificationService';
 import { getProjectById } from './projectService';
+import { requireRole } from '@/lib/auth/serverAuth';
 
 // ─── Mapper DB → type applicatif ─────────────────────────────────────────────
 
@@ -34,9 +35,9 @@ async function mapToUser(row: typeof users.$inferSelect): Promise<User> {
 // ─── CRUD ─────────────────────────────────────────────────────────────────────
 
 export async function getUsers(orgId?: string): Promise<User[]> {
-  const rows = orgId
-    ? await db.select().from(users).where(eq(users.organizationId, orgId))
-    : await db.select().from(users);
+  // Sans orgId, on ne retourne rien pour éviter la fuite cross-tenant
+  if (!orgId) return [];
+  const rows = await db.select().from(users).where(eq(users.organizationId, orgId));
   return Promise.all(rows.map(mapToUser));
 }
 
@@ -60,6 +61,7 @@ export async function addUser(
   password?: string,
   orgId?: string | null
 ): Promise<string> {
+  await requireRole(['ADMIN']);
   if (!password) throw new Error("Le mot de passe est requis pour créer un nouvel utilisateur.");
 
   // Vérifier la limite d'utilisateurs selon le plan
@@ -138,6 +140,7 @@ export async function updateUserAssignments(
   userId: string,
   newAssignments: UserAssignment[]
 ): Promise<void> {
+  await requireRole(['ADMIN', 'SUPERVISOR']);
   const oldAssignmentRows = await db
     .select()
     .from(userAssignments)
@@ -196,5 +199,6 @@ export async function updateUserAssignments(
  * Supprime le record utilisateur de PostgreSQL.
  */
 export async function deleteUserFirestoreRecord(userId: string): Promise<void> {
+  await requireRole(['ADMIN']);
   await db.delete(users).where(eq(users.id, userId));
 }

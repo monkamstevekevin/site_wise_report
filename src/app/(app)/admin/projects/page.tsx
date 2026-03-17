@@ -64,7 +64,8 @@ export default function ProjectManagementPage() {
         (err) => {
             setError((err as Error).message || "Échec du chargement des matériaux.");
             setIsLoading(false);
-        }
+        },
+        user?.organizationId
     );
 
     const unsubUsers = getUsersSubscription(
