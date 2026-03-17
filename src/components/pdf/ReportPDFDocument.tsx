@@ -3,6 +3,7 @@ import {
   Document, Page, Text, View, StyleSheet,
 } from '@react-pdf/renderer';
 import type { FieldReport } from '@/lib/types';
+import type { TestType, TestFieldDef } from '@/db/schema';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -114,6 +115,20 @@ const S = StyleSheet.create({
   measVal:   { fontSize: 16, fontFamily: 'Helvetica-Bold', color: '#111827' },
   measUnit:  { fontSize: 7.5, color: '#6b7280', marginTop: 2 },
 
+  /* Tableau test dynamique */
+  testRow: {
+    flexDirection: 'row', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 5,
+    overflow: 'hidden', marginBottom: 4,
+  },
+  testLabelCell: {
+    width: '45%', paddingVertical: 7, paddingHorizontal: 9,
+    backgroundColor: '#f8fafc', borderRightWidth: 1, borderRightColor: '#e5e7eb',
+  },
+  testValueCell: { flex: 1, paddingVertical: 7, paddingHorizontal: 9 },
+  testLabel: { fontSize: 8, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.4 },
+  testValue: { fontSize: 9.5, fontFamily: 'Helvetica-Bold', color: '#111827' },
+  testUnit:  { fontSize: 7.5, color: '#6b7280', marginTop: 1 },
+
   /* Boîte IA */
   aiOk:  { padding: 10, borderRadius: 5, backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#86efac' },
   aiErr: { padding: 10, borderRadius: 5, backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fdba74' },
@@ -172,19 +187,41 @@ const fmt = (d: string) => {
 
 // ─── Document principal ───────────────────────────────────────────────────────
 
+const CATEGORY_LABELS: Record<string, string> = {
+  CONCRETE: 'Béton',
+  SOIL: 'Sol',
+  ASPHALT: 'Asphalte',
+  GRANULAT: 'Granulats',
+  CEMENT: 'Ciment',
+  FIELD: 'Terrain',
+};
+
 interface ReportPDFDocumentProps {
   report: FieldReport;
   projectName?: string;
   projectLocation?: string;
   technicianName?: string;
+  testType?: TestType | null;
+}
+
+function formatTestValue(fieldDef: TestFieldDef, val: unknown): string {
+  if (val === null || val === undefined || val === '') return 'N/D';
+  if (fieldDef.type === 'boolean') return val === true || val === 'true' || val === 'oui' ? 'Oui' : 'Non';
+  return String(val);
 }
 
 export function ReportPDFDocument({
-  report, projectName, projectLocation, technicianName,
+  report, projectName, projectLocation, technicianName, testType,
 }: ReportPDFDocumentProps) {
   const statusBg = STATUS_BG[report.status] ?? '#94a3b8';
   const matKey = report.materialType?.toLowerCase() ?? 'other';
   const norm = NORMS[matKey] ?? NORMS.other;
+  const testData = report.testData as Record<string, unknown> | null | undefined;
+  const hasTestData = testType && testData && Object.keys(testData).length > 0;
+  // Section numbers shift when dynamic test data is present
+  const aiSectionNum = hasTestData ? 5 : 4;
+  const validationSectionNum = hasTestData ? 6 : 5;
+  const notesSectionNum = hasTestData ? 7 : 6;
 
   return (
     <Document
@@ -243,37 +280,81 @@ export function ReportPDFDocument({
           </View>
         </View>
 
-        {/* ── Section 3 : Mesures ── */}
+        {/* ── Section 3 : Mesures générales ── */}
         <View style={S.section}>
-          <SectionTitle title="3.  Résultats d'essai" />
-          <View style={S.measRow}>
-            <View style={S.measCell}>
-              <Text style={S.measLbl}>Température</Text>
-              <Text style={S.measVal}>{report.temperature}</Text>
-              <Text style={S.measUnit}>°C</Text>
+          <SectionTitle title="3.  Mesures générales" />
+          {hasTestData ? (
+            /* Compact grid when a full test section follows */
+            <View style={S.grid}>
+              <View style={S.cell}>
+                <Text style={S.lbl}>Température</Text>
+                <Text style={S.val}>{report.temperature} °C</Text>
+              </View>
+              <View style={S.cell}>
+                <Text style={S.lbl}>Volume</Text>
+                <Text style={S.val}>{report.volume} m³</Text>
+              </View>
+              <View style={S.cell}>
+                <Text style={S.lbl}>Densité</Text>
+                <Text style={S.val}>{report.density} kg/m³</Text>
+              </View>
+              <View style={S.cell}>
+                <Text style={S.lbl}>Humidité</Text>
+                <Text style={S.val}>{report.humidity} %</Text>
+              </View>
             </View>
-            <View style={S.measCell}>
-              <Text style={S.measLbl}>Volume</Text>
-              <Text style={S.measVal}>{report.volume}</Text>
-              <Text style={S.measUnit}>m³</Text>
+          ) : (
+            /* Large measurement boxes when no test type */
+            <View style={S.measRow}>
+              <View style={S.measCell}>
+                <Text style={S.measLbl}>Température</Text>
+                <Text style={S.measVal}>{report.temperature}</Text>
+                <Text style={S.measUnit}>°C</Text>
+              </View>
+              <View style={S.measCell}>
+                <Text style={S.measLbl}>Volume</Text>
+                <Text style={S.measVal}>{report.volume}</Text>
+                <Text style={S.measUnit}>m³</Text>
+              </View>
+              <View style={S.measCell}>
+                <Text style={S.measLbl}>Densité</Text>
+                <Text style={S.measVal}>{report.density}</Text>
+                <Text style={S.measUnit}>kg/m³</Text>
+              </View>
+              <View style={S.measCellLast}>
+                <Text style={S.measLbl}>Humidité</Text>
+                <Text style={S.measVal}>{report.humidity}</Text>
+                <Text style={S.measUnit}>%</Text>
+              </View>
             </View>
-            <View style={S.measCell}>
-              <Text style={S.measLbl}>Densité</Text>
-              <Text style={S.measVal}>{report.density}</Text>
-              <Text style={S.measUnit}>kg/m³</Text>
-            </View>
-            <View style={S.measCellLast}>
-              <Text style={S.measLbl}>Humidité</Text>
-              <Text style={S.measVal}>{report.humidity}</Text>
-              <Text style={S.measUnit}>%</Text>
-            </View>
-          </View>
+          )}
         </View>
 
-        {/* ── Section 4 : Analyse IA ── */}
+        {/* ── Section 4 : Données du test dynamique ── */}
+        {hasTestData && (
+          <View style={S.section}>
+            <SectionTitle title={`4.  ${testType.name} — ${CATEGORY_LABELS[testType.category] ?? testType.category}`} />
+            {testType.fields.map((fieldDef) => {
+              const val = testData![fieldDef.key];
+              return (
+                <View key={fieldDef.key} style={S.testRow}>
+                  <View style={S.testLabelCell}>
+                    <Text style={S.testLabel}>{fieldDef.label}</Text>
+                    {fieldDef.unit ? <Text style={S.testUnit}>{fieldDef.unit}</Text> : null}
+                  </View>
+                  <View style={S.testValueCell}>
+                    <Text style={S.testValue}>{formatTestValue(fieldDef, val)}</Text>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
+        {/* ── Section AI ── */}
         {(report.aiIsAnomalous !== undefined || report.aiIsAnomalous !== null) && (
           <View style={S.section}>
-            <SectionTitle title="4.  Analyse par intelligence artificielle" />
+            <SectionTitle title={`${aiSectionNum}.  Analyse par intelligence artificielle`} />
             <View style={report.aiIsAnomalous ? S.aiErr : S.aiOk}>
               <Text style={[S.aiTitle, { color: report.aiIsAnomalous ? '#c2410c' : '#15803d' }]}>
                 {report.aiIsAnomalous
@@ -289,9 +370,9 @@ export function ReportPDFDocument({
           </View>
         )}
 
-        {/* ── Section 5 : Validation ── */}
+        {/* ── Section Validation ── */}
         <View style={S.section}>
-          <SectionTitle title="5.  Décision de validation" />
+          <SectionTitle title={`${validationSectionNum}.  Décision de validation`} />
           <View style={S.grid}>
             <Field label="Statut final" value={STATUS_LABELS[report.status]} />
             <Field label="Mis à jour le" value={fmt(report.updatedAt)} />
@@ -304,10 +385,10 @@ export function ReportPDFDocument({
           )}
         </View>
 
-        {/* ── Section 6 : Notes ── */}
+        {/* ── Section Notes ── */}
         {report.notes && (
           <View style={S.section}>
-            <SectionTitle title="6.  Notes du technicien" />
+            <SectionTitle title={`${notesSectionNum}.  Notes du technicien`} />
             <View style={S.notesBox}>
               <Text style={S.notesTxt}>{report.notes}</Text>
             </View>

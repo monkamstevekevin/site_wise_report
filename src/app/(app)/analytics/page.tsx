@@ -3,11 +3,13 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { PageTitle } from '@/components/common/PageTitle';
-import { BarChart3, AlertTriangleIcon, Download, TrendingUp, TrendingDown, Minus, Users } from 'lucide-react';
+import { BarChart3, AlertTriangleIcon, Download, TrendingUp, TrendingDown, Minus, Users, FlaskConical } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { getReportsSubscription } from '@/lib/reportClientService';
 import { getUsersSubscription } from '@/lib/userClientService';
 import type { FieldReport, User } from '@/lib/types';
+import { getTestTypes } from '@/services/testTypeService';
+import type { TestType } from '@/db/schema';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -92,6 +94,7 @@ export default function AnalyticsPage() {
   const { user, loading: authLoading } = useAuth();
   const [reports, setReports] = useState<FieldReport[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [testTypes, setTestTypes] = useState<TestType[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -102,6 +105,11 @@ export default function AnalyticsPage() {
       () => setLoading(false)
     );
     return unsub;
+  }, [user, authLoading]);
+
+  useEffect(() => {
+    if (authLoading || !user) return;
+    getTestTypes(user.organizationId).then(setTestTypes).catch(() => {});
   }, [user, authLoading]);
 
   useEffect(() => {
@@ -192,6 +200,31 @@ export default function AnalyticsPage() {
       })
       .sort((a, b) => b.total - a.total);
   }, [reports, users]);
+
+  // ── Test type stats ─────────────────────────────────────────────────────────
+  const testTypeStats = useMemo(() => {
+    const ttMap: Record<string, string> = {};
+    testTypes.forEach(tt => { ttMap[tt.id] = tt.name; });
+
+    const map: Record<string, { name: string; total: number; validated: number; rejected: number }> = {};
+    reports.forEach(r => {
+      if (!r.testTypeId) return;
+      const name = ttMap[r.testTypeId] ?? 'Type inconnu';
+      if (!map[r.testTypeId]) map[r.testTypeId] = { name, total: 0, validated: 0, rejected: 0 };
+      map[r.testTypeId].total++;
+      if (r.status === 'VALIDATED') map[r.testTypeId].validated++;
+      else if (r.status === 'REJECTED') map[r.testTypeId].rejected++;
+    });
+
+    return Object.values(map)
+      .map(s => {
+        const decided = s.validated + s.rejected;
+        return { ...s, conformity: decided > 0 ? Math.round((s.validated / decided) * 100) : null };
+      })
+      .sort((a, b) => b.total - a.total);
+  }, [reports, testTypes]);
+
+  const reportsWithTestType = reports.filter(r => r.testTypeId).length;
 
   // ── Chart data ──────────────────────────────────────────────────────────────
   const chartData = useMemo(() =>
@@ -354,6 +387,50 @@ export default function AnalyticsPage() {
         </Card>
 
       </div>
+
+      {/* ── Test type stats ────────────────────────────────────────────────── */}
+      {testTypeStats.length > 0 && (
+        <Card className="mt-6 shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <FlaskConical className="h-4 w-4 text-blue-600" /> Activité par Type de Test
+            </CardTitle>
+            <CardDescription>
+              {reportsWithTestType} rapport(s) avec type de test ({reports.length > 0 ? Math.round((reportsWithTestType / reports.length) * 100) : 0}% du total) · {testTypeStats.length} type(s) utilisé(s)
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border/60 text-xs text-muted-foreground">
+                    <th className="text-left px-4 py-3 font-medium">Type de test</th>
+                    <th className="text-center px-3 py-3 font-medium">Rapports</th>
+                    <th className="text-center px-3 py-3 font-medium">✓ Valid.</th>
+                    <th className="text-center px-3 py-3 font-medium">✗ Rejet.</th>
+                    <th className="text-center px-3 py-3 font-medium">Conformité</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {testTypeStats.map((s, i) => (
+                    <tr key={s.name} className={cn('border-b border-border/40 hover:bg-muted/30 transition-colors', i % 2 === 0 ? '' : 'bg-muted/10')}>
+                      <td className="px-4 py-3 font-medium text-foreground">{s.name}</td>
+                      <td className="px-3 py-3 text-center text-muted-foreground font-semibold">{s.total}</td>
+                      <td className="px-3 py-3 text-center text-emerald-600 font-semibold">{s.validated}</td>
+                      <td className="px-3 py-3 text-center text-red-600 font-semibold">{s.rejected || '—'}</td>
+                      <td className="px-3 py-3 text-center">
+                        <Badge className={cn('text-xs font-semibold border-0', conformityColor(s.conformity))}>
+                          {s.conformity !== null ? `${s.conformity}%` : 'N/D'}
+                        </Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ── Technician performance ─────────────────────────────────────────── */}
       {technicianStats.length > 0 && (

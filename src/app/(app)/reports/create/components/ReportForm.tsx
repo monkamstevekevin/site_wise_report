@@ -12,11 +12,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
-import type { AnomalyAssessment, FieldReport } from '@/ai/flows/report-anomaly-detection';
+import type { AnomalyAssessment } from '@/ai/flows/report-anomaly-detection';
+import type { FieldReport } from '@/lib/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, Sparkles, AlertTriangleIcon, Camera, Paperclip, Save, Send, X, FlaskConical } from 'lucide-react';
+import { Loader2, Sparkles, AlertTriangleIcon, Camera, Paperclip, Save, Send, X, FlaskConical, Info } from 'lucide-react';
 import Image from 'next/image';
 import { getProjects } from '@/services/projectService';
 import type { Project, MaterialType, SamplingMethod } from '@/lib/types';
@@ -125,6 +126,7 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
 
   // Test types dynamiques
   const [projectTestTypes, setProjectTestTypes] = useState<TestType[]>([]);
+  const [testTypesLoaded, setTestTypesLoaded] = useState(false);
   const [selectedTestTypeId, setSelectedTestTypeId] = useState<string>('');
   const [testData, setTestData] = useState<Record<string, string>>({});
   const selectedTestType = projectTestTypes.find((t) => t.id === selectedTestTypeId) ?? null;
@@ -156,8 +158,10 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
         if (!isEditMode && userProjects.length > 0 && !form.getValues('projectId')) {
             const firstId = userProjects[0].id;
             form.setValue('projectId', firstId);
-            // Charger les test types du premier projet
-            getTestTypesForProject(firstId).then(setProjectTestTypes).catch(() => {});
+            setTestTypesLoaded(false);
+            getTestTypesForProject(firstId)
+              .then(types => { setProjectTestTypes(types); setTestTypesLoaded(true); })
+              .catch(() => setTestTypesLoaded(true));
         } else if (!isEditMode && userProjects.length === 0) {
              form.setValue('projectId', '');
         }
@@ -188,7 +192,7 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
         supplier: reportToEdit.supplier,
         samplingMethod: reportToEdit.samplingMethod as ReportFormData['samplingMethod'],
         notes: reportToEdit.notes || '',
-        photo: undefined, 
+        photo: undefined,
         attachmentUrls: reportToEdit.attachments.join(', ') || '',
       });
       if (reportToEdit.photoDataUri) {
@@ -196,9 +200,29 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
       } else {
         setPhotoPreviewUrl(null);
       }
+      // Restaurer le type de test et les données
+      if (reportToEdit.testTypeId) {
+        setSelectedTestTypeId(reportToEdit.testTypeId);
+        if (reportToEdit.testData) {
+          const restored: Record<string, string> = {};
+          for (const [k, v] of Object.entries(reportToEdit.testData)) {
+            restored[k] = v !== null && v !== undefined ? String(v) : '';
+          }
+          setTestData(restored);
+        }
+        setTestTypesLoaded(false);
+        getTestTypesForProject(reportToEdit.projectId)
+          .then(types => { setProjectTestTypes(types); setTestTypesLoaded(true); })
+          .catch(() => setTestTypesLoaded(true));
+      } else {
+        setSelectedTestTypeId('');
+        setTestData({});
+      }
     } else if (!isEditMode) {
         form.reset(initialReportFormValues);
         setPhotoPreviewUrl(null);
+        setSelectedTestTypeId('');
+        setTestData({});
         if(photoInputRef.current) photoInputRef.current.value = '';
         if (assignedProjectsList.length > 0) {
             form.setValue('projectId', assignedProjectsList[0].id);
@@ -234,9 +258,32 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
       toast({ variant: 'destructive', title: 'Erreur d\'Authentification', description: 'Vous devez être connecté.' });
       return;
     }
+    // Validation des champs dynamiques du type de test
+    if (selectedTestType) {
+      const fieldErrors: string[] = [];
+      for (const fieldDef of selectedTestType.fields) {
+        const val = testData[fieldDef.key];
+        if (fieldDef.required && (!val || val.trim() === '')) {
+          fieldErrors.push(`"${fieldDef.label}" est requis`);
+        } else if (fieldDef.type === 'number' && val && val.trim() !== '') {
+          const num = parseFloat(val);
+          if (!isNaN(num)) {
+            if (fieldDef.min !== undefined && num < fieldDef.min)
+              fieldErrors.push(`"${fieldDef.label}" doit être ≥ ${fieldDef.min}${fieldDef.unit ? ' ' + fieldDef.unit : ''}`);
+            if (fieldDef.max !== undefined && num > fieldDef.max)
+              fieldErrors.push(`"${fieldDef.label}" doit être ≤ ${fieldDef.max}${fieldDef.unit ? ' ' + fieldDef.unit : ''}`);
+          }
+        }
+      }
+      if (fieldErrors.length > 0) {
+        toast({ variant: 'destructive', title: 'Champs de test invalides', description: fieldErrors.join('\n'), duration: 8000 });
+        return;
+      }
+    }
+
     setIsSubmittingForm(true);
     setSubmitActionType(status);
-    setCurrentAnomalyResult(null); 
+    setCurrentAnomalyResult(null);
 
     const reportPayload: ReportSubmitPayload = {
       projectId: data.projectId,
@@ -349,10 +396,12 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
                     <Select
                       onValueChange={(val) => {
                         field.onChange(val);
-                        // Recharger les types de tests du nouveau projet
                         setSelectedTestTypeId('');
                         setTestData({});
-                        getTestTypesForProject(val).then(setProjectTestTypes).catch(() => {});
+                        setTestTypesLoaded(false);
+                        getTestTypesForProject(val)
+                          .then(types => { setProjectTestTypes(types); setTestTypesLoaded(true); })
+                          .catch(() => setTestTypesLoaded(true));
                       }}
                       value={field.value || ""}
                       disabled={assignedProjectsList.length === 0 || !user || isSubmittingForm}
@@ -374,6 +423,16 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
                 )}
               />
 
+              {/* ── Feedback : aucun type de test sur ce projet ── */}
+              {form.watch('projectId') && testTypesLoaded && projectTestTypes.length === 0 && (
+                <FormItem>
+                  <p className="text-xs text-muted-foreground flex items-start gap-1.5 pt-1">
+                    <Info className="h-3.5 w-3.5 mt-0.5 shrink-0 text-blue-400" />
+                    Aucun type de test assigné à ce projet. Un administrateur peut en assigner via <strong className="mx-0.5">Panneau Admin → Types de Tests</strong>.
+                  </p>
+                </FormItem>
+              )}
+
               {/* ── Sélecteur de type de test ── */}
               {projectTestTypes.length > 0 && (
                 <FormItem>
@@ -384,7 +443,7 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
                   <Select
                     value={selectedTestTypeId}
                     onValueChange={(val) => {
-                      setSelectedTestTypeId(val);
+                      setSelectedTestTypeId(val === 'none' ? '' : val);
                       setTestData({});
                     }}
                     disabled={isSubmittingForm}
@@ -393,7 +452,7 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
                       <SelectValue placeholder="Sélectionner le type de test effectué" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">— Aucun type spécifique —</SelectItem>
+                      <SelectItem value="none">— Aucun type spécifique —</SelectItem>
                       {projectTestTypes.map((tt) => (
                         <SelectItem key={tt.id} value={tt.id}>
                           <span className="flex items-center gap-2">

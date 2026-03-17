@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import {
   Eye, Edit, Trash2, MoreVertical, FileText,
   CheckCircle, XCircle, AlertTriangle, Sparkles,
-  CalendarDays, TestTube2, Tag, Building2, Package,
+  CalendarDays, TestTube2, Tag, Building2, Package, FlaskConical,
 } from 'lucide-react';
 import { DownloadReportButton } from '@/components/pdf/DownloadReportButton';
 import {
@@ -113,6 +113,12 @@ export function ReportTable({
                         <TestTube2 className="h-3 w-3" />
                         {matCfg.label}
                       </span>
+                      {/* Test type */}
+                      {report.testTypeId && (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 ring-1 ring-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:ring-blue-800">
+                          <FlaskConical className="h-3 w-3" /> Test
+                        </span>
+                      )}
                       {/* AI anomaly */}
                       {report.aiIsAnomalous === true && (
                         <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 ring-1 ring-orange-200 dark:bg-orange-950/40 dark:text-orange-400 dark:ring-orange-800">

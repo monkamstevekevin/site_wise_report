@@ -134,6 +134,8 @@ export async function updateReport(
   if (reportData.photoDataUri !== undefined) updateData.photoUrl = reportData.photoDataUri ?? null;
   if (reportData.aiIsAnomalous !== undefined) updateData.aiIsAnomalous = reportData.aiIsAnomalous ?? null;
   if (reportData.aiAnomalyExplanation !== undefined) updateData.aiAnomalyExplanation = reportData.aiAnomalyExplanation ?? null;
+  if (reportData.testTypeId !== undefined) updateData.testTypeId = reportData.testTypeId ?? null;
+  if (reportData.testData !== undefined) updateData.testData = reportData.testData ?? null;
 
   // Nettoyer la raison de rejet si le statut n'est plus REJECTED
   if (reportData.status && reportData.status !== 'REJECTED') {

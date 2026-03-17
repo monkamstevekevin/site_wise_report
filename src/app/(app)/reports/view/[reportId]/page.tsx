@@ -23,6 +23,7 @@ import { DownloadReportButton } from '@/components/pdf/DownloadReportButton';
 import { getProjectById } from '@/services/projectService';
 import { notifyReportValidated, notifyReportRejected } from '@/actions/notifications';
 import { getTestTypeById } from '@/services/testTypeService';
+import { getUserById } from '@/services/userService';
 import type { TestType } from '@/db/schema';
 
 
@@ -78,6 +79,7 @@ export default function ViewReportPage() {
   const [isProcessingAction, setIsProcessingAction] = useState(false);
   const [projectName, setProjectName] = useState<string | undefined>();
   const [projectLocation, setProjectLocation] = useState<string | undefined>();
+  const [technicianName, setTechnicianName] = useState<string | undefined>();
   const [testType, setTestType] = useState<TestType | null>(null);
 
   useEffect(() => {
@@ -97,6 +99,10 @@ export default function ViewReportPage() {
           // Fetch project info for PDF
           getProjectById(data.projectId).then(p => {
             if (p) { setProjectName(p.name); setProjectLocation(p.location); }
+          }).catch(() => {});
+          // Fetch technician name for PDF
+          getUserById(data.technicianId).then(u => {
+            if (u) setTechnicianName(u.name);
           }).catch(() => {});
           if (data.testTypeId) {
             getTestTypeById(data.testTypeId).then(setTestType).catch(() => {});
@@ -189,6 +195,8 @@ export default function ViewReportPage() {
           report={report}
           projectName={projectName}
           projectLocation={projectLocation}
+          technicianName={technicianName}
+          testType={testType}
           variant="outline"
           size="sm"
           className="rounded-lg"
