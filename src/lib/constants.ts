@@ -63,3 +63,18 @@ export type UserRole = 'ADMIN' | 'SUPERVISOR' | 'TECHNICIAN';
 // Mock technician identity for data population
 export const MOCK_TECHNICIAN_EMAIL = 'tech@example.com';
 export const MOCK_TECHNICIAN_REPORTS_ID = 'tech001';
+
+// ─── Helper partagé role/id ───────────────────────────────────────────────────
+
+export interface MappedUserRoleAndId {
+  role: UserRole;
+  effectiveTechnicianId: string | null;
+}
+
+export function mapUserToRoleAndId(
+  appUser: { id: string; role: string } | null
+): MappedUserRoleAndId {
+  if (!appUser) return { role: 'TECHNICIAN', effectiveTechnicianId: null };
+  const role = appUser.role as UserRole;
+  return { role, effectiveTechnicianId: role === 'TECHNICIAN' ? appUser.id : null };
+}

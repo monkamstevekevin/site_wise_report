@@ -16,6 +16,11 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { UserRole } from '@/lib/constants';
+import {
+  MATERIAL_TYPE_DISPLAY,
+  MATERIAL_TYPE_FILTER_OPTIONS,
+  REPORT_STATUS_FILTER_OPTIONS,
+} from '@/lib/report-constants';
 import { getReportsSubscription, getReportsByTechnicianIdSubscription } from '@/lib/reportClientService';
 import { deleteReport as deleteReportService, updateReport } from '@/services/reportService';
 import { notifyReportValidated, notifyReportRejected } from '@/actions/notifications';
@@ -34,26 +39,10 @@ import {
 } from "@/components/ui/alert-dialog";
 
 
-const reportStatusFilterOptions: { value: FieldReport['status'] | 'ALL'; label: string }[] = [
-  { value: 'ALL', label: 'Tous les Statuts' },
-  { value: 'DRAFT', label: 'Brouillon' },
-  { value: 'SUBMITTED', label: 'Soumis' },
-  { value: 'VALIDATED', label: 'Validé' },
-  { value: 'REJECTED', label: 'Rejeté' },
-];
-
-const materialTypeFilterOptions: { value: FieldReport['materialType'] | 'ALL'; label: string }[] = [
-  { value: 'ALL', label: 'Tous les Types de Matériaux' },
-  { value: 'cement', label: 'Ciment' },
-  { value: 'asphalt', label: 'Asphalte' },
-  { value: 'gravel', label: 'Gravier' },
-  { value: 'sand', label: 'Sable' },
-  { value: 'other', label: 'Autre' },
-];
-
-const materialTypeDisplay: Record<string, string> = {
-  cement: 'Ciment', asphalt: 'Asphalte', gravel: 'Gravier', sand: 'Sable', other: 'Autre',
-};
+// Constantes centralisées depuis @/lib/report-constants
+const reportStatusFilterOptions = REPORT_STATUS_FILTER_OPTIONS;
+const materialTypeFilterOptions = MATERIAL_TYPE_FILTER_OPTIONS;
+const materialTypeDisplay = MATERIAL_TYPE_DISPLAY;
 
 function exportReportsToCSV(reports: FieldReport[]) {
   const headers = [

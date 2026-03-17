@@ -3,12 +3,57 @@
 import { db } from '@/db';
 import { reports, reportAttachments } from '@/db/schema';
 import type { NewReport } from '@/db/schema';
-import { eq, desc, and } from 'drizzle-orm';
+import { eq, desc, and, inArray } from 'drizzle-orm';
 import type { FieldReport } from '@/lib/types';
 import { addNotification } from './notificationService';
 import { requireRole } from '@/lib/auth/serverAuth';
 import { getTestTypeById } from './testTypeService';
 import { encryptField, decryptField, encryptJson, decryptJson } from '@/lib/crypto';
+
+// ─── Type narrowing helpers ───────────────────────────────────────────────────
+
+const VALID_MATERIAL_TYPES = ['cement', 'asphalt', 'gravel', 'sand', 'other'] as const;
+type ValidMaterialType = typeof VALID_MATERIAL_TYPES[number];
+
+function assertMaterialType(value: string): asserts value is ValidMaterialType {
+  if (!(VALID_MATERIAL_TYPES as readonly string[]).includes(value)) {
+    throw new Error(
+      `Type de matériau invalide : "${value}". Valeurs acceptées : ${VALID_MATERIAL_TYPES.join(', ')}.`
+    );
+  }
+}
+
+const VALID_SAMPLING_METHODS = ['grab', 'composite', 'core', 'other'] as const;
+type ValidSamplingMethod = typeof VALID_SAMPLING_METHODS[number];
+
+function assertSamplingMethod(value: string): asserts value is ValidSamplingMethod {
+  if (!(VALID_SAMPLING_METHODS as readonly string[]).includes(value)) {
+    throw new Error(
+      `Méthode d'échantillonnage invalide : "${value}". Valeurs acceptées : ${VALID_SAMPLING_METHODS.join(', ')}.`
+    );
+  }
+}
+
+// ─── Batch fetch des pièces jointes ──────────────────────────────────────────
+
+async function fetchAttachmentsByReportIds(
+  reportIds: string[]
+): Promise<Map<string, string[]>> {
+  if (reportIds.length === 0) return new Map();
+
+  const rows = await db
+    .select({ reportId: reportAttachments.reportId, fileUrl: reportAttachments.fileUrl })
+    .from(reportAttachments)
+    .where(inArray(reportAttachments.reportId, reportIds));
+
+  const map = new Map<string, string[]>();
+  for (const row of rows) {
+    const existing = map.get(row.reportId) ?? [];
+    existing.push(row.fileUrl);
+    map.set(row.reportId, existing);
+  }
+  return map;
+}
 
 // ─── Validation des données de test ──────────────────────────────────────────
 
@@ -75,12 +120,10 @@ function sanitizeAttachmentUrls(urls: string[]): string[] {
 
 // ─── Mapper DB → type applicatif ─────────────────────────────────────────────
 
-async function mapToFieldReport(row: typeof reports.$inferSelect): Promise<FieldReport> {
-  const attachmentRows = await db
-    .select({ fileUrl: reportAttachments.fileUrl })
-    .from(reportAttachments)
-    .where(eq(reportAttachments.reportId, row.id));
-
+function mapToFieldReport(
+  row: typeof reports.$inferSelect,
+  attachmentsMap: Map<string, string[]>
+): FieldReport {
   return {
     id: row.id,
     projectId: row.projectId,
@@ -95,7 +138,7 @@ async function mapToFieldReport(row: typeof reports.$inferSelect): Promise<Field
     samplingMethod: row.samplingMethod,
     notes: decryptField(row.notes) ?? undefined,
     status: row.status,
-    attachments: attachmentRows.map((a) => a.fileUrl),
+    attachments: attachmentsMap.get(row.id) ?? [],
     photoDataUri: row.photoUrl ?? undefined,
     rejectionReason: decryptField(row.rejectionReason) ?? undefined,
     aiIsAnomalous: row.aiIsAnomalous ?? undefined,
@@ -116,7 +159,8 @@ export async function getReports(orgId?: string | null): Promise<FieldReport[]> 
     .from(reports)
     .where(eq(reports.organizationId, orgId))
     .orderBy(desc(reports.createdAt));
-  return Promise.all(rows.map(mapToFieldReport));
+  const attachmentsMap = await fetchAttachmentsByReportIds(rows.map((r) => r.id));
+  return rows.map((row) => mapToFieldReport(row, attachmentsMap));
 }
 
 export async function getReportsByTechnicianId(technicianId: string): Promise<FieldReport[]> {
@@ -126,7 +170,8 @@ export async function getReportsByTechnicianId(technicianId: string): Promise<Fi
     .from(reports)
     .where(eq(reports.technicianId, technicianId))
     .orderBy(desc(reports.createdAt));
-  return Promise.all(rows.map(mapToFieldReport));
+  const attachmentsMap = await fetchAttachmentsByReportIds(rows.map((r) => r.id));
+  return rows.map((row) => mapToFieldReport(row, attachmentsMap));
 }
 
 export async function getReportById(reportId: string, orgId?: string | null): Promise<FieldReport | null> {
@@ -134,7 +179,9 @@ export async function getReportById(reportId: string, orgId?: string | null): Pr
     ? and(eq(reports.id, reportId), eq(reports.organizationId, orgId))
     : eq(reports.id, reportId);
   const rows = await db.select().from(reports).where(condition).limit(1);
-  return rows.length > 0 ? mapToFieldReport(rows[0]) : null;
+  if (rows.length === 0) return null;
+  const attachmentsMap = await fetchAttachmentsByReportIds([rows[0].id]);
+  return mapToFieldReport(rows[0], attachmentsMap);
 }
 
 export async function addReport(
@@ -147,17 +194,21 @@ export async function addReport(
   // Validation serveur des données de test structurées
   await validateTestData(reportData.testTypeId, reportData.testData);
 
+  // Valider les enums avant construction — évite les casts silencieux
+  assertMaterialType(reportData.materialType);
+  assertSamplingMethod(reportData.samplingMethod);
+
   const newReport: NewReport = {
     projectId: reportData.projectId,
     technicianId: reportData.technicianId,
-    materialType: reportData.materialType as NewReport['materialType'],
+    materialType: reportData.materialType,
     temperature: reportData.temperature.toString(),
     volume: reportData.volume.toString(),
     density: reportData.density.toString(),
     humidity: reportData.humidity.toString(),
     batchNumber: reportData.batchNumber,
     supplier: reportData.supplier,
-    samplingMethod: reportData.samplingMethod as NewReport['samplingMethod'],
+    samplingMethod: reportData.samplingMethod,
     notes: encryptField(reportData.notes ?? null),
     status: reportData.status as NewReport['status'],
     photoUrl: reportData.photoDataUri ?? null,
@@ -222,7 +273,10 @@ export async function updateReport(
   if (reportData.humidity !== undefined) updateData.humidity = reportData.humidity.toString();
   if (reportData.batchNumber !== undefined) updateData.batchNumber = reportData.batchNumber;
   if (reportData.supplier !== undefined) updateData.supplier = reportData.supplier;
-  if (reportData.samplingMethod !== undefined) updateData.samplingMethod = reportData.samplingMethod as typeof updateData.samplingMethod;
+  if (reportData.samplingMethod !== undefined) {
+    assertSamplingMethod(reportData.samplingMethod);
+    updateData.samplingMethod = reportData.samplingMethod;
+  }
   if (reportData.photoDataUri !== undefined) updateData.photoUrl = reportData.photoDataUri ?? null;
   if (reportData.aiIsAnomalous !== undefined) updateData.aiIsAnomalous = reportData.aiIsAnomalous ?? null;
   if (reportData.aiAnomalyExplanation !== undefined) updateData.aiAnomalyExplanation = encryptField(reportData.aiAnomalyExplanation ?? null);

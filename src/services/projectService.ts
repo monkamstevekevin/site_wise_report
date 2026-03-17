@@ -103,17 +103,17 @@ export async function updateProject(
       ...(projectData.location && { location: projectData.location }),
       ...(projectData.description !== undefined && { description: projectData.description ?? null }),
       ...(projectData.status && { status: projectData.status }),
-      ...(Object.prototype.hasOwnProperty.call(projectData, 'startDate') && {
+      ...(Object.hasOwn(projectData, 'startDate') && {
         startDate: projectData.startDate ? new Date(projectData.startDate as string) : null,
       }),
-      ...(Object.prototype.hasOwnProperty.call(projectData, 'endDate') && {
+      ...(Object.hasOwn(projectData, 'endDate') && {
         endDate: projectData.endDate ? new Date(projectData.endDate as string) : null,
       }),
       updatedAt: new Date(),
     })
     .where(eq(projects.id, projectId));
 
-  if (Object.prototype.hasOwnProperty.call(projectData, 'assignedMaterialIds')) {
+  if (Object.hasOwn(projectData, 'assignedMaterialIds')) {
     await db.delete(projectMaterials).where(eq(projectMaterials.projectId, projectId));
 
     if (projectData.assignedMaterialIds && projectData.assignedMaterialIds.length > 0) {

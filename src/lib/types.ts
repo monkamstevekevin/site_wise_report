@@ -80,6 +80,20 @@ export type NewNotificationPayload = Omit<Notification, 'id' | 'createdAt' | 'is
 
 export type SamplingMethod = 'grab' | 'composite' | 'core' | 'other';
 
+// ─── Result<T> — type de retour unifié pour les server actions ────────────────
+
+export type Result<T = void> =
+  | { success: true; data: T }
+  | { success: false; error: string };
+
+export const ok = <T>(data: T): Result<T> => ({ success: true, data });
+export const okVoid = (): Result<void> => ({ success: true, data: undefined });
+export const err = (error: string): Result<never> => ({ success: false, error });
+
+export function isOk<T>(result: Result<T>): result is { success: true; data: T } {
+  return result.success === true;
+}
+
 export interface ChatMessage {
   id: string; // Firestore document ID
   projectId: string;
