@@ -22,6 +22,8 @@ export const projectStatusEnum = pgEnum('project_status', ['ACTIVE', 'INACTIVE',
 
 export const assignmentTypeEnum = pgEnum('assignment_type', ['FULL_TIME', 'PART_TIME']);
 
+export const projectTypeEnum = pgEnum('project_type', ['VISITS', 'HOURS', 'OPEN']);
+
 export const materialTypeEnum = pgEnum('material_type', [
   'cement',
   'asphalt',
@@ -112,6 +114,9 @@ export const projects = pgTable('projects', {
   location: text('location').notNull(),
   description: text('description'),
   status: projectStatusEnum('status').notNull().default('ACTIVE'),
+  projectType: projectTypeEnum('project_type').notNull().default('OPEN'),
+  targetVisits: numeric('target_visits', { precision: 6, scale: 0 }),
+  targetHours: numeric('target_hours', { precision: 8, scale: 2 }),
   startDate: timestamp('start_date', { withTimezone: true }),
   endDate: timestamp('end_date', { withTimezone: true }),
   organizationId: uuid('organization_id').references(() => organizations.id, { onDelete: 'cascade' }),
