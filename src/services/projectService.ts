@@ -6,6 +6,7 @@ import { eq, desc } from 'drizzle-orm';
 import type { Project } from '@/lib/types';
 import type { ProjectFormData } from '@/app/(app)/admin/projects/components/ProjectFormDialog';
 import { requireRole } from '@/lib/auth/serverAuth';
+import type { ProjectType } from '@/lib/types';
 
 export type ProjectSubmitData = Omit<ProjectFormData, 'assignedMaterialTypes'> & {
   assignedMaterialIds?: string[];
@@ -25,6 +26,9 @@ async function mapToProject(
     location: row.location,
     description: row.description ?? undefined,
     status: row.status,
+    projectType: (row.projectType as ProjectType) ?? 'OPEN',
+    targetVisits: row.targetVisits !== null ? Number(row.targetVisits) : null,
+    targetHours: row.targetHours !== null ? Number(row.targetHours) : null,
     startDate: row.startDate?.toISOString() ?? undefined,
     endDate: row.endDate?.toISOString() ?? undefined,
     assignedMaterialIds: materialIds ?? [],
@@ -73,6 +77,9 @@ export async function addProject(projectData: ProjectSubmitData, orgId?: string 
       location: projectData.location,
       description: projectData.description ?? null,
       status: projectData.status,
+      projectType: projectData.projectType ?? 'OPEN',
+      targetVisits: projectData.targetVisits != null ? String(projectData.targetVisits) : null,
+      targetHours: projectData.targetHours != null ? String(projectData.targetHours) : null,
       startDate: projectData.startDate ? new Date(projectData.startDate) : null,
       endDate: projectData.endDate ? new Date(projectData.endDate) : null,
       organizationId: orgId ?? null,
@@ -103,6 +110,13 @@ export async function updateProject(
       ...(projectData.location && { location: projectData.location }),
       ...(projectData.description !== undefined && { description: projectData.description ?? null }),
       ...(projectData.status && { status: projectData.status }),
+      ...(projectData.projectType && { projectType: projectData.projectType }),
+      ...(Object.hasOwn(projectData, 'targetVisits') && {
+        targetVisits: projectData.targetVisits != null ? String(projectData.targetVisits) : null,
+      }),
+      ...(Object.hasOwn(projectData, 'targetHours') && {
+        targetHours: projectData.targetHours != null ? String(projectData.targetHours) : null,
+      }),
       ...(Object.hasOwn(projectData, 'startDate') && {
         startDate: projectData.startDate ? new Date(projectData.startDate as string) : null,
       }),

@@ -7,7 +7,7 @@ import { PageTitle } from '@/components/common/PageTitle';
 import {
   HardHat, ArrowLeft, Loader2, AlertTriangleIcon, FileText,
   CheckCircle, XCircle, Clock, MapPin, CalendarDays,
-  MessageSquare, BarChart3, AlertTriangle, ShieldCheck,
+  MessageSquare, BarChart3, AlertTriangle, ShieldCheck, Target,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
@@ -79,6 +79,7 @@ export default function ProjectStatsPage() {
 
   const [project, setProject] = useState<Project | null>(null);
   const [reports, setReports] = useState<FieldReport[]>([]);
+  const [totalHours, setTotalHours] = useState<number>(0);
   const [loadingProject, setLoadingProject] = useState(true);
   const [loadingReports, setLoadingReports] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -99,6 +100,18 @@ export default function ProjectStatsPage() {
     );
     return unsub;
   }, [projectId]);
+
+  // Fetch total hours for HOURS-type projects
+  useEffect(() => {
+    if (!project || project.projectType !== 'HOURS') return;
+    fetch(`/api/time-entries?projectId=${projectId}`)
+      .then((res) => res.json())
+      .then((entries: { durationMinutes: string | number }[]) => {
+        const totalMinutes = entries.reduce((acc, e) => acc + Number(e.durationMinutes), 0);
+        setTotalHours(Math.round((totalMinutes / 60) * 10) / 10);
+      })
+      .catch(() => setTotalHours(0));
+  }, [project, projectId]);
 
   // ── stats ──────────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
@@ -194,6 +207,65 @@ export default function ProjectStatsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* ── Progression du projet ───────────────────────────────────────────── */}
+      {project.projectType !== 'OPEN' && (
+        <Card className="mb-6 shadow-sm">
+          <CardContent className="pt-5 pb-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Target className="h-4 w-4 text-primary" />
+              <span className="text-sm font-medium text-foreground">Progression du projet</span>
+            </div>
+            {project.projectType === 'VISITS' && (() => {
+              const current = stats.validated;
+              const target = project.targetVisits ?? 0;
+              const pct = target > 0 ? Math.min(100, Math.round((current / target) * 100)) : 0;
+              return (
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-sm text-muted-foreground">
+                    <span>{current} / {target} visites validées</span>
+                    <span className="font-medium text-foreground">{pct}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-blue-600 h-2 rounded-full transition-all"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })()}
+            {project.projectType === 'HOURS' && (() => {
+              const target = project.targetHours ?? 0;
+              const pct = target > 0 ? Math.min(100, Math.round((totalHours / target) * 100)) : 0;
+              return (
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-sm text-muted-foreground">
+                    <span>{totalHours} / {target} heures</span>
+                    <span className="font-medium text-foreground">{pct}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-blue-600 h-2 rounded-full transition-all"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })()}
+          </CardContent>
+        </Card>
+      )}
+      {project.projectType === 'OPEN' && (
+        <Card className="mb-6 shadow-sm">
+          <CardContent className="pt-5 pb-4">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <FileText className="h-4 w-4 text-primary" />
+              <span>{stats.total} rapport(s) au total — projet sans cible fixée</span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ── KPIs ───────────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">

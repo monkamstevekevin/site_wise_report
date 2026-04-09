@@ -32,15 +32,20 @@ export interface User {
 
 export type MaterialType = 'cement' | 'asphalt' | 'gravel' | 'sand' | 'other';
 
+export type ProjectType = 'VISITS' | 'HOURS' | 'OPEN';
+
 export interface Project {
   id: string;
   name: string;
   location: string;
   description?: string;
   status: 'ACTIVE' | 'INACTIVE' | 'COMPLETED';
+  projectType: ProjectType;
+  targetVisits?: number | null;
+  targetHours?: number | null;
   startDate?: string; // ISO string date
   endDate?: string;   // ISO string date
-  assignedMaterialIds?: string[]; 
+  assignedMaterialIds?: string[];
   createdAt: string;
   updatedAt: string;
 }

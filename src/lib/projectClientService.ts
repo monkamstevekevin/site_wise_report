@@ -10,6 +10,9 @@ type ProjectRow = {
   location: string;
   description: string | null;
   status: string;
+  project_type: string | null;
+  target_visits: string | null;
+  target_hours: string | null;
   start_date: string | null;
   end_date: string | null;
   created_at: string;
@@ -24,6 +27,9 @@ function mapRowToProject(row: ProjectRow): Project {
     location: row.location,
     description: row.description ?? undefined,
     status: row.status as Project['status'],
+    projectType: (row.project_type as Project['projectType']) ?? 'OPEN',
+    targetVisits: row.target_visits !== null ? Number(row.target_visits) : null,
+    targetHours: row.target_hours !== null ? Number(row.target_hours) : null,
     startDate: row.start_date ?? undefined,
     endDate: row.end_date ?? undefined,
     assignedMaterialIds: row.project_materials.map((pm) => pm.material_id),

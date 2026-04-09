@@ -37,6 +37,9 @@ const projectFormSchema = z.object({
   status: z.enum(['ACTIVE', 'INACTIVE', 'COMPLETED'], {
     required_error: 'Le statut du projet est requis.',
   }),
+  projectType: z.enum(['OPEN', 'VISITS', 'HOURS']).default('OPEN'),
+  targetVisits: z.coerce.number().int().min(1).optional().nullable(),
+  targetHours: z.coerce.number().min(0.5).optional().nullable(),
   startDate: z.date().optional(),
   endDate: z.date().optional(),
   assignedMaterialIds: z.array(z.string()).optional().default([]),
@@ -67,36 +70,50 @@ const projectStatusOptions: { value: Project['status']; label: string }[] = [
   { value: 'COMPLETED', label: 'Terminé' },
 ];
 
+const projectTypeOptions: { value: 'OPEN' | 'VISITS' | 'HOURS'; label: string }[] = [
+  { value: 'OPEN', label: 'Libre (sans cible)' },
+  { value: 'VISITS', label: 'Par nombre de visites' },
+  { value: 'HOURS', label: "Par nombre d'heures" },
+];
+
 
 export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange, onFormSubmit, allMaterials }: ProjectFormDialogProps) {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const form = useForm<ProjectFormData>({
     resolver: zodResolver(projectFormSchema),
-    defaultValues: { 
+    defaultValues: {
       name: '',
       location: '',
       description: '',
       status: 'ACTIVE',
+      projectType: 'OPEN',
+      targetVisits: null,
+      targetHours: null,
       startDate: undefined,
       endDate: undefined,
       assignedMaterialIds: [],
     }
   });
 
+  const watchedProjectType = form.watch('projectType');
+
   React.useEffect(() => {
-    if (open) { 
+    if (open) {
       if (projectToEdit) {
         form.reset({
           name: projectToEdit.name || '',
           location: projectToEdit.location || '',
           description: projectToEdit.description || '',
           status: projectToEdit.status || 'ACTIVE',
+          projectType: projectToEdit.projectType || 'OPEN',
+          targetVisits: projectToEdit.targetVisits ?? null,
+          targetHours: projectToEdit.targetHours ?? null,
           startDate: projectToEdit.startDate ? parseISO(projectToEdit.startDate) : undefined,
           endDate: projectToEdit.endDate ? parseISO(projectToEdit.endDate) : undefined,
           assignedMaterialIds: projectToEdit.assignedMaterialIds || [],
         });
       } else {
-        form.reset({ name: '', location: '', description: '', status: 'ACTIVE', startDate: undefined, endDate: undefined, assignedMaterialIds: [] });
+        form.reset({ name: '', location: '', description: '', status: 'ACTIVE', projectType: 'OPEN', targetVisits: null, targetHours: null, startDate: undefined, endDate: undefined, assignedMaterialIds: [] });
       }
     }
   }, [projectToEdit, form, open]);
@@ -116,10 +133,13 @@ export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange,
             location: projectToEdit.location,
             description: projectToEdit.description,
             status: projectToEdit.status,
+            projectType: projectToEdit.projectType || 'OPEN',
+            targetVisits: projectToEdit.targetVisits ?? null,
+            targetHours: projectToEdit.targetHours ?? null,
             startDate: projectToEdit.startDate ? parseISO(projectToEdit.startDate) : undefined,
             endDate: projectToEdit.endDate ? parseISO(projectToEdit.endDate) : undefined,
             assignedMaterialIds: projectToEdit.assignedMaterialIds || [],
-        } : { name: '', location: '', description: '', status: 'ACTIVE', startDate: undefined, endDate: undefined, assignedMaterialIds: [] });
+        } : { name: '', location: '', description: '', status: 'ACTIVE', projectType: 'OPEN', targetVisits: null, targetHours: null, startDate: undefined, endDate: undefined, assignedMaterialIds: [] });
       }
     }}>
       <DialogTrigger asChild>{children}</DialogTrigger>
@@ -343,6 +363,73 @@ export function ProjectFormDialog({ children, projectToEdit, open, onOpenChange,
                 </FormItem>
               )}
             />
+            <FormField
+              control={form.control}
+              name="projectType"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Type de projet</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value || 'OPEN'} defaultValue={field.value || 'OPEN'}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sélectionner le type de projet" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {projectTypeOptions.map(option => (
+                        <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            {watchedProjectType === 'VISITS' && (
+              <FormField
+                control={form.control}
+                name="targetVisits"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nombre de visites prévu</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min={1}
+                        placeholder="Ex: 20"
+                        {...field}
+                        value={field.value ?? ''}
+                        onChange={(e) => field.onChange(e.target.value === '' ? null : Number(e.target.value))}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+            {watchedProjectType === 'HOURS' && (
+              <FormField
+                control={form.control}
+                name="targetHours"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nombre d&apos;heures prévu</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min={0.5}
+                        step={0.5}
+                        placeholder="Ex: 100"
+                        {...field}
+                        value={field.value ?? ''}
+                        onChange={(e) => field.onChange(e.target.value === '' ? null : Number(e.target.value))}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
             <DialogFooter>
               <DialogClose asChild>
                 <Button type="button" variant="outline" disabled={isSubmitting}>
