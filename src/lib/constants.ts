@@ -27,6 +27,7 @@ export const ALL_NAV_ITEMS: NavItem[] = [
       { href: '/admin/projects', label: 'Gestion Projets', icon: HardHat, roles: ['ADMIN'] },
       { href: '/admin/materials', label: 'Gestion Matériaux', icon: TestTube2, roles: ['ADMIN'] },
       { href: '/admin/test-types', label: 'Types de Tests', icon: FlaskConical, roles: ['ADMIN'] },
+      { href: '/admin/technicians', label: 'Techniciens', icon: HardHat, roles: ['ADMIN'] },
     ]
   },
   { href: '/settings', label: 'Paramètres', icon: Settings2, roles: ['ADMIN'] },
