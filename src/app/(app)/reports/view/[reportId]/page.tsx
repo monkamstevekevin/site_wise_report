@@ -25,6 +25,7 @@ import { notifyReportValidated, notifyReportRejected } from '@/actions/notificat
 import { getTestTypeById } from '@/services/testTypeService';
 import { getUserById } from '@/services/userService';
 import type { TestType } from '@/db/schema';
+import { TimeEntryForm } from './components/TimeEntryForm';
 
 
 const reportStatusBadgeVariant: Record<FieldReport['status'], "default" | "secondary" | "outline" | "destructive"> = {
@@ -413,6 +414,17 @@ export default function ViewReportPage() {
             </Card>
         )}
       </div>
+
+      {report && (
+        <div className="mt-6">
+          <TimeEntryForm
+            projectId={report.projectId}
+            reportId={report.id}
+            onSaved={fetchReportData}
+          />
+        </div>
+      )}
+
       <RejectionReasonDialog
         open={isRejectionDialogOpen}
         onOpenChange={setIsRejectionDialogOpen}
