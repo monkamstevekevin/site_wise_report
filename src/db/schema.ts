@@ -290,6 +290,39 @@ export const reportAttachments = pgTable(
 );
 
 /**
+ * time_entries — suivi du temps par technicien et par projet
+ */
+export const timeEntries = pgTable(
+  'time_entries',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    reportId: uuid('report_id')
+      .references(() => reports.id, { onDelete: 'set null' }),
+    date: timestamp('date', { withTimezone: true }).notNull(),
+    durationMinutes: numeric('duration_minutes', { precision: 8, scale: 2 }).notNull(),
+    notes: text('notes'),
+    organizationId: uuid('organization_id').references(() => organizations.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('te_user_id_idx').on(table.userId),
+    index('te_project_id_idx').on(table.projectId),
+    index('te_date_idx').on(table.date),
+    index('te_org_id_idx').on(table.organizationId),
+  ]
+);
+
+export type TimeEntry = typeof timeEntries.$inferSelect;
+export type NewTimeEntry = typeof timeEntries.$inferInsert;
+
+/**
  * chat_messages — messages de chat par projet
  */
 export const chatMessages = pgTable(
