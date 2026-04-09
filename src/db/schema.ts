@@ -69,6 +69,11 @@ export const notificationTypeEnum = pgEnum('notification_type', [
   'system_update',
   'generic',
   'project_assigned_admin_confirm',
+  'project_overdue',
+  'project_behind_visits',
+  'project_behind_hours',
+  'technician_inactive',
+  'report_pending_too_long',
 ]);
 
 // ─── Tables ──────────────────────────────────────────────────────────────────
