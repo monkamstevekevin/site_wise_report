@@ -91,6 +91,7 @@ export const organizations = pgTable('organizations', {
   stripeSubscriptionId: text('stripe_subscription_id').unique(),
   trialEndsAt: timestamp('trial_ends_at', { withTimezone: true }),
   inviteToken: text('invite_token').unique(),
+  logoUrl: text('logo_url'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });

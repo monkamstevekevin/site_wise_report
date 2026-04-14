@@ -9,7 +9,9 @@ import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { getReportById, updateReport } from '@/services/reportService';
+import { getOrganizationById } from '@/services/organizationService';
 import type { FieldReport, UserRole } from '@/lib/types';
+import Image from 'next/image';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -82,6 +84,8 @@ export default function ViewReportPage() {
   const [projectLocation, setProjectLocation] = useState<string | undefined>();
   const [technicianName, setTechnicianName] = useState<string | undefined>();
   const [testType, setTestType] = useState<TestType | null>(null);
+  const [orgLogoUrl, setOrgLogoUrl] = useState<string | null>(null);
+  const [orgName, setOrgName] = useState<string | undefined>();
 
   useEffect(() => {
     if (user) {
@@ -107,6 +111,13 @@ export default function ViewReportPage() {
           }).catch(() => {});
           if (data.testTypeId) {
             getTestTypeById(data.testTypeId).then(setTestType).catch(() => {});
+          }
+          // Fetch org logo
+          if (user.organizationId) {
+            getOrganizationById(user.organizationId).then(org => {
+              setOrgLogoUrl((org as { logoUrl?: string | null })?.logoUrl ?? null);
+              setOrgName(org?.name);
+            }).catch(() => {});
           }
         } else {
           setErrorLoadingReport(`Rapport avec ID ${reportId} non trouvé.`);
@@ -247,12 +258,25 @@ export default function ViewReportPage() {
 
   return (
     <>
-      <PageTitle 
+      <PageTitle
         title={`Détails du Rapport: ${report.id.substring(0,8)}...`}
         icon={FileText}
         subtitle={`Projet ID: ${report.projectId}`}
         actions={pageActions}
       />
+
+      {/* Logo de l'organisation */}
+      <div className="flex items-center gap-3 mb-4 p-3 bg-white border rounded-lg shadow-sm w-fit">
+        {orgLogoUrl ? (
+          <Image src={orgLogoUrl} alt="Logo organisation" width={48} height={48} className="object-contain h-12 w-12" />
+        ) : (
+          <div className="h-12 w-12 rounded bg-blue-600 flex items-center justify-center text-white font-bold text-lg">S</div>
+        )}
+        <div>
+          <p className="font-semibold text-sm text-gray-900">{orgName ?? 'SiteWise Reports'}</p>
+          <p className="text-xs text-gray-400">Rapport d&apos;inspection</p>
+        </div>
+      </div>
 
       {report.status === 'REJECTED' && report.rejectionReason && (
         <Alert variant="destructive" className="mb-6">

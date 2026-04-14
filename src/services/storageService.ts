@@ -70,6 +70,37 @@ export async function deleteProfileImage(imageUrl: string | null | undefined): P
   await supabaseAdmin.storage.from('avatars').remove([path]);
 }
 
+// ─── Logos d'organisation ────────────────────────────────────────────────────
+
+/**
+ * Upload un logo d'organisation dans le bucket `avatars` (dossier org-logos/).
+ */
+export async function uploadOrgLogo(
+  orgId: string,
+  imageDataURI: string,
+  oldLogoUrl?: string | null
+): Promise<string> {
+  if (!orgId) throw new Error('Organization ID is required.');
+  if (!imageDataURI.startsWith('data:image')) throw new Error('Invalid image data URI.');
+
+  if (oldLogoUrl) {
+    const oldPath = extractStoragePath(oldLogoUrl, 'avatars');
+    if (oldPath) await supabaseAdmin.storage.from('avatars').remove([oldPath]);
+  }
+
+  const { blob, mimeType, extension } = dataURIToBlob(imageDataURI);
+  const path = `org-logos/${orgId}/logo_${uuidv4()}.${extension}`;
+
+  const { error } = await supabaseAdmin.storage
+    .from('avatars')
+    .upload(path, blob, { contentType: mimeType, upsert: true });
+
+  if (error) throw new Error(`Échec de l'upload du logo : ${error.message}`);
+
+  const { data } = supabaseAdmin.storage.from('avatars').getPublicUrl(path);
+  return data.publicUrl;
+}
+
 // ─── Pièces jointes de rapports ───────────────────────────────────────────────
 
 /**
