@@ -20,6 +20,11 @@ export function TimeEntryForm({ projectId, reportId, onSaved }: Props) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const parsedHours = parseFloat(hours);
+    if (!Number.isFinite(parsedHours) || parsedHours <= 0) {
+      toast({ variant: 'destructive', title: 'Erreur', description: "Veuillez entrer un nombre d'heures valide." });
+      return;
+    }
     setSaving(true);
     try {
       const res = await fetch('/api/time-entries', {
@@ -29,7 +34,7 @@ export function TimeEntryForm({ projectId, reportId, onSaved }: Props) {
           projectId,
           reportId,
           date: new Date().toISOString(),
-          durationMinutes: Math.round(parseFloat(hours) * 60),
+          durationMinutes: Math.round(parsedHours * 60),
           notes: notes || undefined,
         }),
       });

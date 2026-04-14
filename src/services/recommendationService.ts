@@ -1,6 +1,6 @@
 import { db } from '@/db';
 import { projects, reports, users, userAssignments, timeEntries } from '@/db/schema';
-import { eq, and, lt, gte, count, sum, ne } from 'drizzle-orm';
+import { eq, and, lt, gte, count, sum, ne, inArray } from 'drizzle-orm';
 
 export type RecommendationPriority = 'HIGH' | 'MEDIUM' | 'LOW';
 
@@ -33,6 +33,42 @@ export async function getAdminRecommendations(orgId: string): Promise<AdminRecom
     .from(projects)
     .where(and(eq(projects.organizationId, orgId), eq(projects.status, 'ACTIVE')));
 
+  if (activeProjects.length === 0) {
+    return [];
+  }
+
+  const allProjectIds = activeProjects.map(p => p.id);
+
+  // Batch: validated report counts per project
+  const validatedCounts = await db
+    .select({ projectId: reports.projectId, c: count() })
+    .from(reports)
+    .where(and(
+      inArray(reports.projectId, allProjectIds),
+      eq(reports.status, 'VALIDATED')
+    ))
+    .groupBy(reports.projectId);
+  const validatedByProject = new Map(validatedCounts.map(r => [r.projectId, Number(r.c)]));
+
+  // Batch: logged hours per project (from time entries)
+  const hoursSums = await db
+    .select({ projectId: timeEntries.projectId, total: sum(timeEntries.durationMinutes) })
+    .from(timeEntries)
+    .where(and(
+      inArray(timeEntries.projectId, allProjectIds),
+      eq(timeEntries.organizationId, orgId)
+    ))
+    .groupBy(timeEntries.projectId);
+  const hoursByProject = new Map(hoursSums.map(r => [r.projectId, Number(r.total ?? 0) / 60]));
+
+  // Batch: assignment counts per project
+  const assignmentCounts = await db
+    .select({ projectId: userAssignments.projectId, c: count() })
+    .from(userAssignments)
+    .where(inArray(userAssignments.projectId, allProjectIds))
+    .groupBy(userAssignments.projectId);
+  const assignmentsByProject = new Map(assignmentCounts.map(r => [r.projectId, Number(r.c)]));
+
   for (const project of activeProjects) {
     const daysUntilEnd = project.endDate
       ? Math.ceil((new Date(project.endDate).getTime() - now.getTime()) / 86400000)
@@ -55,14 +91,7 @@ export async function getAdminRecommendations(orgId: string): Promise<AdminRecom
     // Projet type VISITS — vérifier les visites manquantes
     if (project.projectType === 'VISITS' && project.targetVisits) {
       const target = Number(project.targetVisits);
-      const [validatedCount] = await db
-        .select({ c: count() })
-        .from(reports)
-        .where(and(
-          eq(reports.projectId, project.id),
-          eq(reports.status, 'VALIDATED')
-        ));
-      const done = Number(validatedCount?.c ?? 0);
+      const done = validatedByProject.get(project.id) ?? 0;
       const remaining = target - done;
 
       if (remaining === 1) {
@@ -91,11 +120,7 @@ export async function getAdminRecommendations(orgId: string): Promise<AdminRecom
     // Projet type HOURS — vérifier les heures manquantes
     if (project.projectType === 'HOURS' && project.targetHours) {
       const target = Number(project.targetHours);
-      const [hoursResult] = await db
-        .select({ total: sum(timeEntries.durationMinutes) })
-        .from(timeEntries)
-        .where(eq(timeEntries.projectId, project.id));
-      const loggedHours = Number(hoursResult?.total ?? 0) / 60;
+      const loggedHours = hoursByProject.get(project.id) ?? 0;
       const remaining = target - loggedHours;
 
       if (remaining > 0 && daysUntilEnd !== null && daysUntilEnd <= 7 && daysUntilEnd > 0) {
@@ -112,11 +137,7 @@ export async function getAdminRecommendations(orgId: string): Promise<AdminRecom
     }
 
     // Projet sans technicien assigné
-    const [assignmentCount] = await db
-      .select({ c: count() })
-      .from(userAssignments)
-      .where(eq(userAssignments.projectId, project.id));
-    if (Number(assignmentCount?.c ?? 0) === 0) {
+    if ((assignmentsByProject.get(project.id) ?? 0) === 0) {
       recommendations.push({
         id: `unassigned-${project.id}`,
         type: 'unassigned_project',
@@ -131,6 +152,8 @@ export async function getAdminRecommendations(orgId: string): Promise<AdminRecom
 
   // ── 2. Techniciens inactifs (7+ jours) ───────────────────────────────────
   const cutoff7days = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const activeProjectIds = new Set(activeProjects.map(p => p.id));
+
   const activeAssignments = await db
     .select({
       userId: userAssignments.userId,
@@ -141,22 +164,22 @@ export async function getAdminRecommendations(orgId: string): Promise<AdminRecom
     .leftJoin(users, eq(userAssignments.userId, users.id))
     .where(eq(userAssignments.organizationId, orgId));
 
-  // Filtrer uniquement les assignements sur projets actifs
-  const activeProjectIds = new Set(activeProjects.map(p => p.id));
+  const assignmentsOnActive = activeAssignments.filter(a => activeProjectIds.has(a.projectId));
 
-  for (const assignment of activeAssignments) {
-    if (!activeProjectIds.has(assignment.projectId)) continue;
-
-    const [recent] = await db
-      .select({ c: count() })
+  if (assignmentsOnActive.length > 0) {
+    // Batch: get all (technicianId, projectId) pairs with recent reports
+    const recentReports = await db
+      .select({ technicianId: reports.technicianId, projectId: reports.projectId })
       .from(reports)
       .where(and(
-        eq(reports.technicianId, assignment.userId),
-        eq(reports.projectId, assignment.projectId),
+        inArray(reports.projectId, [...activeProjectIds]),
         gte(reports.createdAt, cutoff7days)
       ));
+    const recentSet = new Set(recentReports.map(r => `${r.technicianId}:${r.projectId}`));
 
-    if (Number(recent?.c ?? 0) === 0) {
+    for (const assignment of assignmentsOnActive) {
+      if (recentSet.has(`${assignment.userId}:${assignment.projectId}`)) continue;
+
       const proj = activeProjects.find(p => p.id === assignment.projectId);
       recommendations.push({
         id: `inactive-${assignment.userId}-${assignment.projectId}`,

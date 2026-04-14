@@ -3,7 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { db } from '@/db';
 import { users, organizations } from '@/db/schema';
 import { eq } from 'drizzle-orm';
-import { uploadOrgLogo } from '@/services/storageService';
+import { uploadOrgLogo, deleteProfileImage } from '@/services/storageService';
 
 export async function POST(request: Request) {
   const supabase = await createSupabaseServerClient();
@@ -40,6 +40,9 @@ export async function DELETE() {
   if (!currentUser?.organizationId || currentUser.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
+
+  const [org] = await db.select({ logoUrl: organizations.logoUrl }).from(organizations).where(eq(organizations.id, currentUser.organizationId));
+  if (org?.logoUrl) await deleteProfileImage(org.logoUrl);
 
   await db.update(organizations)
     .set({ logoUrl: null, updatedAt: new Date() })

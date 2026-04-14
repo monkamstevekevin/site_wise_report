@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { projects, reports, users, userAssignments, notifications } from '@/db/schema';
-import { eq, and, lt, lte, gte, ne, count } from 'drizzle-orm';
+import { eq, and, lt, lte, gte, ne, count, inArray } from 'drizzle-orm';
 
 export const dynamic = 'force-dynamic';
+
+type CronNotificationType = 'project_overdue' | 'technician_inactive' | 'report_pending_too_long';
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get('authorization');
@@ -23,13 +25,13 @@ export async function GET(request: Request) {
   }
 
   // Helper: send notification to all admins of an org (skip duplicates silently)
-  async function notifyAdmins(orgId: string, type: string, message: string, targetId: string, link: string) {
+  async function notifyAdmins(orgId: string, type: CronNotificationType, message: string, targetId: string, link: string) {
     const admins = await getAdmins(orgId);
     for (const admin of admins) {
       try {
         await db.insert(notifications).values({
           userId: admin.id,
-          type: type as 'project_overdue' | 'technician_inactive' | 'report_pending_too_long',
+          type,
           message,
           targetId,
           link,
@@ -95,27 +97,37 @@ export async function GET(request: Request) {
       eq(projects.status, 'ACTIVE')
     ));
 
-  for (const assignment of activeAssignments) {
-    if (!assignment.organizationId) continue;
-    const [recent] = await db
-      .select({ c: count() })
+  if (activeAssignments.length > 0) {
+    const activeProjectIds = [...new Set(activeAssignments.map(a => a.projectId))];
+
+    // Batch: get all (technicianId, projectId) pairs with recent reports
+    const recentActivity = await db
+      .select({ technicianId: reports.technicianId, projectId: reports.projectId })
       .from(reports)
       .where(and(
-        eq(reports.technicianId, assignment.userId),
-        eq(reports.projectId, assignment.projectId),
+        inArray(reports.projectId, activeProjectIds),
         gte(reports.createdAt, cutoff7days)
       ));
+    const recentSet = new Set(recentActivity.map(r => `${r.technicianId}:${r.projectId}`));
 
-    if (Number(recent?.c ?? 0) === 0) {
-      const [tech] = await db.select({ name: users.name }).from(users).where(eq(users.id, assignment.userId));
+    // Batch: get user names
+    const userIds = [...new Set(activeAssignments.map(a => a.userId))];
+    const techUsers = await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, userIds));
+    const nameById = new Map(techUsers.map(u => [u.id, u.name]));
+
+    for (const assignment of activeAssignments) {
+      if (!assignment.organizationId) continue;
+      if (recentSet.has(`${assignment.userId}:${assignment.projectId}`)) continue;
+
+      const techName = nameById.get(assignment.userId) ?? 'Un technicien';
       await notifyAdmins(
         assignment.organizationId,
         'technician_inactive',
-        `${tech?.name ?? 'Un technicien'} n'a soumis aucun rapport depuis 7 jours sur un projet actif.`,
+        `${techName} n'a soumis aucun rapport depuis 7 jours sur un projet actif.`,
         assignment.userId,
         `/admin/technicians`
       );
-      alerts.push(`technician_inactive: ${tech?.name}`);
+      alerts.push(`technician_inactive: ${techName}`);
     }
   }
 
