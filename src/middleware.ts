@@ -28,10 +28,10 @@ export async function middleware(request: NextRequest) {
   // No-op if Upstash not configured (dev/staging without Redis)
   if (!limiter) return NextResponse.next();
 
-  // On Vercel, request.ip is the real client IP (pre-resolved by the edge network).
-  // Fallback: use the rightmost x-forwarded-for entry (client-supplied leftmost entries cannot be trusted).
+  // On Vercel, x-real-ip is set to the real client IP by the edge network.
+  // Fallback: use the rightmost x-forwarded-for entry (leftmost entries are client-controlled).
   const ip =
-    request.ip ??
+    request.headers.get('x-real-ip') ??
     request.headers.get('x-forwarded-for')?.split(',').at(-1)?.trim() ??
     '127.0.0.1';
 

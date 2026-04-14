@@ -14,6 +14,8 @@ interface DownloadReportButtonProps {
   projectLocation?: string;
   technicianName?: string;
   testType?: TestType | null;
+  orgLogoUrl?: string | null;
+  orgName?: string | null;
   variant?: 'default' | 'outline' | 'ghost';
   size?: 'default' | 'sm' | 'lg' | 'icon';
   className?: string;
@@ -25,6 +27,8 @@ export function DownloadReportButton({
   projectLocation,
   technicianName,
   testType,
+  orgLogoUrl,
+  orgName,
   variant = 'outline',
   size = 'sm',
   className,
@@ -52,6 +56,8 @@ export function DownloadReportButton({
           projectLocation={projectLocation}
           technicianName={technicianName}
           testType={testType}
+          orgLogoUrl={orgLogoUrl}
+          orgName={orgName}
         />
       }
       fileName={fileName}

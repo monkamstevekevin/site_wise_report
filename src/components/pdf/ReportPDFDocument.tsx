@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  Document, Page, Text, View, StyleSheet,
+  Document, Page, Text, View, StyleSheet, Image,
 } from '@react-pdf/renderer';
 import type { FieldReport } from '@/lib/types';
 import type { TestType, TestFieldDef } from '@/db/schema';
@@ -202,6 +202,8 @@ interface ReportPDFDocumentProps {
   projectLocation?: string;
   technicianName?: string;
   testType?: TestType | null;
+  orgLogoUrl?: string | null;
+  orgName?: string | null;
 }
 
 function formatTestValue(fieldDef: TestFieldDef, val: unknown): string {
@@ -211,7 +213,7 @@ function formatTestValue(fieldDef: TestFieldDef, val: unknown): string {
 }
 
 export function ReportPDFDocument({
-  report, projectName, projectLocation, technicianName, testType,
+  report, projectName, projectLocation, technicianName, testType, orgLogoUrl, orgName,
 }: ReportPDFDocumentProps) {
   const statusBg = STATUS_BG[report.status] ?? '#94a3b8';
   const matKey = report.materialType?.toLowerCase() ?? 'other';
@@ -235,7 +237,11 @@ export function ReportPDFDocument({
         {/* ── En-tête ── */}
         <View style={S.header}>
           <View>
-            <Text style={S.appName}>SiteWise</Text>
+            {orgLogoUrl ? (
+              <Image src={orgLogoUrl} style={{ width: 80, height: 40, objectFit: 'contain' }} />
+            ) : (
+              <Text style={S.appName}>{orgName ?? 'SiteWise'}</Text>
+            )}
             <Text style={S.appSub}>Rapport d'essai de matériaux</Text>
           </View>
           <View style={S.headerRight}>

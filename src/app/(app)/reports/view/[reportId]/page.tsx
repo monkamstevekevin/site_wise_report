@@ -209,6 +209,8 @@ export default function ViewReportPage() {
           projectLocation={projectLocation}
           technicianName={technicianName}
           testType={testType}
+          orgLogoUrl={orgLogoUrl}
+          orgName={orgName}
           variant="outline"
           size="sm"
           className="rounded-lg"
