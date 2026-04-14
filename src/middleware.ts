@@ -43,8 +43,8 @@ export async function middleware(request: NextRequest) {
         headers: {
           'X-RateLimit-Limit': String(limit),
           'X-RateLimit-Remaining': String(remaining),
-          'X-RateLimit-Reset': String(reset),
-          'Retry-After': String(Math.ceil((reset - Date.now()) / 1000)),
+          'X-RateLimit-Reset': String(Math.floor(reset / 1000)),
+          'Retry-After': String(Math.max(0, Math.ceil((reset - Date.now()) / 1000))),
         },
       }
     );
