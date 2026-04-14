@@ -58,6 +58,7 @@ export default function UserManagementPage() {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<UserRole | 'ALL'>('ALL');
+  const [userActivity, setUserActivity] = useState<Record<string, string | null>>({});
 
   useEffect(() => {
     setIsLoading(true);
@@ -92,6 +93,19 @@ export default function UserManagementPage() {
         unsubProjects();
     };
   }, [adminAuthUser?.organizationId]);
+
+  useEffect(() => {
+    fetch('/api/admin/users-activity')
+      .then(res => res.ok ? res.json() : [])
+      .then((data: { userId: string; lastReportAt: string | null }[]) => {
+        const map: Record<string, string | null> = {};
+        for (const entry of data) {
+          map[entry.userId] = entry.lastReportAt;
+        }
+        setUserActivity(map);
+      })
+      .catch(() => {});
+  }, []);
 
   const handleAddNewUser = () => {
     setEditingUser(undefined);
@@ -348,6 +362,7 @@ export default function UserManagementPage() {
             onEditUser={handleEditUser}
             onDeleteUser={openDeleteDialog}
             onAssignProjects={handleOpenAssignProjectsDialog}
+            userActivity={userActivity}
           />
         </div>
       )}

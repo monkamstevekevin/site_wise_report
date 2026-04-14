@@ -18,6 +18,7 @@ interface UserTableProps {
   onEditUser: (user: Partial<UserFormData> & { id: string }) => void;
   onDeleteUser: (user: User) => void;
   onAssignProjects: (user: User) => void;
+  userActivity: Record<string, string | null>;
 }
 
 const ROLE_CONFIG: Record<UserRole, { label: string; icon: React.ElementType; bar: string; pill: string; avatar: string }> = {
@@ -26,7 +27,17 @@ const ROLE_CONFIG: Record<UserRole, { label: string; icon: React.ElementType; ba
   TECHNICIAN: { label: 'Technicien',     icon: HardHat,  bar: 'bg-sky-500',     pill: 'bg-sky-50 text-sky-700 ring-sky-200 dark:bg-sky-950/40 dark:text-sky-400 dark:ring-sky-800',           avatar: 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300' },
 };
 
-export function UserTable({ users, allProjects, onEditUser, onDeleteUser, onAssignProjects }: UserTableProps) {
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const days = Math.floor(diff / 86400000);
+  if (days === 0) return "aujourd'hui";
+  if (days === 1) return 'hier';
+  if (days < 7) return `il y a ${days} jours`;
+  if (days < 30) return `il y a ${Math.floor(days / 7)} sem.`;
+  return `il y a ${Math.floor(days / 30)} mois`;
+}
+
+export function UserTable({ users, allProjects, onEditUser, onDeleteUser, onAssignProjects, userActivity }: UserTableProps) {
   const projectsById = React.useMemo(() =>
     allProjects.reduce((acc, p) => { acc[p.id] = p; return acc; }, {} as Record<string, Project>),
     [allProjects]
@@ -97,6 +108,11 @@ export function UserTable({ users, allProjects, onEditUser, onDeleteUser, onAssi
                         {new Date(user.createdAt).toLocaleDateString('fr-FR')}
                       </span>
                     </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {userActivity[user.id]
+                        ? `Dernier rapport : ${timeAgo(userActivity[user.id]!)}`
+                        : 'Aucun rapport soumis'}
+                    </p>
                   </div>
                 </div>
 
