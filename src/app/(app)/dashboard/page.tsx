@@ -19,6 +19,7 @@ import { ProjectAssignmentsCard } from './components/ProjectAssignmentsCard';
 import { AlertsCard } from './components/AlertsCard';
 import { ScheduleView } from './components/ScheduleView';
 import { OnboardingChecklist } from './components/OnboardingChecklist';
+import { RecommendationsWidget } from './components/RecommendationsWidget';
 import { ProjectDateFilter } from './components/ProjectDateFilter';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -175,11 +176,14 @@ export default function DashboardPage() {
       {(role === 'ADMIN' || role === 'SUPERVISOR') && (
         <>
           {role === 'ADMIN' && (
-            <OnboardingChecklist
-              hasProjects={allProjectsData.length > 0}
-              hasTeamMembers={allUsersData.length > 1}
-              hasReports={allReportsData.length > 0}
-            />
+            <>
+              <OnboardingChecklist
+                hasProjects={allProjectsData.length > 0}
+                hasTeamMembers={allUsersData.length > 1}
+                hasReports={allReportsData.length > 0}
+              />
+              <RecommendationsWidget />
+            </>
           )}
 
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5 mb-8">
