@@ -36,7 +36,7 @@ export function UpgradeGate({ children }: UpgradeGateProps) {
       {children}
       <Dialog open modal>
         <DialogContent
-          className="sm:max-w-md"
+          className="sm:max-w-md [&>button:last-child]:hidden"
           onPointerDownOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={(e) => e.preventDefault()}
         >
