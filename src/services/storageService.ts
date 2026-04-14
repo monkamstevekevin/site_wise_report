@@ -34,13 +34,7 @@ const ALLOWED_IMAGE_TYPES = new Set([
   'image/gif',
 ]);
 
-const ALLOWED_ATTACHMENT_TYPES = new Set([
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'image/gif',
-  'application/pdf',
-]);
+const ALLOWED_ATTACHMENT_TYPES = new Set([...ALLOWED_IMAGE_TYPES, 'application/pdf']);
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;        // 5 MB
 const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;  // 20 MB
@@ -50,6 +44,9 @@ function assertDataURI(
   allowedTypes: Set<string>,
   maxBytes: number
 ): void {
+  if (!dataURI.startsWith('data:') || !dataURI.includes(',')) {
+    throw new Error('Format de données invalide : URI data attendu.');
+  }
   const mimeType = dataURI.split(',')[0]?.split(':')[1]?.split(';')[0];
   if (!mimeType || !allowedTypes.has(mimeType)) {
     throw new Error(
@@ -58,10 +55,11 @@ function assertDataURI(
     );
   }
   const base64 = dataURI.split(',')[1] ?? '';
-  const estimatedBytes = Math.ceil(base64.length * 0.75);
+  const padding = (base64.match(/=+$/) ?? [''])[0].length;
+  const estimatedBytes = Math.floor(base64.length * 0.75) - padding;
   if (estimatedBytes > maxBytes) {
     throw new Error(
-      `Fichier trop volumineux (${Math.round(estimatedBytes / 1024 / 1024 * 10) / 10} MB). ` +
+      `Fichier trop volumineux (${(estimatedBytes / 1024 / 1024).toFixed(1)} MB). ` +
       `Maximum : ${Math.round(maxBytes / 1024 / 1024)} MB.`
     );
   }
