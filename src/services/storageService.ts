@@ -25,6 +25,48 @@ function extractStoragePath(publicUrl: string, bucket: string): string | null {
   return decodeURIComponent(publicUrl.substring(idx + marker.length));
 }
 
+// ─── Validation ──────────────────────────────────────────────────────────────
+
+const ALLOWED_IMAGE_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+]);
+
+const ALLOWED_ATTACHMENT_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'application/pdf',
+]);
+
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;        // 5 MB
+const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;  // 20 MB
+
+function assertDataURI(
+  dataURI: string,
+  allowedTypes: Set<string>,
+  maxBytes: number
+): void {
+  const mimeType = dataURI.split(',')[0]?.split(':')[1]?.split(';')[0];
+  if (!mimeType || !allowedTypes.has(mimeType)) {
+    throw new Error(
+      `Type de fichier non autorisé : ${mimeType ?? 'inconnu'}. ` +
+      `Types acceptés : ${[...allowedTypes].join(', ')}`
+    );
+  }
+  const base64 = dataURI.split(',')[1] ?? '';
+  const estimatedBytes = Math.ceil(base64.length * 0.75);
+  if (estimatedBytes > maxBytes) {
+    throw new Error(
+      `Fichier trop volumineux (${Math.round(estimatedBytes / 1024 / 1024 * 10) / 10} MB). ` +
+      `Maximum : ${Math.round(maxBytes / 1024 / 1024)} MB.`
+    );
+  }
+}
+
 // ─── Avatars ─────────────────────────────────────────────────────────────────
 
 /**
@@ -37,7 +79,7 @@ export async function uploadProfileImage(
   oldImageUrl?: string | null
 ): Promise<string> {
   if (!userId) throw new Error('User ID is required to upload a profile image.');
-  if (!imageDataURI.startsWith('data:image')) throw new Error('Invalid image data URI provided.');
+  assertDataURI(imageDataURI, ALLOWED_IMAGE_TYPES, MAX_IMAGE_BYTES);
 
   // Supprimer l'ancienne image si elle est dans notre bucket
   if (oldImageUrl) {
@@ -81,7 +123,7 @@ export async function uploadOrgLogo(
   oldLogoUrl?: string | null
 ): Promise<string> {
   if (!orgId) throw new Error('Organization ID is required.');
-  if (!imageDataURI.startsWith('data:image')) throw new Error('Invalid image data URI.');
+  assertDataURI(imageDataURI, ALLOWED_IMAGE_TYPES, MAX_IMAGE_BYTES);
 
   if (oldLogoUrl) {
     const oldPath = extractStoragePath(oldLogoUrl, 'avatars');
@@ -111,7 +153,7 @@ export async function uploadReportAttachment(
   fileDataURI: string,
   fileName: string
 ): Promise<string> {
-  if (!fileDataURI.startsWith('data:')) throw new Error('Invalid data URI provided.');
+  assertDataURI(fileDataURI, ALLOWED_ATTACHMENT_TYPES, MAX_ATTACHMENT_BYTES);
 
   const { blob, mimeType } = dataURIToBlob(fileDataURI);
   const path = `${reportId}/${uuidv4()}_${fileName}`;
