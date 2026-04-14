@@ -4,6 +4,7 @@ import { db } from '@/db';
 import { users, organizations } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import type { UserRole } from '@/lib/types';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 export type AppUser = {
   id: string;
@@ -99,6 +100,12 @@ export async function updateUserProfile(
   userId: string,
   data: { name?: string; avatarUrl?: string | null }
 ): Promise<AppUser> {
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user || user.id !== userId) {
+    throw new Error("Unauthorized: cannot update another user's profile.");
+  }
+
   await db
     .update(users)
     .set({
