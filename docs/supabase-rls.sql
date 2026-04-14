@@ -5,7 +5,9 @@
 
 -- Helper : retourne l'org_id de l'utilisateur courant
 CREATE OR REPLACE FUNCTION auth_user_org_id()
-RETURNS uuid LANGUAGE sql STABLE SECURITY DEFINER AS $$
+RETURNS uuid LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
   SELECT organization_id FROM public.users WHERE id = auth.uid()
 $$;
 
@@ -13,52 +15,66 @@ $$;
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 
 -- Un utilisateur voit uniquement les membres de son org
+DROP POLICY IF EXISTS "users_org_isolation" ON public.users;
 CREATE POLICY "users_org_isolation" ON public.users
   USING (organization_id = auth_user_org_id());
 
 -- Un utilisateur peut mettre à jour son propre profil
+DROP POLICY IF EXISTS "users_self_update" ON public.users;
 CREATE POLICY "users_self_update" ON public.users
-  FOR UPDATE USING (id = auth.uid());
+  FOR UPDATE
+  USING (id = auth.uid())
+  WITH CHECK (
+    id = auth.uid()
+    AND role = (SELECT role FROM public.users WHERE id = auth.uid())
+  );
 
 -- ── organizations ────────────────────────────────────────────
 ALTER TABLE public.organizations ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "orgs_own_only" ON public.organizations;
 CREATE POLICY "orgs_own_only" ON public.organizations
   USING (id = auth_user_org_id());
 
 -- ── projects ─────────────────────────────────────────────────
 ALTER TABLE public.projects ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "projects_org_isolation" ON public.projects;
 CREATE POLICY "projects_org_isolation" ON public.projects
   USING (organization_id = auth_user_org_id());
 
 -- ── reports ──────────────────────────────────────────────────
 ALTER TABLE public.reports ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "reports_org_isolation" ON public.reports;
 CREATE POLICY "reports_org_isolation" ON public.reports
   USING (organization_id = auth_user_org_id());
 
 -- ── time_entries ─────────────────────────────────────────────
 ALTER TABLE public.time_entries ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "time_entries_org_isolation" ON public.time_entries;
 CREATE POLICY "time_entries_org_isolation" ON public.time_entries
   USING (organization_id = auth_user_org_id());
 
 -- ── user_assignments ─────────────────────────────────────────
 ALTER TABLE public.user_assignments ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "assignments_org_isolation" ON public.user_assignments;
 CREATE POLICY "assignments_org_isolation" ON public.user_assignments
   USING (organization_id = auth_user_org_id());
 
 -- ── notifications ────────────────────────────────────────────
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "notifications_own_only" ON public.notifications;
 CREATE POLICY "notifications_own_only" ON public.notifications
   USING (user_id = auth.uid());
 
 -- ── materials ────────────────────────────────────────────────
 ALTER TABLE public.materials ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "materials_org_isolation" ON public.materials;
 CREATE POLICY "materials_org_isolation" ON public.materials
   USING (organization_id = auth_user_org_id());
 
@@ -66,20 +82,45 @@ CREATE POLICY "materials_org_isolation" ON public.materials
 -- organizationId = null means a global shared template visible to all orgs
 ALTER TABLE public.test_types ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "test_types_org_isolation" ON public.test_types;
 CREATE POLICY "test_types_org_isolation" ON public.test_types
   USING (organization_id IS NULL OR organization_id = auth_user_org_id());
 
 -- ── report_attachments ───────────────────────────────────────
 ALTER TABLE public.report_attachments ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "report_attachments_org_isolation" ON public.report_attachments;
 CREATE POLICY "report_attachments_org_isolation" ON public.report_attachments
   USING (organization_id = auth_user_org_id());
 
 -- ── chat_messages ────────────────────────────────────────────
 ALTER TABLE public.chat_messages ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "chat_messages_org_isolation" ON public.chat_messages;
 CREATE POLICY "chat_messages_org_isolation" ON public.chat_messages
   USING (organization_id = auth_user_org_id());
+
+-- ── project_test_types (no organization_id — scoped via project) ──────────────
+ALTER TABLE public.project_test_types ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "ptt_org_isolation" ON public.project_test_types;
+CREATE POLICY "ptt_org_isolation" ON public.project_test_types
+  USING (project_id IN (
+    SELECT id FROM public.projects WHERE organization_id = auth_user_org_id()
+  ));
+
+-- ── project_materials (no organization_id — scoped via project) ───────────────
+ALTER TABLE public.project_materials ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "pm_org_isolation" ON public.project_materials;
+CREATE POLICY "pm_org_isolation" ON public.project_materials
+  USING (project_id IN (
+    SELECT id FROM public.projects WHERE organization_id = auth_user_org_id()
+  ));
+
+-- ── webhook_events (Stripe idempotency — deny all direct user access) ─────────
+ALTER TABLE public.webhook_events ENABLE ROW LEVEL SECURITY;
+-- No policies = deny all to non-superusers (service role bypasses RLS)
 
 -- ============================================================
 -- Vérification : toutes les tables doivent avoir rowsecurity=true
