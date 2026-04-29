@@ -13,6 +13,7 @@ const API_ROUTES = [
   '/api/time-entries',
   '/api/admin/recommendations',
   '/api/admin/users-activity',
+  '/api/compaction-rows',
 ];
 
 export async function middleware(request: NextRequest) {
