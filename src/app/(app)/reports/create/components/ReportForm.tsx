@@ -26,6 +26,9 @@ import { getUserById } from '@/services/userService';
 import { getTestTypesForProject } from '@/services/testTypeService';
 import type { TestType, TestFieldDef } from '@/db/schema';
 import { Badge } from '@/components/ui/badge';
+import { CompactionHeaderForm } from '@/components/compaction/CompactionHeaderForm';
+import { CompactionTestTable, type CompactionRowDraft } from '@/components/compaction/CompactionTestTable';
+import type { CompactionReportData } from '@/db/schema';
 
 const MAX_FILE_SIZE_MB = 5;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
@@ -33,7 +36,7 @@ const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/web
 
 const reportFormSchema = z.object({
   projectId: z.string().min(1, 'L\'ID du projet est requis'),
-  materialType: z.enum(['cement', 'asphalt', 'gravel', 'sand', 'other'], {
+  materialType: z.enum(['cement', 'asphalt', 'gravel', 'sand', 'other', 'compaction'], {
     required_error: 'Le type de matériau est requis.',
   }),
   temperature: z.coerce.number().min(-50, "Trop bas").max(200, "Trop élevé"),
@@ -87,12 +90,13 @@ const initialReportFormValues: ReportFormData = {
   attachmentUrls: '',
 };
 
-const materialTypeOptions: { value: MaterialType; label: string }[] = [
+const materialTypeOptions: { value: MaterialType | 'compaction'; label: string }[] = [
   { value: 'cement', label: 'Ciment' },
   { value: 'asphalt', label: 'Asphalte' },
   { value: 'gravel', label: 'Gravier' },
   { value: 'sand', label: 'Sable' },
   { value: 'other', label: 'Autre' },
+  { value: 'compaction', label: 'Contrôle de compacité' },
 ];
 
 const samplingMethodOptions: { value: SamplingMethod; label: string }[] = [
@@ -130,6 +134,8 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
   const [selectedTestTypeId, setSelectedTestTypeId] = useState<string>('');
   const [testData, setTestData] = useState<Record<string, string>>({});
   const selectedTestType = projectTestTypes.find((t) => t.id === selectedTestTypeId) ?? null;
+  const [compactionHeader, setCompactionHeader] = useState<Partial<CompactionReportData>>({});
+  const [compactionRows, setCompactionRows] = useState<CompactionRowDraft[]>([]);
 
   const isEditMode = !!reportToEdit;
 
@@ -137,6 +143,8 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
     resolver: zodResolver(reportFormSchema),
     defaultValues: initialReportFormValues,
   });
+
+  const isCompaction = form.watch('materialType') === 'compaction';
 
   useEffect(() => {
     const fetchProjectDataForForm = async () => {
@@ -232,6 +240,18 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
     }
   }, [reportToEdit, isEditMode, form, assignedProjectsList]);
 
+  useEffect(() => {
+    if (isCompaction) {
+      form.setValue('temperature', 0);
+      form.setValue('volume', 0);
+      form.setValue('density', 0);
+      form.setValue('humidity', 0);
+      form.setValue('batchNumber', 'N/A');
+      form.setValue('supplier', 'N/A');
+      form.setValue('samplingMethod', 'other');
+    }
+  }, [isCompaction, form]);
+
   const handlePhotoInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
@@ -309,10 +329,36 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
         photoFileArg = null; 
     }
 
+    // Compaction reports don't use generic material fields — use neutral defaults
+    if (isCompaction) {
+      reportPayload.temperature = 0;
+      reportPayload.volume = 0;
+      reportPayload.density = 0;
+      reportPayload.humidity = 0;
+      reportPayload.batchNumber = 'N/A';
+      reportPayload.supplier = 'N/A';
+      reportPayload.samplingMethod = 'other';
+      reportPayload.testData = compactionHeader;
+    }
+
     toast({ title: 'Traitement du Rapport...', description: 'Vérification des anomalies par l\'IA en cours...' });
-    
+
     const { success, reportId, anomalyAssessment } = await onSubmitReport(reportPayload, status, photoFileArg);
     setCurrentAnomalyResult(anomalyAssessment || null);
+
+    // Save compaction test rows after report creation
+    if (success && reportId && isCompaction && compactionRows.length > 0) {
+      try {
+        await fetch('/api/compaction-rows', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reportId, rows: compactionRows }),
+        });
+      } catch {
+        // Non-blocking: rows save failure doesn't fail the report creation
+        console.error('Failed to save compaction rows');
+      }
+    }
 
     if (success) {
       const actionVerb = isEditMode ? "mis à jour" : "créé";
@@ -470,19 +516,6 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
               )}
               <FormField
                 control={form.control}
-                name="batchNumber"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Numéro de Lot</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Ex: LOT-XYZ-123" {...field} disabled={isSubmittingForm} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
                 name="materialType"
                 render={({ field }) => (
                   <FormItem>
@@ -503,93 +536,120 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="supplier"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Fournisseur</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Ex: Matériaux Acme Ltée." {...field} disabled={isSubmittingForm} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="temperature"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Température (°C)</FormLabel>
-                    <FormControl>
-                      <Input type="number" step="0.1" placeholder="Ex: 25.5" {...field} disabled={isSubmittingForm} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="volume"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Volume (m³)</FormLabel>
-                    <FormControl>
-                      <Input type="number" step="0.01" placeholder="Ex: 10.25" {...field} disabled={isSubmittingForm} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="density"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Densité (kg/m³)</FormLabel>
-                    <FormControl>
-                      <Input type="number" step="0.1" placeholder="Ex: 1500.0" {...field} disabled={isSubmittingForm} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-               <FormField
-                control={form.control}
-                name="humidity"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Humidité (%)</FormLabel>
-                    <FormControl>
-                      <Input type="number" step="0.1" placeholder="Ex: 60.5" {...field} disabled={isSubmittingForm} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="samplingMethod"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Méthode d'Échantillonnage</FormLabel>
-                     <Select onValueChange={field.onChange} value={field.value} disabled={isSubmittingForm}>
+              {!isCompaction && (
+                <FormField
+                  control={form.control}
+                  name="batchNumber"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Numéro de Lot</FormLabel>
                       <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner la méthode d'échantillonnage" />
-                        </SelectTrigger>
+                        <Input placeholder="Ex: LOT-XYZ-123" {...field} disabled={isSubmittingForm} />
                       </FormControl>
-                      <SelectContent>
-                        {samplingMethodOptions.map(option => (
-                          <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+              {!isCompaction && (
+                <FormField
+                  control={form.control}
+                  name="supplier"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Fournisseur</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Ex: Matériaux Acme Ltée." {...field} disabled={isSubmittingForm} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+              {!isCompaction && (
+                <FormField
+                  control={form.control}
+                  name="temperature"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Température (°C)</FormLabel>
+                      <FormControl>
+                        <Input type="number" step="0.1" placeholder="Ex: 25.5" {...field} disabled={isSubmittingForm} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+              {!isCompaction && (
+                <FormField
+                  control={form.control}
+                  name="volume"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Volume (m³)</FormLabel>
+                      <FormControl>
+                        <Input type="number" step="0.01" placeholder="Ex: 10.25" {...field} disabled={isSubmittingForm} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+              {!isCompaction && (
+                <FormField
+                  control={form.control}
+                  name="density"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Densité (kg/m³)</FormLabel>
+                      <FormControl>
+                        <Input type="number" step="0.1" placeholder="Ex: 1500.0" {...field} disabled={isSubmittingForm} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+              {!isCompaction && (
+                <FormField
+                  control={form.control}
+                  name="humidity"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Humidité (%)</FormLabel>
+                      <FormControl>
+                        <Input type="number" step="0.1" placeholder="Ex: 60.5" {...field} disabled={isSubmittingForm} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+              {!isCompaction && (
+                <FormField
+                  control={form.control}
+                  name="samplingMethod"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Méthode d'Échantillonnage</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value} disabled={isSubmittingForm}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Sélectionner la méthode d'échantillonnage" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {samplingMethodOptions.map(option => (
+                            <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               <FormField
                 control={form.control}
@@ -653,6 +713,25 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
                 )}
               />
             </div>
+
+            {/* ── Compaction UI ── */}
+            {isCompaction && (
+              <div className="space-y-4">
+                <CompactionHeaderForm
+                  value={compactionHeader}
+                  onChange={setCompactionHeader}
+                />
+                <div>
+                  <h3 className="text-sm font-medium mb-2">Essais de compacité</h3>
+                  <CompactionTestTable
+                    rows={compactionRows}
+                    onRowsChange={setCompactionRows}
+                    material1Name={compactionHeader.material1?.name || 'Mat. 1'}
+                    material2Name={compactionHeader.material2?.name || 'Mat. 2'}
+                  />
+                </div>
+              </div>
+            )}
 
             {/* ── Champs dynamiques du type de test ── */}
             {selectedTestType && (

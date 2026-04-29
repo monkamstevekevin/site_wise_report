@@ -12,7 +12,7 @@ import { encryptField, decryptField, encryptJson, decryptJson } from '@/lib/cryp
 
 // ─── Type narrowing helpers ───────────────────────────────────────────────────
 
-const VALID_MATERIAL_TYPES = ['cement', 'asphalt', 'gravel', 'sand', 'other'] as const;
+const VALID_MATERIAL_TYPES = ['cement', 'asphalt', 'gravel', 'sand', 'other', 'compaction'] as const;
 type ValidMaterialType = typeof VALID_MATERIAL_TYPES[number];
 
 function assertMaterialType(value: string): asserts value is ValidMaterialType {
