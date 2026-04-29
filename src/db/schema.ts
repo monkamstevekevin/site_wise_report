@@ -30,6 +30,7 @@ export const materialTypeEnum = pgEnum('material_type', [
   'gravel',
   'sand',
   'other',
+  'compaction',
 ]);
 
 export const reportStatusEnum = pgEnum('report_status', [
@@ -301,6 +302,49 @@ export const reportAttachments = pgTable(
 );
 
 /**
+ * compaction_test_rows — individual test measurements for compaction reports
+ * Used for both RC-6306 (daily, qualitative) and RC-6304 (client summary, quantitative)
+ */
+export const compactionTestRows = pgTable(
+  'compaction_test_rows',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    reportId: uuid('report_id')
+      .notNull()
+      .references(() => reports.id, { onDelete: 'cascade' }),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    rowOrder: numeric('row_order', { precision: 4, scale: 0 }).notNull().default('0'),
+    // Quantitative (RC-6304)
+    localisation: text('localisation'),
+    testDate: text('test_date'), // stored as ISO date string 'YYYY-MM-DD'
+    waterContent: numeric('water_content', { precision: 6, scale: 2 }),
+    dryDensity: numeric('dry_density', { precision: 8, scale: 2 }),
+    retained5mm: numeric('retained_5mm', { precision: 6, scale: 2 }),
+    correctedDensity: numeric('corrected_density', { precision: 8, scale: 2 }),
+    compactionPercent: numeric('compaction_percent', { precision: 6, scale: 2 }),
+    // Qualitative (RC-6306)
+    materialRef: text('material_ref'), // 'mat1' | 'mat2'
+    requiredPercent: numeric('required_percent', { precision: 6, scale: 2 }),
+    isCompliant: boolean('is_compliant'),
+    sampleTaken: boolean('sample_taken'),
+    sampleNo: text('sample_no'),
+    remarks: text('remarks'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('ctr_report_id_idx').on(table.reportId),
+    index('ctr_project_id_idx').on(table.projectId),
+    index('ctr_org_id_idx').on(table.organizationId),
+  ]
+);
+
+/**
  * time_entries — suivi du temps par technicien et par projet
  */
 export const timeEntries = pgTable(
@@ -446,3 +490,39 @@ export type NewChatMessage = typeof chatMessages.$inferInsert;
 
 export type Notification = typeof notifications.$inferSelect;
 export type NewNotification = typeof notifications.$inferInsert;
+
+export type CompactionTestRow = typeof compactionTestRows.$inferSelect;
+export type NewCompactionTestRow = typeof compactionTestRows.$inferInsert;
+
+/** Header data stored in reports.testData for compaction reports */
+export interface CompactionReportData {
+  // Timing
+  arrivalTime: string;     // 'HH:MM'
+  departureTime: string;   // 'HH:MM'
+  nucleoNo?: string;       // Nucléodensimètre No
+  // Materials
+  material1: {
+    name: string;
+    source: string;
+    maxDensity: number;        // Masse volumique max (kg/m³)
+    densityMethod: 'proctor' | 'planche';
+    optimalMoisture: number;   // Teneur en eau optimale (%)
+    compactionReq: number;     // Exigence compaction (90|95|98)
+  };
+  material2?: {
+    name: string;
+    source: string;
+    maxDensity: number;
+    densityMethod: 'proctor' | 'planche';
+    optimalMoisture: number;
+    compactionReq: number;
+  };
+  // Work type & location
+  workType: 'ROUTE' | 'BATIMENT';
+  workCategory: string;
+  chainageFrom?: string;
+  chainageTo?: string;
+  axis?: string;
+  entrepreneur?: string;
+  subcontractor?: string;
+}
