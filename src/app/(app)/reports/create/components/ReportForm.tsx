@@ -243,8 +243,8 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
   useEffect(() => {
     if (isCompaction) {
       form.setValue('temperature', 0);
-      form.setValue('volume', 0);
-      form.setValue('density', 0);
+      form.setValue('volume', 1);
+      form.setValue('density', 1);
       form.setValue('humidity', 0);
       form.setValue('batchNumber', 'N/A');
       form.setValue('supplier', 'N/A');
@@ -332,8 +332,8 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
     // Compaction reports don't use generic material fields — use neutral defaults
     if (isCompaction) {
       reportPayload.temperature = 0;
-      reportPayload.volume = 0;
-      reportPayload.density = 0;
+      reportPayload.volume = 1;
+      reportPayload.density = 1;
       reportPayload.humidity = 0;
       reportPayload.batchNumber = 'N/A';
       reportPayload.supplier = 'N/A';
