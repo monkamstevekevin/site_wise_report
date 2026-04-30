@@ -55,7 +55,13 @@ export default function CreateReportPage() {
         status: status,
     };
     
-    const assessment = await detectReportAnomaly(tempReportForAI);
+    let assessment: Awaited<ReturnType<typeof detectReportAnomaly>>;
+    try {
+      assessment = await detectReportAnomaly(tempReportForAI);
+    } catch (e) {
+      console.error('Anomaly detection failed, proceeding without AI:', e);
+      assessment = { isAnomalous: false, explanation: 'Analyse IA temporairement indisponible.' };
+    }
 
     if (status === 'SUBMITTED' && assessment.isAnomalous) {
       return { success: false, anomalyAssessment: assessment };
