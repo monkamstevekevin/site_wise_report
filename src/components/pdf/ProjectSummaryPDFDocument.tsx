@@ -150,7 +150,7 @@ export function ProjectSummaryPDFDocument({ project, reports, orgLogoUrl, orgNam
         <View style={S.header}>
           <View>
             {orgLogoUrl ? (
-              <Image src={orgLogoUrl} style={{ width: 80, height: 40, objectFit: 'contain' }} />
+              <Image src={orgLogoUrl} style={{ width: 120, height: 56, objectFit: 'contain', marginBottom: 4 }} />
             ) : (
               <Text style={S.logo}>{orgName ?? 'SiteWise Reports'}</Text>
             )}
