@@ -10,12 +10,14 @@ import type { FieldReport, Project } from '@/lib/types';
 interface Props {
   project: Project;
   reports: FieldReport[];
+  orgLogoUrl?: string | null;
+  orgName?: string | null;
   variant?: 'default' | 'outline' | 'ghost';
   size?: 'default' | 'sm' | 'lg' | 'icon';
   className?: string;
 }
 
-export function DownloadProjectSummaryButton({ project, reports, variant = 'default', size = 'sm', className }: Props) {
+export function DownloadProjectSummaryButton({ project, reports, orgLogoUrl, orgName, variant = 'default', size = 'sm', className }: Props) {
   const [isClient, setIsClient] = useState(false);
   useEffect(() => setIsClient(true), []);
 
@@ -31,7 +33,7 @@ export function DownloadProjectSummaryButton({ project, reports, variant = 'defa
 
   return (
     <PDFDownloadLink
-      document={<ProjectSummaryPDFDocument project={project} reports={reports} />}
+      document={<ProjectSummaryPDFDocument project={project} reports={reports} orgLogoUrl={orgLogoUrl} orgName={orgName} />}
       fileName={fileName}
     >
       {({ loading }) => (

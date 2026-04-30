@@ -1,5 +1,5 @@
 import React from 'react';
-import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
+import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
 import type { FieldReport, Project } from '@/lib/types';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -116,9 +116,11 @@ const COL = { date: '13%', mat: '14%', lot: '18%', supplier: '20%', status: '16%
 interface Props {
   project: Project;
   reports: FieldReport[];
+  orgLogoUrl?: string | null;
+  orgName?: string | null;
 }
 
-export function ProjectSummaryPDFDocument({ project, reports }: Props) {
+export function ProjectSummaryPDFDocument({ project, reports, orgLogoUrl, orgName }: Props) {
   const total     = reports.length;
   const validated = reports.filter(r => r.status === 'VALIDATED').length;
   const rejected  = reports.filter(r => r.status === 'REJECTED').length;
@@ -147,7 +149,11 @@ export function ProjectSummaryPDFDocument({ project, reports }: Props) {
         {/* ── Header ─────────────────────────────────────────────────────── */}
         <View style={S.header}>
           <View>
-            <Text style={S.logo}>SiteWise Reports</Text>
+            {orgLogoUrl ? (
+              <Image src={orgLogoUrl} style={{ width: 80, height: 40, objectFit: 'contain' }} />
+            ) : (
+              <Text style={S.logo}>{orgName ?? 'SiteWise Reports'}</Text>
+            )}
             <Text style={S.logoSub}>Rapport de synthèse — Contrôle qualité des matériaux</Text>
           </View>
           <View style={S.headerRight}>

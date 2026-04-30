@@ -99,6 +99,15 @@ export default function ProjectStatsPage() {
       .catch(() => { setError('Impossible de charger le projet.'); setLoadingProject(false); });
   }, [projectId]);
 
+  // Fetch org logo
+  useEffect(() => {
+    if (!user?.organizationId) return;
+    getOrganizationById(user.organizationId).then((org) => {
+      setOrgLogoUrl((org as { logoUrl?: string | null })?.logoUrl ?? null);
+      setOrgName(org?.name ?? null);
+    }).catch(() => {});
+  }, [user?.organizationId]);
+
   // Subscribe to reports
   useEffect(() => {
     const unsub = getReportsByProjectIdSubscription(
@@ -164,6 +173,8 @@ export default function ProjectStatsPage() {
         <DownloadProjectSummaryButton
           project={project}
           reports={reports}
+          orgLogoUrl={orgLogoUrl}
+          orgName={orgName}
           variant="default"
           size="sm"
           className="rounded-lg"
