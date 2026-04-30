@@ -13,6 +13,7 @@ export const MATERIAL_TYPE_DISPLAY: Record<string, string> = {
   gravel: 'Gravier',
   sand: 'Sable',
   other: 'Autre',
+  compaction: 'Compacité',
 };
 
 // ─── Options de filtre matériaux ─────────────────────────────────────────────
@@ -24,6 +25,7 @@ export const MATERIAL_TYPE_FILTER_OPTIONS: { value: FieldReport['materialType'] 
   { value: 'gravel', label: 'Gravier' },
   { value: 'sand', label: 'Sable' },
   { value: 'other', label: 'Autre' },
+  { value: 'compaction' as unknown as FieldReport['materialType'], label: 'Contrôle de compacité' },
 ];
 
 // ─── Options de filtre statuts ────────────────────────────────────────────────
