@@ -26,6 +26,13 @@ const nextConfig: NextConfig = {
   async headers() {
     return [{ source: '/(.*)', headers: securityHeaders }];
   },
+  serverExternalPackages: ['@opentelemetry/sdk-node'],
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      config.resolve.alias['@opentelemetry/exporter-jaeger'] = false;
+    }
+    return config;
+  },
   /* config options here */
   // Note: For production builds (`next start` or deployments),
   // a successful `next build` must complete first. This generates
