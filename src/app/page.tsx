@@ -45,7 +45,7 @@ const FEATURES = [
 const PLANS = [
   {
     name: 'Starter',
-    price: 49,
+    price: 199,
     desc: 'Pour les petites équipes qui veulent se digitaliser rapidement.',
     features: ["Jusqu'à 5 utilisateurs", 'Projets illimités', 'Rapports illimités', 'Analyse IA', 'Export PDF & CSV', 'Support email'],
     cta: 'Démarrer l\'essai gratuit',
@@ -53,9 +53,9 @@ const PLANS = [
   },
   {
     name: 'Pro',
-    price: 149,
+    price: 499,
     desc: 'Pour les entreprises qui gèrent plusieurs chantiers et de grandes équipes.',
-    features: ['Utilisateurs illimités', 'Projets illimités', 'Rapports illimités', 'Analyse IA', 'Export PDF & CSV', 'Chat temps réel', 'Support prioritaire', 'Accès API'],
+    features: ['Utilisateurs illimités', 'Projets illimités', 'Rapports illimités', 'Analyse IA', 'Export PDF & CSV', 'Chat temps réel', 'Support prioritaire'],
     cta: 'Démarrer l\'essai gratuit',
     highlighted: true,
   },
@@ -235,6 +235,11 @@ export default function HomePage() {
           <span className="font-medium text-gray-600">SiteWise Reports</span>
         </div>
         <p>© {new Date().getFullYear()} SiteWise Reports. Tous droits réservés.</p>
+        <div className="flex items-center justify-center gap-4 mt-3">
+          <Link href="/privacy" className="hover:text-gray-600 transition-colors">Politique de confidentialité</Link>
+          <span>·</span>
+          <Link href="/terms" className="hover:text-gray-600 transition-colors">Conditions d&apos;utilisation</Link>
+        </div>
       </footer>
 
     </div>

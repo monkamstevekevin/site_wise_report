@@ -15,7 +15,7 @@ const PLANS = [
   {
     key: 'STARTER' as const,
     name: 'Starter',
-    price: 49,
+    price: 199,
     description: 'Idéal pour les petites équipes',
     features: [
       'Jusqu\'à 5 utilisateurs',
@@ -28,7 +28,7 @@ const PLANS = [
   {
     key: 'PRO' as const,
     name: 'Pro',
-    price: 149,
+    price: 499,
     description: 'Pour les grandes équipes sans limite',
     features: [
       'Utilisateurs illimités',
