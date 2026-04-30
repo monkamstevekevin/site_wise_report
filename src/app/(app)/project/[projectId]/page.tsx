@@ -19,7 +19,11 @@ import { cn } from '@/lib/utils';
 import { getProjectById } from '@/services/projectService';
 import { getReportsByProjectIdSubscription } from '@/lib/reportClientService';
 import type { Project, FieldReport } from '@/lib/types';
+import { useAuth } from '@/contexts/AuthContext';
+import { getOrganizationById } from '@/services/organizationService';
 import { DownloadProjectSummaryButton } from '@/components/pdf/DownloadProjectSummaryButton';
+import { DownloadCompactionSummaryButton } from '@/components/pdf/DownloadCompactionSummaryButton';
+import type { CompactionReportData } from '@/db/schema';
 import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts';
@@ -28,6 +32,7 @@ import {
 
 const materialDisplay: Record<string, string> = {
   cement: 'Ciment', asphalt: 'Asphalte', gravel: 'Gravier', sand: 'Sable', other: 'Autre',
+  compaction: 'Contrôle de compacité',
 };
 
 const statusBadgeVariant: Record<FieldReport['status'], 'default' | 'secondary' | 'outline' | 'destructive'> = {
@@ -76,6 +81,7 @@ function Kpi({ label, value, sub, icon: Icon, color }: {
 export default function ProjectStatsPage() {
   const { projectId } = useParams() as { projectId: string };
   const router = useRouter();
+  const { user } = useAuth();
 
   const [project, setProject] = useState<Project | null>(null);
   const [reports, setReports] = useState<FieldReport[]>([]);
@@ -83,6 +89,8 @@ export default function ProjectStatsPage() {
   const [loadingProject, setLoadingProject] = useState(true);
   const [loadingReports, setLoadingReports] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [orgLogoUrl, setOrgLogoUrl] = useState<string | null>(null);
+  const [orgName, setOrgName] = useState<string | null>(null);
 
   // Fetch project
   useEffect(() => {
@@ -136,8 +144,22 @@ export default function ProjectStatsPage() {
 
   const loading = loadingProject || loadingReports;
 
+  const compactionReports = reports.filter(r => r.materialType === 'compaction');
+
   const pageActions = (
     <div className="flex items-center gap-2">
+      {project && compactionReports.length > 0 && (
+        <DownloadCompactionSummaryButton
+          projectId={project.id}
+          projectName={project.name}
+          projectLocation={project.location}
+          orgLogoUrl={orgLogoUrl}
+          orgName={orgName}
+          compactionHeader={(compactionReports[0]?.testData ?? {}) as Partial<CompactionReportData>}
+          size="sm"
+          className="rounded-lg"
+        />
+      )}
       {project && reports.length > 0 && (
         <DownloadProjectSummaryButton
           project={project}
