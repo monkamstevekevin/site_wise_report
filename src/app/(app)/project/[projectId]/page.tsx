@@ -21,6 +21,7 @@ import { getReportsByProjectIdSubscription } from '@/lib/reportClientService';
 import type { Project, FieldReport } from '@/lib/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { getOrganizationById } from '@/services/organizationService';
+import { fetchLogoAsDataUri } from '@/lib/fetchLogoAsDataUri';
 import { DownloadProjectSummaryButton } from '@/components/pdf/DownloadProjectSummaryButton';
 import { DownloadCompactionSummaryButton } from '@/components/pdf/DownloadCompactionSummaryButton';
 import type { CompactionReportData } from '@/db/schema';
@@ -99,12 +100,20 @@ export default function ProjectStatsPage() {
       .catch(() => { setError('Impossible de charger le projet.'); setLoadingProject(false); });
   }, [projectId]);
 
-  // Fetch org logo
+  // Fetch org logo and convert to data URI for react-pdf (avoids CORS)
   useEffect(() => {
     if (!user?.organizationId) return;
-    getOrganizationById(user.organizationId).then((org) => {
-      setOrgLogoUrl((org as { logoUrl?: string | null })?.logoUrl ?? null);
+    getOrganizationById(user.organizationId).then(async (org) => {
       setOrgName(org?.name ?? null);
+      const rawUrl = (org as { logoUrl?: string | null })?.logoUrl ?? null;
+      if (rawUrl) {
+        try {
+          const dataUri = await fetchLogoAsDataUri(rawUrl);
+          setOrgLogoUrl(dataUri);
+        } catch {
+          setOrgLogoUrl(rawUrl);
+        }
+      }
     }).catch(() => {});
   }, [user?.organizationId]);
 

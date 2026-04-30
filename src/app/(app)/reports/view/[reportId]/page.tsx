@@ -27,6 +27,7 @@ import { notifyReportValidated, notifyReportRejected } from '@/actions/notificat
 import { getTestTypeById } from '@/services/testTypeService';
 import { getUserById } from '@/services/userService';
 import type { TestType } from '@/db/schema';
+import { fetchLogoAsDataUri } from '@/lib/fetchLogoAsDataUri';
 import { TimeEntryForm } from './components/TimeEntryForm';
 
 
@@ -112,11 +113,19 @@ export default function ViewReportPage() {
           if (data.testTypeId) {
             getTestTypeById(data.testTypeId).then(setTestType).catch(() => {});
           }
-          // Fetch org logo
+          // Fetch org logo and convert to data URI for react-pdf (avoids CORS)
           if (user.organizationId) {
-            getOrganizationById(user.organizationId).then(org => {
-              setOrgLogoUrl((org as { logoUrl?: string | null })?.logoUrl ?? null);
+            getOrganizationById(user.organizationId).then(async (org) => {
               setOrgName(org?.name);
+              const rawUrl = (org as { logoUrl?: string | null })?.logoUrl ?? null;
+              if (rawUrl) {
+                try {
+                  const dataUri = await fetchLogoAsDataUri(rawUrl);
+                  setOrgLogoUrl(dataUri);
+                } catch {
+                  setOrgLogoUrl(rawUrl);
+                }
+              }
             }).catch(() => {});
           }
         } else {
