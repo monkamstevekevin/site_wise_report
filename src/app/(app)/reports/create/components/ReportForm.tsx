@@ -519,11 +519,11 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
                 name="materialType"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Type de Matériau</FormLabel>
+                    <FormLabel>Type de rapport</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value} disabled={isSubmittingForm}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner le type de matériau" />
+                          <SelectValue placeholder="Sélectionner le type de rapport" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
@@ -532,6 +532,9 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
                         ))}
                       </SelectContent>
                     </Select>
+                    <FormDescription>
+                      Sélectionnez &laquo;&nbsp;Contrôle de compacité&nbsp;&raquo; pour générer un rapport RC-6306.
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -716,20 +719,29 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
 
             {/* ── Compaction UI ── */}
             {isCompaction && (
-              <div className="space-y-4">
+              <div className="space-y-3">
+                <div className="rounded-md border border-blue-200 bg-blue-50/50 px-4 py-2.5 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300">
+                  <strong>Rapport RC-6306 — Contrôle de compacité</strong>
+                  <span className="mx-1.5">·</span>
+                  Remplissez les informations du chantier, les matériaux de référence, puis ajoutez les essais réalisés. Le rapport RC-6304 (synthèse client) sera généré automatiquement depuis la page du projet.
+                </div>
                 <CompactionHeaderForm
                   value={compactionHeader}
                   onChange={setCompactionHeader}
                 />
-                <div>
-                  <h3 className="text-sm font-medium mb-2">Essais de compacité</h3>
-                  <CompactionTestTable
-                    rows={compactionRows}
-                    onRowsChange={setCompactionRows}
-                    material1Name={compactionHeader.material1?.name || 'Mat. 1'}
-                    material2Name={compactionHeader.material2?.name || 'Mat. 2'}
-                  />
-                </div>
+                <Card>
+                  <CardHeader className="py-3 px-4">
+                    <CardTitle className="text-sm">Essais de compacité</CardTitle>
+                  </CardHeader>
+                  <CardContent className="px-4 pb-4">
+                    <CompactionTestTable
+                      rows={compactionRows}
+                      onRowsChange={setCompactionRows}
+                      material1Name={compactionHeader.material1?.name || 'Mat. 1'}
+                      material2Name={compactionHeader.material2?.name || 'Mat. 2'}
+                    />
+                  </CardContent>
+                </Card>
               </div>
             )}
 
