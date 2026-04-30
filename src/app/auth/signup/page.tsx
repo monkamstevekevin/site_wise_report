@@ -143,12 +143,18 @@ export default function SignupPage() {
           Continuer avec Google
         </Button>
       </CardContent>
-      <CardFooter className="flex flex-col items-center text-sm">
+      <CardFooter className="flex flex-col items-center gap-3 text-sm">
         <p>
           Vous avez déjà un compte ?{' '}
           <Button variant="link" asChild className="p-0 h-auto">
             <Link href="/auth/login">Se connecter</Link>
           </Button>
+        </p>
+        <p className="text-xs text-muted-foreground text-center">
+          En vous inscrivant, vous acceptez nos{' '}
+          <Link href="/terms" className="underline hover:text-foreground">Conditions d&apos;utilisation</Link>
+          {' '}et notre{' '}
+          <Link href="/privacy" className="underline hover:text-foreground">Politique de confidentialité</Link>.
         </p>
       </CardFooter>
     </Card>

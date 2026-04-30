@@ -19,7 +19,7 @@ export const STRIPE_PLANS = {
   STARTER: {
     name: 'Starter',
     priceId: process.env.STRIPE_STARTER_PRICE_ID!,
-    price: 49,
+    price: 199,
     currency: 'usd',
     maxUsers: 5,
     description: 'Idéal pour les petites équipes',
@@ -27,7 +27,7 @@ export const STRIPE_PLANS = {
   PRO: {
     name: 'Pro',
     priceId: process.env.STRIPE_PRO_PRICE_ID!,
-    price: 149,
+    price: 499,
     currency: 'usd',
     maxUsers: null, // unlimited
     description: 'Pour les grandes équipes sans limite',
