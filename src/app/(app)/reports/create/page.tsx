@@ -67,10 +67,11 @@ export default function CreateReportPage() {
       return { success: false, anomalyAssessment: assessment };
     }
 
-    const reportDataToSave: Omit<FieldReport, 'id' | 'createdAt' | 'updatedAt'> = {
-      ...data, 
+    const reportDataToSave: Omit<FieldReport, 'id' | 'createdAt' | 'updatedAt'> & { organizationId?: string | null } = {
+      ...data,
       technicianId: reportTechnicianId,
-      photoDataUri: photoDataUriInSubmit, 
+      organizationId: user.organizationId ?? null,
+      photoDataUri: photoDataUriInSubmit,
       status: status,
       aiIsAnomalous: assessment.isAnomalous,
       aiAnomalyExplanation: assessment.explanation,
