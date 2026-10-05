@@ -26,6 +26,7 @@ import { deleteReport as deleteReportService, updateReport } from '@/services/re
 import { notifyReportValidated, notifyReportRejected } from '@/actions/notifications';
 import { getTestTypes } from '@/services/testTypeService';
 import type { TestType } from '@/db/schema';
+import { fetchOrgLogoDataUri } from '@/lib/fetchOrgLogoDataUri';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   AlertDialog,
@@ -123,10 +124,18 @@ export default function ReportsPage() {
   const [isRejectionDialogOpen, setIsRejectionDialogOpen] = useState(false);
   const [reportToReject, setReportToReject] = useState<FieldReport | null>(null);
 
+  const [orgLogoUrl, setOrgLogoUrl] = useState<string | null>(null);
+  const orgName = user?.organizationName ?? null;
+
   useEffect(() => {
     if (!user) return;
     getTestTypes(user.organizationId).then(setAvailableTestTypes).catch(() => {});
   }, [user]);
+
+  useEffect(() => {
+    if (!user?.organizationId) return;
+    fetchOrgLogoDataUri().then((dataUri) => { if (dataUri) setOrgLogoUrl(dataUri); }).catch(() => {});
+  }, [user?.organizationId]);
 
   useEffect(() => {
     if (authLoading) {
@@ -394,11 +403,13 @@ export default function ReportsPage() {
           <ReportTable
             reports={filteredReports}
             onEditReport={handleEditReport}
-            onDeleteReport={openDeleteDialog} 
+            onDeleteReport={openDeleteDialog}
             onValidateReport={handleValidateReport}
             onRejectReport={handleOpenRejectionDialog}
-            currentUserId={effectiveTechnicianId || user?.id} 
+            currentUserId={effectiveTechnicianId || user?.id}
             currentUserRole={currentUserRole}
+            orgLogoUrl={orgLogoUrl}
+            orgName={orgName}
           />
         </div>
       )}

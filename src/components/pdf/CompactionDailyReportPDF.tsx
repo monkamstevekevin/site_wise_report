@@ -25,7 +25,7 @@ const S = StyleSheet.create({
     marginBottom: 10,
     alignItems: 'flex-start',
   },
-  logo: { width: 120, height: 56, objectFit: 'contain', marginBottom: 4 },
+  logo: { width: 160, height: 72, objectFit: 'contain', marginBottom: 4 },
   title: { fontSize: 12, fontWeight: 'bold', marginBottom: 2 },
   subtitle: { fontSize: 8, color: '#555555', marginBottom: 1 },
   section: { marginBottom: 8 },

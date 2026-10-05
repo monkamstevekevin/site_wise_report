@@ -209,7 +209,14 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
         setPhotoPreviewUrl(null);
       }
       // Restaurer le type de test et les données
-      if (reportToEdit.testTypeId) {
+      if (reportToEdit.materialType === 'compaction') {
+        if (reportToEdit.testData) {
+          setCompactionHeader(reportToEdit.testData as Partial<CompactionReportData>);
+        } else {
+          setCompactionHeader({});
+        }
+        setCompactionRows([]);
+      } else if (reportToEdit.testTypeId) {
         setSelectedTestTypeId(reportToEdit.testTypeId);
         if (reportToEdit.testData) {
           const restored: Record<string, string> = {};
@@ -374,6 +381,8 @@ export function ReportForm({ reportToEdit, isLoadingExternally, onSubmitReport }
       if (!isEditMode || status === 'DRAFT') {
         form.reset(initialReportFormValues);
         setPhotoPreviewUrl(null);
+        setCompactionHeader({});
+        setCompactionRows([]);
         if(photoInputRef.current) photoInputRef.current.value = '';
         if (assignedProjectsList.length > 0) {
             form.setValue('projectId', assignedProjectsList[0].id);
