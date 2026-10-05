@@ -238,7 +238,7 @@ export function ReportPDFDocument({
         <View style={S.header}>
           <View>
             {orgLogoUrl ? (
-              <Image src={orgLogoUrl} style={{ width: 120, height: 56, objectFit: 'contain', marginBottom: 4 }} />
+              <Image src={orgLogoUrl} style={{ width: 160, height: 72, objectFit: 'contain', marginBottom: 4 }} />
             ) : (
               <Text style={S.appName}>{orgName ?? 'SiteWise'}</Text>
             )}

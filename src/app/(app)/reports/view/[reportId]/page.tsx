@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { getReportById, updateReport } from '@/services/reportService';
-import { getOrganizationById } from '@/services/organizationService';
 import type { FieldReport, UserRole } from '@/lib/types';
 import Image from 'next/image';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -27,7 +26,7 @@ import { notifyReportValidated, notifyReportRejected } from '@/actions/notificat
 import { getTestTypeById } from '@/services/testTypeService';
 import { getUserById } from '@/services/userService';
 import type { TestType } from '@/db/schema';
-import { fetchLogoAsDataUri } from '@/lib/fetchLogoAsDataUri';
+import { fetchOrgLogoDataUri } from '@/lib/fetchOrgLogoDataUri';
 import { TimeEntryForm } from './components/TimeEntryForm';
 
 
@@ -87,12 +86,22 @@ export default function ViewReportPage() {
   const [testType, setTestType] = useState<TestType | null>(null);
   const [orgLogoUrl, setOrgLogoUrl] = useState<string | null>(null);
   const [orgName, setOrgName] = useState<string | undefined>();
+  const [orgLogoLoading, setOrgLogoLoading] = useState(true);
 
   useEffect(() => {
     if (user) {
       setCurrentUserRole(user.role as UserRole);
     }
   }, [user]);
+
+  // Fetch org logo via server-side API (avoids CORS issues with Supabase Storage)
+  useEffect(() => {
+    if (!user?.organizationId) { setOrgLogoLoading(false); return; }
+    setOrgLogoLoading(true);
+    fetchOrgLogoDataUri()
+      .then((dataUri) => { if (dataUri) setOrgLogoUrl(dataUri); })
+      .finally(() => setOrgLogoLoading(false));
+  }, [user?.organizationId]);
 
   const fetchReportData = async () => {
     if (reportId && user) { 
@@ -112,21 +121,6 @@ export default function ViewReportPage() {
           }).catch(() => {});
           if (data.testTypeId) {
             getTestTypeById(data.testTypeId).then(setTestType).catch(() => {});
-          }
-          // Fetch org logo and convert to data URI for react-pdf (avoids CORS)
-          if (user.organizationId) {
-            getOrganizationById(user.organizationId).then(async (org) => {
-              setOrgName(org?.name);
-              const rawUrl = (org as { logoUrl?: string | null })?.logoUrl ?? null;
-              if (rawUrl) {
-                try {
-                  const dataUri = await fetchLogoAsDataUri(rawUrl);
-                  setOrgLogoUrl(dataUri);
-                } catch {
-                  setOrgLogoUrl(rawUrl);
-                }
-              }
-            }).catch(() => {});
           }
         } else {
           setErrorLoadingReport(`Rapport avec ID ${reportId} non trouvé.`);
@@ -220,6 +214,7 @@ export default function ViewReportPage() {
           testType={testType}
           orgLogoUrl={orgLogoUrl}
           orgName={orgName}
+          logoLoading={orgLogoLoading}
           variant="outline"
           size="sm"
           className="rounded-lg"

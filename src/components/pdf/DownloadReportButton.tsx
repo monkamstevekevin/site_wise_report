@@ -18,6 +18,7 @@ interface DownloadReportButtonProps {
   testType?: TestType | null;
   orgLogoUrl?: string | null;
   orgName?: string | null;
+  logoLoading?: boolean;
   variant?: 'default' | 'outline' | 'ghost';
   size?: 'default' | 'sm' | 'lg' | 'icon';
   className?: string;
@@ -31,6 +32,7 @@ export function DownloadReportButton({
   testType,
   orgLogoUrl,
   orgName,
+  logoLoading = false,
   variant = 'outline',
   size = 'sm',
   className,
@@ -59,7 +61,7 @@ export function DownloadReportButton({
   const fileName = `rapport-${report.id.slice(0, 8).toUpperCase()}-${report.materialType}.pdf`;
 
   if ((report.materialType as string) === 'compaction') {
-    if (!isClient || !rowsLoaded) {
+    if (!isClient || !rowsLoaded || logoLoading) {
       return (
         <Button variant={variant} size={size} className={className} disabled>
           <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> RC-6306
@@ -98,10 +100,10 @@ export function DownloadReportButton({
     );
   }
 
-  if (!isClient || !rowsLoaded) {
+  if (!isClient || !rowsLoaded || logoLoading) {
     return (
       <Button variant={variant} size={size} className={className} disabled>
-        <Download className="h-4 w-4 mr-1.5" /> PDF
+        {logoLoading ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Download className="h-4 w-4 mr-1.5" />} PDF
       </Button>
     );
   }

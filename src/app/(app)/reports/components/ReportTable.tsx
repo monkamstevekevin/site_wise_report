@@ -42,12 +42,15 @@ interface ReportTableProps {
   onRejectReport?: (report: FieldReport) => void;
   currentUserId?: string;
   currentUserRole?: UserRole | null;
+  orgLogoUrl?: string | null;
+  orgName?: string | null;
 }
 
 export function ReportTable({
   reports, onEditReport, onDeleteReport,
   onValidateReport, onRejectReport,
   currentUserId, currentUserRole,
+  orgLogoUrl, orgName,
 }: ReportTableProps) {
   const router = useRouter();
 
@@ -148,6 +151,8 @@ export function ReportTable({
                           <div className="w-full">
                             <DownloadReportButton
                               report={report}
+                              orgLogoUrl={orgLogoUrl}
+                              orgName={orgName}
                               variant="ghost"
                               size="sm"
                               className="w-full justify-start px-0 h-auto font-normal text-sm"
